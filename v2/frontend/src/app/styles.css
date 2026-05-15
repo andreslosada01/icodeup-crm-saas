@@ -1,0 +1,32 @@
+:root {
+  color: #172026;
+  background: #f4f6f8;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.panel {
+  width: min(720px, 100%);
+  padding: 28px;
+  border: 1px solid #d8e0e5;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 40px rgba(18, 31, 38, 0.08);
+}
+
+.eyebrow {
+  color: #217842;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+

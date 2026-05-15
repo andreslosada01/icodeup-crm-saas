@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+v2/.env
+!v2/.env.example
+v2/backend/.venv/
+
+# Logs
+*.log
+server.log
+server.err.log
+v2/postgres.log
+
+# Generated local runtimes and databases
+v2/runtime/
+v2/postgres-data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Local IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

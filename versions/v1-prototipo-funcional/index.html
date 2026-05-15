@@ -1,0 +1,1285 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IcodeUp CRM</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <section class="login-screen" id="loginScreen" hidden>
+      <div class="login-card">
+        <div class="login-form-panel">
+          <div class="login-brand-lockup">
+            <img class="login-logo" src="assets/icodeup-logo.png" alt="IcodeUp CRM" />
+            <span>CRM de cobranzas inteligente</span>
+          </div>
+          <div class="login-heading">
+            <p class="eyebrow">Acceso seguro</p>
+            <h1>Acceso corporativo</h1>
+            <p class="login-copy">Ingresa con tu usuario autorizado y abre tu entorno operativo de gestion.</p>
+          </div>
+
+          <form class="form-stack" id="loginForm">
+            <label hidden>
+              Empresa
+              <select id="loginCompany"></select>
+            </label>
+            <label>
+              Email
+              <input id="loginEmail" type="email" autocomplete="username" required />
+            </label>
+            <label>
+              Contrasena
+              <input id="loginPassword" type="password" autocomplete="current-password" required />
+            </label>
+            <button class="primary-button" type="submit">Ingresar</button>
+          </form>
+
+          <details class="demo-users" id="demoUsers">
+            <summary>Accesos de desarrollo</summary>
+            <div class="demo-user-grid">
+            <button type="button" data-demo-login="platform">IcodeUp plataforma</button>
+            <button type="button" data-demo-login="superadmin">Super usuario</button>
+            <button type="button" data-demo-login="admin">Administrador</button>
+            <button type="button" data-demo-login="coordinator">Coordinador</button>
+            <button type="button" data-demo-login="agent">Usuario estandar</button>
+            <button type="button" data-demo-login="quality">Supervisor calidad</button>
+            </div>
+          </details>
+        </div>
+
+        <aside class="login-visual" aria-hidden="true">
+          <div class="login-visual-header">
+            <span>IcodeUp CRM</span>
+            <strong>Bienvenido al futuro de la recuperacion</strong>
+            <p>IA aplicada, omnicanalidad y analitica para equipos que gestionan cartera con precision.</p>
+          </div>
+
+          <div class="crm-hologram">
+            <div class="holo-shell">
+              <div class="holo-sidebar">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="holo-main">
+                <div class="holo-topline"></div>
+                <div class="holo-metrics">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="holo-chart">
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                  <i></i>
+                </div>
+                <div class="holo-flow">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+            <div class="holo-orbit">
+              <span></span>
+              <span></span>
+            </div>
+            <div class="holo-node node-a"></div>
+            <div class="holo-node node-b"></div>
+            <div class="holo-node node-c"></div>
+            <div class="holo-node node-d"></div>
+          </div>
+
+          <div class="login-signal-card primary">
+            <span>Operacion inteligente</span>
+            <strong>Prioriza, contacta y recupera con inteligencia</strong>
+            <p>Un flujo claro para cartera, clientes, promesas, pagos y seguimiento ejecutivo.</p>
+          </div>
+
+          <div class="login-signal-grid">
+            <div><span>IA aplicada</span><strong>Priorizacion de cartera</strong></div>
+            <div><span>Omnicanalidad</span><strong>WhatsApp, correo y llamadas</strong></div>
+            <div><span>Riesgo</span><strong>Alertas y seguimiento</strong></div>
+            <div><span>Analitica BI</span><strong>Indicadores ejecutivos</strong></div>
+          </div>
+
+          <div class="login-flow-lines">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <div class="app-shell" id="appShell">
+      <aside class="sidebar" aria-label="Navegacion principal">
+        <div class="brand-block">
+          <img class="brand-logo" src="assets/icodeup-logo.png" alt="IcodeUp CRM" />
+          <div class="brand-copy">
+            <strong>IcodeUp CRM</strong>
+            <span>Cobranzas y recuperacion</span>
+          </div>
+        </div>
+
+        <nav class="main-nav" id="mainNav">
+          <button class="nav-item active" data-view="dashboard" type="button">Tablero</button>
+          <button class="nav-item" data-view="queue" type="button">Cola de gestion</button>
+          <button class="nav-item" data-view="customers" type="button">Clientes</button>
+          <button class="nav-item" data-view="assignments" data-ops-only="true" type="button">Repartos</button>
+          <button class="nav-item" data-view="users" data-admin-only="true" type="button">Usuarios</button>
+          <button class="nav-item" data-view="tenants" data-platform-only="true" type="button">Empresas</button>
+          <button class="nav-item" data-view="promises" type="button">Promesas</button>
+          <button class="nav-item" data-view="payments" type="button">Pagos</button>
+          <button class="nav-item" data-view="campaigns" type="button">Campanas</button>
+          <button class="nav-item" data-view="reports" type="button">Reportes</button>
+          <button class="nav-item" data-view="bi" data-admin-only="true" type="button">BI Ejecutivo</button>
+          <button class="nav-item" data-view="settings" data-admin-only="true" type="button">Configuracion</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <span class="status-dot"></span>
+          <span id="sessionLabel">Base local activa</span>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">IcodeUp CRM</p>
+            <h1 id="viewTitle">Tablero ejecutivo</h1>
+          </div>
+          <div class="topbar-actions">
+            <div class="session-pill" id="sessionPill" hidden>
+              <strong id="sessionCompany">Empresa demo</strong>
+              <span id="sessionUser">Usuario local</span>
+            </div>
+            <label class="search-box" for="globalSearch">
+              <span>Buscar</span>
+              <input id="globalSearch" type="search" placeholder="Cliente, documento, telefono..." />
+            </label>
+            <button class="ghost-button" id="exportCsvBtn" type="button">Exportar CSV</button>
+            <button class="primary-button" id="newCaseBtn" type="button">Nuevo caso</button>
+            <button class="ghost-button" id="logoutBtn" type="button" hidden>Salir</button>
+          </div>
+        </header>
+
+        <section class="workspace">
+          <div class="view active" id="view-dashboard">
+            <div class="metric-grid" id="metricGrid"></div>
+
+            <section class="command-strip" id="dashboardCommandStrip"></section>
+
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Prioridad de cartera</h2>
+                    <p>Distribucion por mora y riesgo.</p>
+                  </div>
+                  <select id="dashboardSegmentFilter" aria-label="Segmento del tablero">
+                    <option value="all">Todos los segmentos</option>
+                  </select>
+                </div>
+                <div class="aging-bars" id="agingBars"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Agenda critica</h2>
+                    <p>Promesas y seguimientos vencidos o proximos.</p>
+                  </div>
+                  <button class="ghost-button compact" data-view-target="promises" type="button">Ver promesas</button>
+                </div>
+                <div class="task-list" id="criticalAgenda"></div>
+              </section>
+            </div>
+
+            <div class="dashboard-grid">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Carteras activas</h2>
+                    <p>Concentracion por proyecto, riesgo y saldo.</p>
+                  </div>
+                </div>
+                <div class="portfolio-risk-list" id="portfolioRiskList"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Equipo de gestion</h2>
+                    <p>Asignacion, recuperacion y foco operativo.</p>
+                  </div>
+                </div>
+                <div class="team-snapshot" id="teamSnapshot"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Gobierno operativo</h2>
+                    <p>Controles base para una operacion corporativa.</p>
+                  </div>
+                </div>
+                <div class="governance-list" id="governanceList"></div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Casos recomendados para hoy</h2>
+                  <p>Ordenados por puntaje de recuperacion, mora y promesas incumplidas.</p>
+                </div>
+                <button class="ghost-button compact" data-view-target="queue" type="button">Abrir cola</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Segmento</th>
+                      <th>Saldo</th>
+                      <th>Mora</th>
+                      <th>Riesgo</th>
+                      <th>Siguiente accion</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="todayCasesTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="view" id="view-queue">
+            <section class="panel">
+              <div class="panel-header queue-header">
+                <div>
+                  <h2>Cola de gestion</h2>
+                  <p>Filtra, prioriza, registra contacto y programa seguimientos.</p>
+                </div>
+                <div class="filter-row">
+                  <select id="queueAgentFilter" aria-label="Agente">
+                    <option value="all">Todos los agentes</option>
+                  </select>
+                  <select id="queueStatusFilter" aria-label="Estado">
+                    <option value="all">Todos los estados</option>
+                    <option value="Sin contacto">Sin contacto</option>
+                    <option value="Contactado">Contactado</option>
+                    <option value="Promesa">Promesa</option>
+                    <option value="Disputa">Disputa</option>
+                    <option value="Escalado">Escalado</option>
+                  </select>
+                  <select id="queueRiskFilter" aria-label="Riesgo">
+                    <option value="all">Todo riesgo</option>
+                    <option value="Alto">Alto</option>
+                    <option value="Medio">Medio</option>
+                    <option value="Bajo">Bajo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="queue-layout">
+                <div class="queue-table-panel">
+                  <div class="customer-results-bar" id="queueResultsBar"></div>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Prioridad</th>
+                          <th>Cliente</th>
+                          <th>Documento</th>
+                          <th>Saldo</th>
+                          <th>DPD</th>
+                          <th>Estado</th>
+                          <th>Agente</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="queueTable"></tbody>
+                    </table>
+                  </div>
+                  <div class="pagination-bar">
+                    <button class="ghost-button compact" id="queuePrevPage" type="button">Anterior</button>
+                    <span id="queuePageLabel"></span>
+                    <button class="ghost-button compact" id="queueNextPage" type="button">Siguiente</button>
+                  </div>
+                </div>
+                <aside class="detail-panel" id="queueDetailPanel">
+                  <div class="empty-detail">Selecciona un caso para ver el expediente.</div>
+                </aside>
+              </div>
+            </section>
+          </div>
+
+          <div class="view" id="view-customers">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Clientes y expedientes</h2>
+                  <p>Busqueda operativa para carteras grandes, con filtros y paginacion.</p>
+                </div>
+                <button class="primary-button compact" id="openCustomerFormBtn" type="button">Agregar cliente</button>
+              </div>
+              <div class="customer-tools">
+                <select id="customerPortfolioFilter" aria-label="Cartera">
+                  <option value="all">Todas las carteras</option>
+                </select>
+                <select id="customerAgentFilter" aria-label="Gestor">
+                  <option value="all">Todos los gestores</option>
+                </select>
+                <select id="customerStatusFilter" aria-label="Estado">
+                  <option value="all">Todos los estados</option>
+                  <option value="Sin contacto">Sin contacto</option>
+                  <option value="Contactado">Contactado</option>
+                  <option value="Promesa">Promesa</option>
+                  <option value="Disputa">Disputa</option>
+                  <option value="Escalado">Escalado</option>
+                </select>
+                <select id="customerPageSize" aria-label="Clientes por pagina">
+                  <option value="10">10 por pagina</option>
+                  <option value="5">5 por pagina</option>
+                </select>
+              </div>
+              <div class="customer-results-bar" id="customerResultsBar"></div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Cliente</th>
+                      <th>Cartera</th>
+                      <th>Gestor</th>
+                      <th>Saldo</th>
+                      <th>Mora</th>
+                      <th>Estado</th>
+                      <th>Riesgo</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="customerTable"></tbody>
+                </table>
+              </div>
+              <div class="pagination-bar">
+                <button class="ghost-button compact" id="customerPrevPage" type="button">Anterior</button>
+                <span id="customerPageLabel"></span>
+                <button class="ghost-button compact" id="customerNextPage" type="button">Siguiente</button>
+              </div>
+            </section>
+          </div>
+
+          <div class="view" id="view-assignments">
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Cargar reparto</h2>
+                    <p>Importa cartera por CSV y asigna clientes a gestor, lider y cartera.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="assignmentUploadForm">
+                  <label>
+                    Nombre de cartera o proyecto
+                    <input id="assignmentPortfolioName" type="text" required placeholder="Ej. Castigo mayo 2026" />
+                  </label>
+                  <label>
+                    Codigo cartera
+                    <input id="assignmentPortfolioCode" type="text" required placeholder="CAST-MAY-2026" />
+                  </label>
+                  <label>
+                    Lider o coordinador
+                    <select id="assignmentLeader"></select>
+                  </label>
+                  <label>
+                    Gestor predeterminado
+                    <select id="assignmentDefaultAgent"></select>
+                  </label>
+                  <label>
+                    Archivo CSV
+                    <input id="assignmentCsvFile" type="file" accept=".csv,text/csv" required />
+                  </label>
+                  <button class="primary-button" type="submit">Cargar reparto</button>
+                </form>
+                <div class="note-box">
+                  Columnas recomendadas: nombre, documento, telefono, email, ciudad, segmento, saldo, saldo_original, mora, gestor, obligacion, producto, direccion, ingreso, score.
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Carteras y equipos</h2>
+                    <p>Resumen operativo de proyectos, lideres y asignacion.</p>
+                  </div>
+                </div>
+                <div class="portfolio-list" id="portfolioList"></div>
+              </section>
+            </div>
+          </div>
+
+          <div class="view" id="view-users">
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Crear usuario</h2>
+                    <p>Alta de usuarios por empresa con rol y lider asignado.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="userCreateForm">
+                  <label>
+                    Nombre
+                    <input id="userName" type="text" required placeholder="Nombre completo" />
+                  </label>
+                  <label>
+                    Email
+                    <input id="userEmail" type="email" required placeholder="usuario@empresa.com" />
+                  </label>
+                  <label>
+                    Rol
+                    <select id="userRole">
+                      <option value="agent">Gestor</option>
+                      <option value="coordinator">Coordinador</option>
+                      <option value="quality">Supervisor calidad</option>
+                      <option value="admin">Administrador</option>
+                      <option value="superadmin">Super usuario</option>
+                    </select>
+                  </label>
+                  <label>
+                    Lider
+                    <select id="userLeader"></select>
+                  </label>
+                  <label>
+                    Contrasena inicial
+                    <input id="userPassword" type="password" minlength="8" required placeholder="Minimo 8 caracteres" />
+                  </label>
+                  <button class="primary-button" type="submit">Crear usuario</button>
+                </form>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Asociar a cartera/proyecto</h2>
+                    <p>Vincula gestores, lideres o calidad a carteras activas.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="portfolioUserForm">
+                  <label>
+                    Cartera o proyecto
+                    <select id="portfolioUserPortfolio"></select>
+                  </label>
+                  <label>
+                    Usuario
+                    <select id="portfolioUserUser"></select>
+                  </label>
+                  <label>
+                    Rol en cartera
+                    <select id="portfolioUserRole">
+                      <option value="agent">Gestor</option>
+                      <option value="leader">Lider</option>
+                      <option value="quality">Calidad</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </label>
+                  <label>
+                    Lider directo
+                    <select id="portfolioUserLeader"></select>
+                  </label>
+                  <button class="primary-button" type="submit">Guardar asociacion</button>
+                </form>
+              </section>
+            </div>
+
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Usuarios de la empresa</h2>
+                    <p>Roles, lideres y estado operativo.</p>
+                  </div>
+                </div>
+                <div class="user-directory" id="userDirectory"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Carteras y miembros</h2>
+                    <p>Equipos asociados a cada cartera o proyecto.</p>
+                  </div>
+                </div>
+                <div class="portfolio-members" id="portfolioMembers"></div>
+              </section>
+            </div>
+          </div>
+
+          <div class="view" id="view-tenants">
+            <div class="tenant-admin-grid">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Nueva empresa cliente</h2>
+                    <p>Alta SaaS con entorno, administrador inicial y proyecto base.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="tenantCreateForm">
+                  <label>
+                    Nombre empresa
+                    <input id="tenantName" type="text" required placeholder="Ej. Empresa ABC" />
+                  </label>
+                  <label>
+                    Identificador URL interno
+                    <input id="tenantSlug" type="text" required placeholder="empresa-abc" />
+                  </label>
+                  <label>
+                    NIT / Tax ID
+                    <input id="tenantTaxId" type="text" placeholder="NIT 900..." />
+                  </label>
+                  <label>
+                    Nombre administrador
+                    <input id="tenantAdminName" type="text" required placeholder="Administrador cliente" />
+                  </label>
+                  <label>
+                    Email administrador
+                    <input id="tenantAdminEmail" type="email" required placeholder="admin@empresa.com" />
+                  </label>
+                  <label>
+                    Contrasena inicial
+                    <input id="tenantAdminPassword" type="password" minlength="8" required value="Admin123!" />
+                  </label>
+                  <label>
+                    Proyecto inicial
+                    <input id="tenantProjectName" type="text" required value="Cartera inicial" />
+                  </label>
+                  <label>
+                    Codigo proyecto
+                    <input id="tenantProjectCode" type="text" required value="BASE" />
+                  </label>
+                  <button class="primary-button" type="submit">Crear empresa</button>
+                </form>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Nuevo proyecto para empresa</h2>
+                    <p>Crea carteras/proyectos dentro de una empresa existente.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="tenantProjectForm">
+                  <label>
+                    Empresa
+                    <select id="tenantProjectCompany"></select>
+                  </label>
+                  <label>
+                    Nombre proyecto
+                    <input id="tenantProjectOnlyName" type="text" required placeholder="Ej. Mora temprana mayo" />
+                  </label>
+                  <label>
+                    Codigo
+                    <input id="tenantProjectOnlyCode" type="text" required placeholder="MT-MAY" />
+                  </label>
+                  <button class="primary-button" type="submit">Crear proyecto</button>
+                </form>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Nuevo usuario tenant</h2>
+                    <p>Alta directa de usuarios por empresa desde IcodeUp plataforma.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="tenantUserForm">
+                  <div class="note-box compact-note">
+                    Crea usuarios dentro de una empresa cliente desde el administrador general de IcodeUp. Se usan para dar acceso a gestores, lideres, calidad o administradores de esa empresa.
+                  </div>
+                  <label>
+                    Empresa
+                    <select id="tenantUserCompany"></select>
+                  </label>
+                  <label>
+                    Nombre
+                    <input id="tenantUserName" type="text" required placeholder="Nombre completo" />
+                  </label>
+                  <label>
+                    Email
+                    <input id="tenantUserEmail" type="email" required placeholder="usuario@empresa.com" />
+                  </label>
+                  <label>
+                    Rol
+                    <select id="tenantUserRole">
+                      <option value="agent">Gestor</option>
+                      <option value="coordinator">Coordinador</option>
+                      <option value="quality">Supervisor calidad</option>
+                      <option value="admin">Administrador</option>
+                      <option value="superadmin">Super usuario empresa</option>
+                    </select>
+                  </label>
+                  <label>
+                    Lider directo
+                    <select id="tenantUserLeader"></select>
+                  </label>
+                  <label>
+                    Contrasena inicial
+                    <input id="tenantUserPassword" type="password" minlength="8" required value="Usuario123!" />
+                  </label>
+                  <button class="primary-button" type="submit">Crear usuario</button>
+                </form>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Nuevo cliente tenant</h2>
+                    <p>Alta de clientes o casos desde IcodeUp plataforma para cualquier empresa.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="tenantCustomerForm">
+                  <label>
+                    Empresa
+                    <select id="tenantCustomerCompany"></select>
+                  </label>
+                  <label>
+                    Proyecto / cartera
+                    <select id="tenantCustomerPortfolio"></select>
+                  </label>
+                  <label>
+                    Gestor
+                    <select id="tenantCustomerAgent"></select>
+                  </label>
+                  <label>
+                    Nombre cliente
+                    <input id="tenantCustomerName" type="text" required placeholder="Nombre o razon social" />
+                  </label>
+                  <label>
+                    Documento
+                    <input id="tenantCustomerDocument" type="text" required placeholder="CC / NIT" />
+                  </label>
+                  <label>
+                    Telefono
+                    <input id="tenantCustomerPhone" type="tel" placeholder="+57 ..." />
+                  </label>
+                  <label>
+                    Email
+                    <input id="tenantCustomerEmail" type="email" placeholder="cliente@correo.com" />
+                  </label>
+                  <label>
+                    Segmento
+                    <select id="tenantCustomerSegment"></select>
+                  </label>
+                  <label>
+                    Ciudad
+                    <input id="tenantCustomerCity" type="text" placeholder="Ciudad" />
+                  </label>
+                  <label>
+                    Saldo
+                    <input id="tenantCustomerBalance" type="number" min="1" step="1000" required />
+                  </label>
+                  <label>
+                    DPD / mora
+                    <input id="tenantCustomerDpd" type="number" min="0" required />
+                  </label>
+                  <label>
+                    Observacion
+                    <textarea id="tenantCustomerNotes" rows="3" placeholder="Nota inicial del caso."></textarea>
+                  </label>
+                  <button class="primary-button" type="submit">Crear cliente</button>
+                </form>
+              </section>
+            </div>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Parametrizacion de tipificaciones</h2>
+                  <p>Administra los arboles de combinacion por empresa sin tocar la base de datos.</p>
+                </div>
+              </div>
+              <div class="param-admin-grid">
+                <form class="form-stack" id="typificationForm">
+                  <label>
+                    Empresa
+                    <select id="typificationCompany"></select>
+                  </label>
+                  <input id="typificationNodeId" type="hidden" />
+                  <label>
+                    Nodo padre
+                    <select id="typificationParent"></select>
+                  </label>
+                  <label>
+                    Nombre visible
+                    <input id="typificationLabel" type="text" required placeholder="Ej. Titular contactado" />
+                  </label>
+                  <label>
+                    Codigo
+                    <input id="typificationCode" type="text" required placeholder="TITULAR_CONTACTADO" />
+                  </label>
+                  <label>
+                    Estado resultante
+                    <select id="typificationNextStatus">
+                      <option value="">Sin cambio automatico</option>
+                      <option>Contactado</option>
+                      <option>Promesa</option>
+                      <option>Sin contacto</option>
+                      <option>Disputa</option>
+                      <option>Escalado</option>
+                    </select>
+                  </label>
+                  <label>
+                    Canal sugerido
+                    <select id="typificationChannel">
+                      <option value="">Todos</option>
+                      <option>Telefono</option>
+                      <option>WhatsApp</option>
+                      <option>Email</option>
+                      <option>SMS</option>
+                    </select>
+                  </label>
+                  <label>
+                    Orden
+                    <input id="typificationSortOrder" type="number" value="0" />
+                  </label>
+                  <label class="checkbox-row">
+                    <input id="typificationRequiresPromise" type="checkbox" />
+                    Requiere promesa
+                  </label>
+                  <label class="checkbox-row">
+                    <input id="typificationRequiresPayment" type="checkbox" />
+                    Requiere pago
+                  </label>
+                  <div class="form-actions">
+                    <button class="primary-button" type="submit">Guardar nodo</button>
+                    <button class="ghost-button" id="typificationResetBtn" type="button">Nuevo nodo</button>
+                  </div>
+                </form>
+                <div class="typification-admin-panel">
+                  <div class="customer-results-bar" id="typificationSummary"></div>
+                  <div class="table-wrap">
+                    <table class="typification-table">
+                      <thead>
+                        <tr>
+                          <th>Nivel</th>
+                          <th>Nodo</th>
+                          <th>Padre</th>
+                          <th>Estado</th>
+                          <th>Reglas</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="typificationList"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Centro de control SaaS</h2>
+                  <p>Inventario general de empresas, proyectos, usuarios y clientes por tenant.</p>
+                </div>
+              </div>
+              <div class="tenant-grid" id="tenantGrid"></div>
+            </section>
+          </div>
+
+          <div class="view" id="view-promises">
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Promesas de pago</h2>
+                    <p>Seguimiento de compromisos vigentes, vencidos y cumplidos.</p>
+                  </div>
+                  <select id="promiseFilter" aria-label="Filtro de promesas">
+                    <option value="all">Todas</option>
+                    <option value="Vigente">Vigentes</option>
+                    <option value="Vencida">Vencidas</option>
+                    <option value="Cumplida">Cumplidas</option>
+                  </select>
+                </div>
+                <div class="promise-list" id="promiseList"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Crear promesa</h2>
+                    <p>Registra un compromiso y deja trazabilidad.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="promiseForm">
+                  <label>
+                    Cliente
+                    <select id="promiseCustomer"></select>
+                  </label>
+                  <label>
+                    Monto prometido
+                    <input id="promiseAmount" type="number" min="1" step="1000" required />
+                  </label>
+                  <label>
+                    Fecha compromiso
+                    <input id="promiseDate" type="date" required />
+                  </label>
+                  <label>
+                    Canal
+                    <select id="promiseChannel">
+                      <option>Telefono</option>
+                      <option>WhatsApp</option>
+                      <option>Email</option>
+                      <option>SMS</option>
+                    </select>
+                  </label>
+                  <button class="primary-button" type="submit">Guardar promesa</button>
+                </form>
+              </section>
+            </div>
+          </div>
+
+          <div class="view" id="view-payments">
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Pagos registrados</h2>
+                    <p>Conciliacion operativa de recaudos.</p>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Cliente</th>
+                        <th>Monto</th>
+                        <th>Medio</th>
+                        <th>Referencia</th>
+                      </tr>
+                    </thead>
+                    <tbody id="paymentsTable"></tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Registrar pago</h2>
+                    <p>Actualiza saldo, promesas y actividad.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="paymentForm">
+                  <label>
+                    Cliente
+                    <select id="paymentCustomer"></select>
+                  </label>
+                  <label>
+                    Monto pagado
+                    <input id="paymentAmount" type="number" min="1" step="1000" required />
+                  </label>
+                  <label>
+                    Fecha
+                    <input id="paymentDate" type="date" required />
+                  </label>
+                  <label>
+                    Medio
+                    <select id="paymentMethod">
+                      <option>Transferencia</option>
+                      <option>PSE</option>
+                      <option>Efectivo</option>
+                      <option>Tarjeta</option>
+                    </select>
+                  </label>
+                  <label>
+                    Referencia
+                    <input id="paymentReference" type="text" placeholder="TRX-0000" />
+                  </label>
+                  <button class="primary-button" type="submit">Registrar pago</button>
+                </form>
+              </section>
+            </div>
+          </div>
+
+          <div class="view" id="view-campaigns">
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Campanas multicanal</h2>
+                    <p>Segmentos, mensajes y resultados operativos.</p>
+                  </div>
+                </div>
+                <div class="campaign-list" id="campaignList"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Crear campana</h2>
+                    <p>Define publico, canal, plantilla y objetivo.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="campaignForm">
+                  <label>
+                    Nombre
+                    <input id="campaignName" type="text" required placeholder="Ej. Mora temprana - WhatsApp" />
+                  </label>
+                  <label>
+                    Segmento
+                    <select id="campaignSegment"></select>
+                  </label>
+                  <label>
+                    Canal
+                    <select id="campaignChannel">
+                      <option>WhatsApp</option>
+                      <option>Email</option>
+                      <option>SMS</option>
+                      <option>Llamada</option>
+                    </select>
+                  </label>
+                  <label>
+                    Plantilla
+                    <textarea id="campaignTemplate" rows="6"></textarea>
+                  </label>
+                  <button class="primary-button" type="submit">Guardar campana</button>
+                </form>
+              </section>
+            </div>
+          </div>
+
+          <div class="view" id="view-reports">
+            <div class="metric-grid" id="reportMetricGrid"></div>
+            <div class="analytics-grid">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Recuperacion mensual</h2>
+                    <p>Tendencia de pagos registrados.</p>
+                  </div>
+                </div>
+                <div class="chart-frame"><canvas id="reportRecoveryChart"></canvas></div>
+              </section>
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Riesgo de cartera</h2>
+                    <p>Distribucion de saldo por nivel de riesgo.</p>
+                  </div>
+                </div>
+                <div class="chart-frame"><canvas id="reportRiskChart"></canvas></div>
+              </section>
+            </div>
+            <div class="two-column">
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Recuperacion por agente</h2>
+                    <p>Pagos acumulados sobre cartera asignada.</p>
+                  </div>
+                </div>
+                <div class="bar-report" id="agentRecoveryReport"></div>
+              </section>
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Embudo de cobranza</h2>
+                    <p>De contacto a pago confirmado.</p>
+                  </div>
+                </div>
+                <div class="funnel" id="collectionFunnel"></div>
+              </section>
+            </div>
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Resumen gerencial</h2>
+                  <p>Lectura automatica de cartera y acciones recomendadas.</p>
+                </div>
+              </div>
+              <div class="insight-list" id="insightList"></div>
+            </section>
+          </div>
+
+          <div class="view" id="view-bi">
+            <div class="bi-hero">
+              <div>
+                <p class="eyebrow">Inteligencia de negocio</p>
+                <h2>Centro ejecutivo de decisiones</h2>
+                <p>Lectura consolidada de recuperacion, riesgo, productividad, promesas y oportunidades de accion.</p>
+              </div>
+              <div class="bi-hero-actions">
+                <button class="ghost-button compact" data-view-target="reports" type="button">Ver reportes</button>
+                <button class="primary-button compact" data-view-target="assignments" type="button">Gestionar repartos</button>
+              </div>
+            </div>
+
+            <div class="metric-grid" id="biMetricGrid"></div>
+
+            <div class="bi-chart-grid">
+              <section class="panel bi-wide">
+                <div class="panel-header">
+                  <div>
+                    <h2>Recuperacion vs cartera</h2>
+                    <p>Pagos, saldo pendiente y avance frente a meta.</p>
+                  </div>
+                </div>
+                <div class="chart-frame large"><canvas id="biRecoveryChart"></canvas></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Composicion de riesgo</h2>
+                    <p>Saldo por riesgo alto, medio y bajo.</p>
+                  </div>
+                </div>
+                <div class="chart-frame large"><canvas id="biRiskDonut"></canvas></div>
+                <div class="chart-legend" id="biRiskLegend"></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Top carteras</h2>
+                    <p>Mayor exposicion y concentracion.</p>
+                  </div>
+                </div>
+                <div class="chart-frame"><canvas id="biPortfolioChart"></canvas></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Productividad equipo</h2>
+                    <p>Clientes asignados y recuperacion.</p>
+                  </div>
+                </div>
+                <div class="chart-frame"><canvas id="biAgentChart"></canvas></div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-header">
+                  <div>
+                    <h2>Aging de mora</h2>
+                    <p>Concentracion por rango de dias vencidos.</p>
+                  </div>
+                </div>
+                <div class="chart-frame"><canvas id="biAgingChart"></canvas></div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Motor de decisiones</h2>
+                  <p>Recomendaciones ejecutivas generadas desde los indicadores actuales.</p>
+                </div>
+              </div>
+              <div class="decision-grid" id="biDecisionGrid"></div>
+            </section>
+          </div>
+
+          <div class="view" id="view-settings">
+            <div class="two-column">
+              <section class="panel" data-super-only="true">
+                <div class="panel-header">
+                  <div>
+                    <h2>Parametros de cobranza</h2>
+                    <p>Reglas base para prioridad y alertas.</p>
+                  </div>
+                </div>
+                <form class="form-stack" id="settingsForm">
+                  <label>
+                    Meta mensual de recuperacion
+                    <input id="monthlyGoal" type="number" min="1" step="100000" />
+                  </label>
+                  <label>
+                    Dias antes de alerta de promesa
+                    <input id="promiseAlertDays" type="number" min="0" max="15" />
+                  </label>
+                  <label>
+                    Mora critica desde
+                    <input id="criticalDpd" type="number" min="1" max="365" />
+                  </label>
+                  <button class="primary-button" type="submit">Guardar parametros</button>
+                </form>
+              </section>
+
+              <section class="panel" data-super-only="true">
+                <div class="panel-header">
+                  <div>
+                    <h2>Datos locales</h2>
+                    <p>Utilidades para demo, pruebas y reinicio.</p>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="ghost-button" id="seedDataBtn" type="button">Restaurar datos demo</button>
+                  <button class="danger-button" id="clearDataBtn" type="button">Borrar datos locales</button>
+                </div>
+                <div class="note-box">
+                  Esta version guarda la informacion en localStorage del navegador. Para produccion se recomienda backend con autenticacion, roles, auditoria inmutable e integraciones de telefonia, WhatsApp, pasarelas de pago y bureaus.
+                </div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Canales omnicanalidad</h2>
+                  <p>Administra los remitentes y origenes que usara la empresa antes de conectar proveedores reales.</p>
+                </div>
+              </div>
+
+              <div class="channel-admin-grid">
+                <div class="channel-box">
+                  <div>
+                    <h3>Lineas WhatsApp</h3>
+                    <p>Numeros autorizados para gestion y campanas.</p>
+                  </div>
+                  <div class="channel-list" id="whatsappChannelList"></div>
+                  <form class="form-stack" id="whatsappChannelForm">
+                    <label>
+                      Nombre de la linea
+                      <input id="whatsappChannelLabel" type="text" required placeholder="Ej. Linea principal cobranzas" />
+                    </label>
+                    <label>
+                      Numero internacional
+                      <input id="whatsappChannelValue" type="tel" required placeholder="+57 300 000 0000" />
+                    </label>
+                    <label>
+                      Proveedor
+                      <input id="whatsappChannelProvider" type="text" value="WhatsApp Web / Cloud API pendiente" />
+                    </label>
+                    <label class="checkbox-row">
+                      <input id="whatsappChannelDefault" type="checkbox" />
+                      Marcar como predeterminada
+                    </label>
+                    <button class="primary-button" type="submit">Agregar WhatsApp</button>
+                  </form>
+                </div>
+
+                <div class="channel-box">
+                  <div>
+                    <h3>Cuentas de correo</h3>
+                    <p>Correos remitentes para acuerdos, soportes y notificaciones.</p>
+                  </div>
+                  <div class="channel-list" id="emailChannelList"></div>
+                  <form class="form-stack" id="emailChannelForm">
+                    <label>
+                      Nombre de la cuenta
+                      <input id="emailChannelLabel" type="text" required placeholder="Ej. Correo cobranzas" />
+                    </label>
+                    <label>
+                      Email remitente
+                      <input id="emailChannelValue" type="email" required placeholder="cobranzas@empresa.com" />
+                    </label>
+                    <label>
+                      Proveedor
+                      <input id="emailChannelProvider" type="text" value="SMTP/API pendiente" />
+                    </label>
+                    <label class="checkbox-row">
+                      <input id="emailChannelDefault" type="checkbox" />
+                      Marcar como predeterminada
+                    </label>
+                    <button class="primary-button" type="submit">Agregar correo</button>
+                  </form>
+                </div>
+
+                <div class="channel-box">
+                  <div>
+                    <h3>Telefonia embebida futura</h3>
+                    <p>Preconfiguracion para PBX, SIP o proveedor WebRTC.</p>
+                  </div>
+                  <div class="channel-list" id="telephonyChannelList"></div>
+                  <form class="form-stack" id="telephonyChannelForm">
+                    <label>
+                      Nombre
+                      <input id="telephonyChannelLabel" type="text" required placeholder="Ej. PBX principal" />
+                    </label>
+                    <label>
+                      Servidor o descripcion
+                      <input id="telephonyChannelValue" type="text" required placeholder="wss://pbx.empresa.com/ws" />
+                    </label>
+                    <label>
+                      Proveedor
+                      <input id="telephonyChannelProvider" type="text" value="SIP/WebRTC pendiente" />
+                    </label>
+                    <button class="primary-button" type="submit">Guardar telefonia</button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="modal" id="customerModal">
+      <form class="modal-body" id="customerForm" method="dialog">
+        <div class="modal-header">
+          <div>
+            <h2>Nuevo caso de cobranza</h2>
+            <p>Registra cliente, saldo, mora y asignacion inicial.</p>
+          </div>
+          <button class="icon-button" id="closeCustomerModalBtn" type="button" aria-label="Cerrar">x</button>
+        </div>
+        <div class="form-grid">
+          <label>
+            Nombre
+            <input id="newName" type="text" required />
+          </label>
+          <label>
+            Documento
+            <input id="newDocument" type="text" required />
+          </label>
+          <label>
+            Telefono
+            <input id="newPhone" type="tel" required />
+          </label>
+          <label>
+            Email
+            <input id="newEmail" type="email" />
+          </label>
+          <label>
+            Segmento
+            <select id="newSegment"></select>
+          </label>
+          <label>
+            Agente
+            <select id="newAgent"></select>
+          </label>
+          <label>
+            Saldo vencido
+            <input id="newBalance" type="number" min="1" step="1000" required />
+          </label>
+          <label>
+            Dias de mora
+            <input id="newDpd" type="number" min="0" required />
+          </label>
+        </div>
+        <label>
+          Observacion inicial
+          <textarea id="newNotes" rows="3"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button class="ghost-button" id="cancelCustomerBtn" type="button">Cancelar</button>
+          <button class="primary-button" type="submit">Crear caso</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
