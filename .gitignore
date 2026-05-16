@@ -38,3 +38,6 @@ v2/postgres-data/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Agent / skill registry
+.atl/
