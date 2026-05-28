@@ -36,6 +36,7 @@ class Customer(Base):
     activities = relationship("ManagementActivity", back_populates="customer", cascade="all, delete-orphan")
     promises = relationship("PaymentPromise", back_populates="customer", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="customer", cascade="all, delete-orphan")
+    agreements = relationship("PaymentAgreement", back_populates="customer", cascade="all, delete-orphan")
 
 
 class TypificationNode(Base):
@@ -136,3 +137,36 @@ class ImportBatch(Base):
     skipped_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="completed", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class PaymentAgreement(Base):
+    __tablename__ = "payment_agreements"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True, nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    total_amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    installment_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    customer = relationship("Customer", back_populates="agreements")
+    installments = relationship("PaymentAgreementInstallment", back_populates="agreement", cascade="all, delete-orphan")
+
+
+class PaymentAgreementInstallment(Base):
+    __tablename__ = "payment_agreement_installments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    agreement_id: Mapped[int] = mapped_column(ForeignKey("payment_agreements.id"), index=True, nullable=False)
+    due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    paid_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    agreement = relationship("PaymentAgreement", back_populates="installments")

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -7,7 +8,7 @@ from app.core.config import settings
 from app.core.roles import can_be_direct_leader
 from app.core.security import hash_password
 from app.db.session import get_db
-from app.models import Project, Tenant, User
+from app.models import AuditLog, Project, Tenant, User
 from app.repositories.administration_repository import AdministrationRepository
 from app.schemas.administration import (
     AdminOverview,
@@ -24,6 +25,7 @@ from app.schemas.administration import (
     UserUpdate,
     role_options,
 )
+from app.services.audit_service import record_audit
 
 
 router = APIRouter(dependencies=[Depends(require_platform_admin)])
@@ -76,10 +78,12 @@ def list_tenants(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @router.post("/tenants", response_model=TenantAdminOut, status_code=status.HTTP_201_CREATED)
-def create_tenant(payload: TenantCreate, db: Session = Depends(get_db)) -> dict:
+def create_tenant(payload: TenantCreate, db: Session = Depends(get_db), user: User = Depends(require_platform_admin)) -> dict:
     tenant = Tenant(name=payload.name.strip(), slug=payload.slug, tax_id=payload.tax_id, notes=payload.notes)
     db.add(tenant)
     commit_or_conflict(db)
+    record_audit(db, user, "tenant", "create", tenant.id, tenant.id, after={"name": tenant.name, "slug": tenant.slug})
+    db.commit()
     return next(row for row in AdministrationRepository(db).list_tenants() if row["id"] == tenant.id)
 
 
@@ -133,7 +137,7 @@ def list_users(tenant_id: int | None = None, db: Session = Depends(get_db)) -> l
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> dict:
+def create_user(payload: UserCreate, db: Session = Depends(get_db), platform_user: User = Depends(require_platform_admin)) -> dict:
     validate_business_tenant(db.get(Tenant, payload.tenant_id))
     validate_leader(db, payload.tenant_id, payload.leader_id)
     user = User(
@@ -157,6 +161,8 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> dict:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     commit_or_conflict(db)
+    record_audit(db, platform_user, "user", "create", user.id, user.tenant_id, after={"email": user.email, "role": user.role})
+    db.commit()
     return next(row for row in AdministrationRepository(db).list_users(user.tenant_id) if row["id"] == user.id)
 
 
@@ -190,3 +196,23 @@ def assign_user_projects(user_id: int, payload: ProjectAssignmentIn, db: Session
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     commit_or_conflict(db)
     return next(row for row in AdministrationRepository(db).list_users(user.tenant_id) if row["id"] == user.id)
+
+
+@router.get("/audit-logs")
+def list_audit_logs(tenant_id: int | None = None, limit: int = 100, db: Session = Depends(get_db)) -> list[dict]:
+    query = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(max(limit, 1), 500))
+    if tenant_id:
+        query = query.where(AuditLog.tenant_id == tenant_id)
+    logs = list(db.scalars(query))
+    return [
+        {
+            "id": item.id,
+            "tenant_id": item.tenant_id,
+            "user_id": item.user_id,
+            "entity_type": item.entity_type,
+            "entity_id": item.entity_id,
+            "action": item.action,
+            "created_at": item.created_at,
+        }
+        for item in logs
+    ]

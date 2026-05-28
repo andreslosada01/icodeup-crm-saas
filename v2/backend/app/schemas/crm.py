@@ -151,6 +151,56 @@ class PaymentOut(BaseModel):
     created_at: datetime
 
 
+class AgreementInstallmentCreate(BaseModel):
+    due_date: datetime
+    amount: int = Field(gt=0)
+
+
+class AgreementInstallmentPatch(BaseModel):
+    paid_amount: int | None = Field(default=None, ge=0)
+    status: str | None = None
+
+
+class AgreementInstallmentOut(BaseModel):
+    id: int
+    agreement_id: int
+    due_date: datetime
+    amount: int
+    paid_amount: int
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PaymentAgreementCreate(BaseModel):
+    customer_id: int
+    total_amount: int = Field(gt=0)
+    installment_count: int = Field(gt=0)
+    start_date: datetime
+    status: str = "active"
+    notes: str | None = None
+    installments: list[AgreementInstallmentCreate] | None = None
+
+
+class PaymentAgreementOut(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int | None = None
+    customer_id: int
+    customer_name: str | None = None
+    user_id: int
+    total_amount: int
+    installment_count: int
+    start_date: datetime
+    status: str
+    notes: str | None = None
+    created_at: datetime
+    installments: list[AgreementInstallmentOut] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
 class CommunicationChannelCreate(BaseModel):
     tenant_id: int | None = None
     project_id: int | None = None
