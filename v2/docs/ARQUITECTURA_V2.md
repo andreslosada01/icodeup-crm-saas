@@ -42,13 +42,11 @@ flowchart TD
 - `app`: layout, rutas y estado global.
 - `styles`: sistema visual.
 
-## Migracion Desde V1
+## Evolucion Pendiente
 
-1. Autenticacion y sesion.
-2. Empresas/proyectos/usuarios.
-3. Clientes y cola de gestion.
-4. Tipificaciones parametrizables.
-5. Canales omnicanalidad.
-6. Reporteria y BI.
-7. Auditoria e importacion masiva.
-
+1. Alembic como migrador formal de esquema.
+2. Auditoria inmutable de acciones criticas.
+3. Pruebas automatizadas de permisos multiempresa.
+4. Integraciones reales de WhatsApp, email y telefonia WebRTC.
+5. Workers para importaciones, reportes programados y campanas.
+6. Observabilidad, backups y CI/CD para ambientes test, staging y produccion.

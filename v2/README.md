@@ -1,34 +1,48 @@
 # IcodeUp CRM V2
 
-Version corporativa del CRM SaaS de cobranzas.
-
-Esta carpeta nace para rehacer la aplicacion con arquitectura modular, configuracion por ambiente y separacion clara entre frontend, backend, dominio, datos e infraestructura.
+Version actual del CRM SaaS corporativo de cobranzas de IcodeUp.
 
 ## Objetivo
 
-- Mantener la V1 como prototipo funcional.
-- Construir V2 con arquitectura lista para pruebas, staging y produccion.
-- Evitar variables quemadas en codigo.
-- Centralizar la parametrizacion en usuarios IcodeUp plataforma.
-- Preparar el camino para PostgreSQL, auditoria, integraciones omnicanalidad y despliegue seguro.
+- Operar como plataforma multiempresa administrada por IcodeUp.
+- Aislar datos, usuarios, proyectos y clientes por empresa contratante.
+- Centralizar parametrizacion desde usuarios plataforma de IcodeUp.
+- Preparar el camino para test, staging y produccion con PostgreSQL, auditoria, integraciones y despliegue seguro.
 
-## Stack Propuesto
+## Stack
 
-- Frontend: React + TypeScript + Vite.
-- Backend: FastAPI + SQLAlchemy + Alembic.
+- Backend: FastAPI, SQLAlchemy y Pydantic.
 - Base de datos: PostgreSQL.
-- Cache/colas: Redis + worker para importaciones, reportes e integraciones.
-- Autenticacion: JWT/sesiones seguras, roles y permisos por tenant.
+- Frontend operativo: archivos estaticos servidos por FastAPI.
+- Frontend objetivo: React, TypeScript y Vite.
 - Configuracion: `.env` por ambiente.
+- Seguridad: roles, permisos y autenticacion por token.
 
 ## Estado
 
-Base inicial creada. PostgreSQL local esta configurado para desarrollo en `127.0.0.1:5432` y la V2 corre en `http://127.0.0.1:8020/`.
+La V2 ya cuenta con autenticacion, roles, empresas, proyectos, usuarios, clientes, repartos, cola de gestion, gestiones, promesas, pagos, canales, tipificaciones y reporteria BI.
 
-Arranque recomendado desde la raiz del proyecto:
+PostgreSQL local esta configurado para desarrollo en `127.0.0.1:5432` y la app corre en:
+
+```text
+http://127.0.0.1:8020/
+```
+
+## Arranque
+
+Desde la raiz del repositorio:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\v2\scripts\start-v2.ps1
 ```
 
-La implementacion funcional se migrara por modulos desde V1.
+## Data Demo
+
+Para generar data masiva de prueba:
+
+```powershell
+cd .\v2\backend
+.\.venv\Scripts\python.exe -m app.seeds.scale_demo --customers-per-project 125
+```
+
+La data demo crea empresas, proyectos, usuarios, agentes, supervisores, clientes, gestiones, promesas y pagos para validar tablero, cola y BI.

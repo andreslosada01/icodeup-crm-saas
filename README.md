@@ -1,78 +1,62 @@
-# IcodeUp CRM
+# IcodeUp CRM SaaS
 
-Primera version funcional de un CRM de cobranzas corporativo, multiempresa y preparado para evolucionar a SaaS.
+Repositorio oficial de IcodeUp CRM V2, una plataforma SaaS corporativa para cobranzas, recuperacion de cartera, gestion operativa, analitica BI y administracion multiempresa.
 
-## Como usarlo con base de datos y login
+La version activa del producto vive en `v2/`. El repositorio fue depurado para mantener una sola base de codigo y evitar confusiones de arranque, arquitectura y despliegue.
 
-Ejecuta en PowerShell:
+## Arranque Local
+
+Ejecuta desde la raiz del repositorio:
 
 ```powershell
-.\run-crm.ps1
+powershell -ExecutionPolicy Bypass -File .\v2\scripts\start-v2.ps1
 ```
 
 Luego abre:
 
 ```text
-http://127.0.0.1:8010
+http://127.0.0.1:8020/
 ```
 
-Las bases SQLite se crean automaticamente asi:
+Credenciales locales de plataforma:
 
-- Plataforma IcodeUp: `data/platform.sqlite3`.
-- Empresas cliente: `data/tenants/<empresa>.sqlite3`.
-- Base anterior de trabajo local: `data/icodeup_crm.sqlite3`, conservada como origen de migracion.
+```text
+platform@icodeup.com
+ChangeMeV2Local!
+```
 
-Usuarios demo:
+## Stack
 
-- Plataforma IcodeUp: `platform@icodeup.com` / `Platform123!`
-- `super@pepeperez.com` / `Super123!`
-- `admin@pepeperez.com` / `Admin123!`
-- `lider@pepeperez.com` / `Lider123!`
-- `gestor@pepeperez.com` / `Gestor123!`
-- `calidad@pepeperez.com` / `Calidad123!`
-- `super@martinez.com` / `Super123!`
-- `admin@martinez.com` / `Admin123!`
-- `lider@martinez.com` / `Lider123!`
-- `gestor@martinez.com` / `Gestor123!`
-- `calidad@martinez.com` / `Calidad123!`
+- Backend: FastAPI, SQLAlchemy y PostgreSQL.
+- Frontend operativo: HTML, CSS y JavaScript servido por FastAPI.
+- Frontend objetivo: React, TypeScript y Vite.
+- Autenticacion: tokens JWT y roles por tenant.
+- Base de datos local: PostgreSQL portable para desarrollo.
+- Arquitectura SaaS: IcodeUp plataforma, empresas cliente, proyectos, usuarios, clientes y datos aislados por tenant.
 
-## Modulos incluidos
+## Modulos Actuales
 
-- Tablero ejecutivo con saldo vencido, recuperado, promesas y riesgo.
-- Cola de gestion con filtros por agente, estado y riesgo.
-- Expediente 360 del cliente con bitacora, acciones rapidas y seguimiento.
-- Registro de promesas de pago y cambio automatico de vencidas.
-- Registro de pagos con actualizacion de saldo.
-- Campanas multicanal por segmento.
-- Reportes de recuperacion por agente, embudo e insights gerenciales.
-- Modulo BI ejecutivo con graficos de recuperacion, riesgo, carteras, equipo y aging.
-- Configuracion de meta mensual, alertas y mora critica.
-- Exportacion CSV de cartera.
-- Persistencia local usando `localStorage`.
-- Backend local con SQLite, sesiones, empresas y roles.
-- Arquitectura SaaS local con base de plataforma y una base tenant por empresa cliente.
-- Acceso SaaS: la empresa se autodetecta por el usuario y cada cliente ve solo su entorno.
-- Modulo Empresas para que IcodeUp plataforma cree empresas contratantes, proyectos y usuarios tenant.
-- Inventario general para IcodeUp plataforma con usuarios, proyectos y clientes por empresa.
-- Arbol de tipificaciones por empresa.
-- Omnicanalidad inicial con click to call, WhatsApp y email.
-- Configuracion administrativa de lineas WhatsApp, correos y telefonia futura por empresa.
-- Carga de repartos por CSV con cartera, lider y gestor.
-- Modulo Usuarios para crear usuarios, asignar lideres y asociarlos a carteras/proyectos.
+- Login corporativo.
+- Tablero ejecutivo y BI predictivo.
+- Cola de gestion.
+- Clientes y carga de repartos.
+- Promesas de pago.
+- Pagos.
+- Canales de comunicacion.
+- Empresas cliente.
+- Proyectos/carteras.
+- Usuarios, lideres, supervisores y agentes.
+- Tipificaciones parametrizables.
+- Data demo masiva para pruebas operativas.
 
-## Siguiente evolucion recomendada
+## Rutas Relevantes
 
-- Backend con usuarios, roles, permisos y auditoria inmutable.
-- Base de datos relacional para clientes, obligaciones, pagos, gestiones y promesas.
-- Integracion con telefonia, WhatsApp Business, email, SMS y pasarelas de pago.
-- Carga masiva de cartera por Excel/CSV.
-- Motor de reglas para segmentacion, prioridad y asignacion de gestores.
-- Cumplimiento: habeas data, consentimiento, horarios permitidos y trazabilidad legal.
+- Backend: `v2/backend/app/`
+- Frontend estatico: `v2/frontend/static/`
+- Scripts locales: `v2/scripts/`
+- Documentacion tecnica: `v2/docs/`
+- Sembrador demo: `v2/backend/app/seeds/scale_demo.py`
 
-Ver tambien `PLAN_PRODUCCION.md`.
+## Seguridad Local
 
-Ver estructura tecnica en `ARQUITECTURA.md`.
-
-Ver criterios corporativos en `ESTANDARES_CORPORATIVOS.md`.
-
-Ver modelo SaaS multiempresa en `SAAS_MULTIEMPRESA.md`.
+No se versionan `.env`, entornos virtuales, runtime portable de PostgreSQL, base de datos local ni logs. Usa `v2/.env.example` como referencia para crear configuraciones por ambiente.

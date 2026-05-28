@@ -2,8 +2,8 @@
 
 ## Puertos
 
-- V1 funcional: `http://127.0.0.1:8010/`
-- V2 arquitectura nueva: `http://127.0.0.1:8020/`
+- IcodeUp CRM V2: `http://127.0.0.1:8020/`
+- PostgreSQL: `127.0.0.1:5432`
 
 ## Backend V2
 
@@ -75,4 +75,4 @@ debe mostrar `PostgreSQL conectado`.
 
 ## Siguiente paso
 
-Continuar la migracion funcional de modulos de V1 a V2: empresas, proyectos, usuarios, clientes, tipificaciones, gestiones, auditoria y reporteria.
+Continuar el endurecimiento de V2 para produccion: migraciones Alembic, auditoria, pruebas automatizadas, integraciones omnicanalidad y pipeline de despliegue.

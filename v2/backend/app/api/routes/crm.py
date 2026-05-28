@@ -661,7 +661,7 @@ def business_intelligence(
             "expected_recovery_high": round(expected_recovery * 1.18),
             "leakage_risk_value": round((no_contact_balance + stale_balance + overdue_promise_value) * 0.18),
             "horizon_days": horizon_days,
-            "model": "scoring_operativo_v1",
+            "model": "scoring_operativo_v2",
         },
         "aging_buckets": list(aging_template.values()),
         "project_performance": project_performance,

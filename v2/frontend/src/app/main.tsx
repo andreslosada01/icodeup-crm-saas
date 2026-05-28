@@ -8,9 +8,9 @@ function App() {
     <main className="app-shell">
       <section className="panel">
         <p className="eyebrow">IcodeUp CRM V2</p>
-        <h1>Arquitectura modular iniciada</h1>
+        <h1>Arquitectura SaaS corporativa</h1>
         <p>
-          Esta version sera migrada por modulos desde la V1 funcional hacia una base SaaS corporativa.
+          Base modular para evolucionar el frontend React de la plataforma actual.
         </p>
       </section>
     </main>
@@ -22,4 +22,3 @@ createRoot(document.getElementById("root") as HTMLElement).render(
     <App />
   </React.StrictMode>
 );
-

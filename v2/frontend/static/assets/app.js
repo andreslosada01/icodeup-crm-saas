@@ -421,7 +421,7 @@ function renderDashboardStacks() {
     { label: "Aislamiento por empresa", detail: isPlatform() ? "IcodeUp visualiza todo; cada empresa solo ve su operacion." : "Tu sesion esta limitada a la empresa autenticada.", tone: "green" },
     { label: "Roles y alcance", detail: "Administrador, coordinador, supervisor de calidad y gestor con permisos diferenciados.", tone: "green" },
     { label: "Trazabilidad", detail: "Gestiones, promesas, pagos y canales quedan asociados a cliente, proyecto y usuario.", tone: "green" },
-    { label: "Motor predictivo", detail: `Modelo ${escapeHtml(bi.prediction?.model || "scoring_operativo_v1")} con scoring, semaforos y valor esperado.`, tone: "blue" },
+    { label: "Motor predictivo", detail: `Modelo ${escapeHtml(bi.prediction?.model || "scoring_operativo_v2")} con scoring, semaforos y valor esperado.`, tone: "blue" },
   ];
   document.querySelector("#dashboardGovernance").innerHTML = governance
     .map(
