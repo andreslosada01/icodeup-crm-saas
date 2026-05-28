@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models import ManagementActivity, PaymentPromise, User
 from app.schemas.crm import PromiseCreate, PromiseOut
 from app.services.audit_service import record_audit
+from app.services.access_control import require_permission
 
 from .access import customer_for_access, customer_query, ensure_read_access
 
@@ -18,6 +19,7 @@ router = APIRouter()
 
 @router.get("/promises", response_model=list[PromiseOut])
 def list_promises(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PromiseOut]:
+    require_permission(db, user, "collections.promises.view")
     ensure_read_access(user)
     customers = list(db.scalars(customer_query(db, user)))
     customer_map = {customer.id: customer for customer in customers}
@@ -39,6 +41,7 @@ def list_promises(db: Session = Depends(get_db), user: User = Depends(current_us
 
 @router.post("/promises", response_model=PromiseOut, status_code=status.HTTP_201_CREATED)
 def create_promise(payload: PromiseCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> PromiseOut:
+    require_permission(db, user, "collections.promises.create")
     customer = customer_for_access(db, payload.customer_id, user, write=True)
     promise = PaymentPromise(
         tenant_id=customer.tenant_id,
@@ -61,6 +64,7 @@ def create_promise(payload: PromiseCreate, db: Session = Depends(get_db), user: 
 
 @router.patch("/promises/{promise_id}/complete", response_model=PromiseOut)
 def complete_promise(promise_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> PromiseOut:
+    require_permission(db, user, "collections.promises.update")
     promise = db.get(PaymentPromise, promise_id)
     if promise is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Promesa no encontrada.")

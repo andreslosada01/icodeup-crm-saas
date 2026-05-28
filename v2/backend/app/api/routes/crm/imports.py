@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.models import Customer, ImportBatch, User
 from app.schemas.crm import ImportCustomersRequest, ImportCustomersResponse
 from app.services.audit_service import record_audit
+from app.services.access_control import require_permission
 
 from .access import ensure_manage_access, project_for_access, validate_assigned_user
 from .utils import next_action_for, parse_csv_records, parse_money, pick, priority_score, risk_from_dpd
@@ -19,6 +20,7 @@ router = APIRouter()
 
 @router.post("/customers/import", response_model=ImportCustomersResponse)
 def import_customers(payload: ImportCustomersRequest, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ImportCustomersResponse:
+    require_permission(db, user, "crm.clients.import")
     ensure_manage_access(user)
     project = project_for_access(db, payload.project_id, user)
     validate_assigned_user(db, project.tenant_id, payload.assigned_user_id)

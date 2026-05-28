@@ -10,6 +10,7 @@ from app.api.deps import current_user
 from app.db.session import get_db
 from app.models import Customer, Payment, PaymentPromise, Project, User
 from app.schemas.crm import DashboardMetrics
+from app.services.access_control import require_permission
 
 from .access import customer_query, ensure_read_access, is_platform
 
@@ -24,6 +25,7 @@ def dashboard(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> DashboardMetrics:
+    require_permission(db, user, "crm.dashboard.view")
     ensure_read_access(user)
     query = customer_query(db, user)
     if tenant_id and is_platform(user):

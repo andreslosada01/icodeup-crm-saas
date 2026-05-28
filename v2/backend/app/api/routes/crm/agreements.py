@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models import Customer, PaymentAgreement, PaymentAgreementInstallment, User
 from app.schemas.crm import AgreementInstallmentOut, AgreementInstallmentPatch, PaymentAgreementCreate, PaymentAgreementOut
 from app.services.audit_service import record_audit
+from app.services.access_control import require_permission
 
 from .access import customer_for_access, customer_query, ensure_read_access, is_platform
 
@@ -57,6 +58,7 @@ def agreement_to_out(db: Session, agreement: PaymentAgreement) -> PaymentAgreeme
 
 @router.get("/agreements", response_model=list[PaymentAgreementOut])
 def list_agreements(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentAgreementOut]:
+    require_permission(db, user, "collections.agreements.view")
     ensure_read_access(user)
     if is_platform(user):
         agreements = list(db.scalars(select(PaymentAgreement).order_by(PaymentAgreement.created_at.desc())))
@@ -69,6 +71,7 @@ def list_agreements(db: Session = Depends(get_db), user: User = Depends(current_
 
 @router.post("/agreements", response_model=PaymentAgreementOut, status_code=status.HTTP_201_CREATED)
 def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> PaymentAgreementOut:
+    require_permission(db, user, "collections.agreements.create")
     ensure_agreement_write(user)
     customer = customer_for_access(db, payload.customer_id, user, write=False)
     installments_payload = payload.installments or []
@@ -104,6 +107,7 @@ def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_
 
 @router.get("/agreements/{agreement_id}", response_model=PaymentAgreementOut)
 def get_agreement(agreement_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> PaymentAgreementOut:
+    require_permission(db, user, "collections.agreements.view")
     ensure_read_access(user)
     return agreement_to_out(db, agreement_for_access(db, agreement_id, user))
 
@@ -116,6 +120,7 @@ def update_installment(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> PaymentAgreementOut:
+    require_permission(db, user, "collections.agreements.update")
     agreement = agreement_for_access(db, agreement_id, user, write=True)
     installment = db.get(PaymentAgreementInstallment, installment_id)
     if installment is None or installment.agreement_id != agreement.id:

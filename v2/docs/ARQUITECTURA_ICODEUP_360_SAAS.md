@@ -18,6 +18,7 @@ v2/backend/app/
     auth.py
     menu.py
     dashboard.py
+    governance.py
     administration.py
     subscriptions.py
     crm/
@@ -108,6 +109,15 @@ Las rutas operativas pueden validar tenant, modulo y permiso sin duplicar logica
 
 El frontend renderiza el menu con esa respuesta y oculta modulos no contratados.
 
+### Flujo de navegacion por rol
+
+- **SuperAdmin Icodeup:** `governance`, `tenants`, `plans`, `subscriptions`, `modules`, `users`, `projects`, `typifications`, `audit`, `system-health`.
+- **Admin Empresa:** `dashboard`, `tenant-settings`, `company-users`, `roles-permissions`, `tenant-modules`, `branding`, `customers`, `parties`, operacion, reportes y auditoria del tenant.
+- **Lider operativo:** inicio, cola, clientes, terceros, promesas, pagos, acuerdos, juridico, documentos, ventas y reportes autorizados.
+- **Usuario operativo:** inicio, mi operacion, clientes/terceros, tareas y documentos autorizados.
+
+No se debe confiar solo en el menu: los endpoints tambien validan tenant, modulo y permiso.
+
 ## Dashboard por rol
 
 `GET /api/dashboard/me` retorna una lectura distinta para:
@@ -129,7 +139,15 @@ La fase mantiene:
 ## Evolucion recomendada
 
 1. Convertir compat migrations a Alembic.
-2. Completar administracion UI de roles/permisos/modulos.
+2. Convertir roles custom en una experiencia completa de edicion/duplicado/versionado.
 3. Migrar progresivamente clientes a `Party`.
 4. Agregar workflows/estados configurables.
 5. Migrar frontend a React/Vite en V3.
+
+## Reglas de exportes seguros
+
+- Todo exporte operativo debe validar permiso `*.export`.
+- Los usuarios cliente exportan solo su `tenant_id`.
+- Platform admin puede exportar globalmente solo desde rutas autorizadas.
+- Si se recibe `tenant_id` por parametro, solo platform admin puede usarlo para cambiar alcance.
+- Los exportes agregados en Fase 2 usan consultas filtradas por `customer_query` o por tenant validado.

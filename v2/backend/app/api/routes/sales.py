@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models import Customer, Lead, Opportunity, User
 from app.schemas.sales import LeadCreate, LeadOut, LeadPatch, OpportunityCreate, OpportunityOut, OpportunityPatch
 from app.services.audit_service import record_audit
-from app.services.access_control import require_active_module
+from app.services.access_control import require_active_module, require_permission
 
 
 router = APIRouter(dependencies=[Depends(require_active_module("sales"))])
@@ -69,6 +69,7 @@ def opportunity_for_access(db: Session, opportunity_id: int, user: User, write: 
 
 @router.get("/leads", response_model=list[LeadOut])
 def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Lead]:
+    require_permission(db, user, "sales.leads.view")
     ensure_sales_read(user)
     query = select(Lead).order_by(Lead.created_at.desc())
     if not is_platform(user):
@@ -80,6 +81,7 @@ def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)
 
 @router.post("/leads", response_model=LeadOut, status_code=status.HTTP_201_CREATED)
 def create_lead(payload: LeadCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Lead:
+    require_permission(db, user, "sales.leads.create")
     ensure_sales_manage(user)
     tenant_id = tenant_from_payload(payload.tenant_id, user)
     validate_sales_project_and_user(db, tenant_id, payload.project_id, payload.assigned_user_id, user)
@@ -94,6 +96,7 @@ def create_lead(payload: LeadCreate, db: Session = Depends(get_db), user: User =
 
 @router.patch("/leads/{lead_id}", response_model=LeadOut)
 def update_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Lead:
+    require_permission(db, user, "sales.leads.update")
     lead = lead_for_access(db, lead_id, user, write=True)
     updates = payload.model_dump(exclude_unset=True)
     if "project_id" in updates or "assigned_user_id" in updates:
@@ -107,6 +110,7 @@ def update_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db),
 
 @router.get("/opportunities", response_model=list[OpportunityOut])
 def list_opportunities(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Opportunity]:
+    require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(user)
     query = select(Opportunity).order_by(Opportunity.created_at.desc())
     if not is_platform(user):
@@ -118,6 +122,7 @@ def list_opportunities(db: Session = Depends(get_db), user: User = Depends(curre
 
 @router.post("/opportunities", response_model=OpportunityOut, status_code=status.HTTP_201_CREATED)
 def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Opportunity:
+    require_permission(db, user, "sales.opportunities.create")
     ensure_sales_manage(user)
     tenant_id = tenant_from_payload(payload.tenant_id, user)
     validate_assigned_user(db, tenant_id, payload.assigned_user_id)
@@ -140,6 +145,7 @@ def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)
 
 @router.patch("/opportunities/{opportunity_id}", response_model=OpportunityOut)
 def update_opportunity(opportunity_id: int, payload: OpportunityPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Opportunity:
+    require_permission(db, user, "sales.opportunities.update")
     opportunity = opportunity_for_access(db, opportunity_id, user, write=True)
     updates = payload.model_dump(exclude_unset=True)
     if "assigned_user_id" in updates:

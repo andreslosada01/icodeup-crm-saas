@@ -10,6 +10,7 @@ from app.api.deps import current_user
 from app.db.session import get_db
 from app.models import ManagementActivity, PaymentPromise, TypificationNode, User
 from app.schemas.crm import ActivityCreate, ActivityOut
+from app.services.access_control import require_permission
 
 from .access import activity_to_out, customer_for_access, ensure_read_access
 from .utils import next_action_for, priority_score
@@ -20,6 +21,7 @@ router = APIRouter()
 
 @router.get("/customers/{customer_id}/activities", response_model=list[ActivityOut])
 def list_activities(customer_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ActivityOut]:
+    require_permission(db, user, "crm.clients.view")
     ensure_read_access(user)
     customer_for_access(db, customer_id, user)
     activities = list(db.scalars(select(ManagementActivity).where(ManagementActivity.customer_id == customer_id).order_by(ManagementActivity.created_at.desc()).limit(10)))
@@ -28,6 +30,7 @@ def list_activities(customer_id: int, db: Session = Depends(get_db), user: User 
 
 @router.post("/customers/{customer_id}/activities", response_model=ActivityOut, status_code=status.HTTP_201_CREATED)
 def create_activity(customer_id: int, payload: ActivityCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ActivityOut:
+    require_permission(db, user, "crm.clients.update")
     ensure_read_access(user)
     customer = customer_for_access(db, customer_id, user, write=True)
     typification = db.get(TypificationNode, payload.typification_id) if payload.typification_id else None

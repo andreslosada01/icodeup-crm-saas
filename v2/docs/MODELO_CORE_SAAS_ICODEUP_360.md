@@ -53,6 +53,22 @@ Roles sistema:
 - `quality_supervisor`
 - `agent`
 
+## Matriz de permisos por modulo
+
+| Modulo | Permisos base |
+| --- | --- |
+| Core | `menu.view`, `platform.governance.view`, `platform.governance.configure`, `health.view` |
+| Administracion | `tenant.settings.view`, `tenant.settings.configure`, `users.view`, `users.create`, `users.update`, `users.assign`, `roles.view`, `roles.create`, `roles.update`, `roles.configure`, `modules.view`, `modules.configure`, `audit.logs.view`, `audit.logs.export` |
+| CRM | `crm.dashboard.view`, `crm.clients.view`, `crm.clients.create`, `crm.clients.update`, `crm.clients.delete`, `crm.clients.import`, `crm.clients.export`, `parties.view`, `parties.create`, `parties.update`, `parties.export` |
+| Cobranzas | `collections.queue.view`, `collections.promises.view/create/update/export`, `collections.payments.view/create/export`, `collections.agreements.view/create/update/export` |
+| Juridico | `legal.cases.view/create/update/export`, `legal.deadlines.view` |
+| Documentos | `documents.view/create/update/export` |
+| Ventas | `sales.leads.view/create/update/export`, `sales.opportunities.view/create/update/export` |
+| BI | `reports.view`, `reports.export` |
+| Integraciones | `integrations.channels.view/create/update` |
+
+Los permisos legacy (`crm.read`, `crm.manage`, `collections.read`, etc.) se conservan para compatibilidad durante la transicion.
+
 ## Planes y suscripciones
 
 Tablas:
@@ -90,6 +106,15 @@ Modulos registrados:
 - `industrial`
 
 Los modulos futuros quedan registrados pero no desarrollados funcionalmente en esta fase.
+
+## Reglas de activacion de modulos
+
+- El catalogo global vive en `modules`.
+- La contratacion por empresa vive en `tenant_modules`.
+- `enabled` e `is_enabled` deben estar activos para permitir acceso.
+- Si un tenant antiguo no tiene filas en `tenant_modules`, el sistema conserva comportamiento permisivo para no bloquear instalaciones heredadas.
+- Solo SuperAdmin Icodeup puede activar/desactivar modulos desde `/api/governance/modules/{tenant_id}`.
+- Admin Empresa puede consultar sus modulos, pero no activar capacidades no contratadas.
 
 ## Menu dinamico
 
@@ -163,3 +188,16 @@ Campos reforzados:
 - `created_at`
 
 Se conservan `entity_type`, `entity_id`, `before_json` y `after_json` por compatibilidad.
+
+## Pantallas administrativas Fase 2
+
+- Gobierno SaaS global.
+- Planes.
+- Suscripciones.
+- Modulos por empresa.
+- Mi empresa.
+- Usuarios de empresa.
+- Roles y permisos.
+- Branding.
+- Auditoria.
+- Terceros maestros.

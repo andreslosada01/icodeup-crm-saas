@@ -14,10 +14,49 @@ from app.models import Module, Permission, Role, RolePermission, Tenant, TenantM
 
 ROLE_PERMISSION_FALLBACKS = {
     PLATFORM_ADMIN: {"*"},
-    TENANT_ADMIN: {"tenant.manage", "users.manage", "crm.manage", "collections.manage", "legal.manage", "documents.manage", "sales.manage", "reports.view", "menu.view"},
-    COORDINATOR: {"crm.manage", "collections.manage", "legal.manage", "documents.manage", "sales.manage", "reports.view", "menu.view"},
-    QUALITY_SUPERVISOR: {"crm.read", "collections.read", "legal.read", "documents.read", "reports.view", "menu.view"},
-    AGENT: {"crm.read", "crm.manage_own", "collections.read", "collections.manage_own", "documents.read", "sales.read_own", "menu.view"},
+    TENANT_ADMIN: {
+        "tenant.manage", "tenant.settings.view", "tenant.settings.configure",
+        "users.manage", "users.view", "users.create", "users.update", "users.assign",
+        "roles.manage", "roles.view", "roles.create", "roles.update", "roles.configure",
+        "modules.view", "crm.read", "crm.manage", "crm.dashboard.view",
+        "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.export", "crm.clients.import",
+        "parties.view", "parties.create", "parties.update", "parties.export",
+        "collections.read", "collections.manage", "collections.queue.view",
+        "collections.promises.view", "collections.promises.create", "collections.promises.update", "collections.promises.export",
+        "collections.payments.view", "collections.payments.create", "collections.payments.export",
+        "collections.agreements.view", "collections.agreements.create", "collections.agreements.update", "collections.agreements.export",
+        "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.cases.export", "legal.deadlines.view",
+        "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update", "documents.export",
+        "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export",
+        "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
+        "reports.view", "reports.export", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
+        "audit.logs.view", "audit.logs.export", "menu.view",
+    },
+    COORDINATOR: {
+        "crm.manage", "crm.read", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
+        "parties.view", "parties.create", "parties.update",
+        "collections.manage", "collections.read", "collections.queue.view",
+        "collections.promises.view", "collections.promises.create", "collections.promises.update",
+        "collections.payments.view", "collections.payments.create",
+        "collections.agreements.view", "collections.agreements.create", "collections.agreements.update",
+        "legal.manage", "legal.read", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
+        "documents.manage", "documents.read", "documents.view", "documents.create", "documents.update",
+        "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
+        "reports.view", "reports.export", "menu.view",
+    },
+    QUALITY_SUPERVISOR: {
+        "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
+        "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
+        "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
+        "reports.view", "menu.view",
+    },
+    AGENT: {
+        "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update",
+        "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
+        "collections.promises.view", "collections.promises.create", "collections.promises.update",
+        "collections.payments.view", "collections.payments.create", "documents.read", "documents.view",
+        "sales.read_own", "sales.leads.view", "sales.opportunities.view", "menu.view",
+    },
 }
 
 

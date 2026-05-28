@@ -4,6 +4,7 @@ let currentUser = JSON.parse(localStorage.getItem("icodeup_v2_user") || "null");
 const state = {
   core: { menu: null, roleDashboard: null },
   admin: { overview: null, tenants: [], projects: [], users: [], roles: [], typifications: [] },
+  governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null },
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], channels: [], typifications: [] },
   selectedCustomer: null,
   selectedActivities: [],
@@ -26,7 +27,20 @@ const titles = {
   tenants: "Empresas",
   projects: "Proyectos",
   users: "Usuarios",
-  typifications: "Tipificaciones"
+  typifications: "Tipificaciones",
+  governance: "Gobierno SaaS",
+  plans: "Planes",
+  subscriptions: "Suscripciones",
+  modules: "Modulos",
+  "tenant-settings": "Mi empresa",
+  "company-users": "Usuarios de empresa",
+  "roles-permissions": "Roles y permisos",
+  "tenant-modules": "Modulos contratados",
+  branding: "Branding",
+  audit: "Auditoria",
+  "system-health": "Salud del sistema",
+  parties: "Tercero maestro",
+  tasks: "Mis tareas"
 };
 
 const loginView = document.querySelector("#loginView");
@@ -158,6 +172,34 @@ async function api(path, options = {}) {
   return payload;
 }
 
+async function apiMaybe(path, fallback, options = {}) {
+  try {
+    return await api(path, options);
+  } catch (error) {
+    console.warn(`${path}: ${error.message}`);
+    return fallback;
+  }
+}
+
+async function downloadCsv(path, fileName) {
+  const response = await fetch(path, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || "No fue posible exportar.");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function isPlatform() {
   return currentUser?.role === "platform_admin";
 }
@@ -212,6 +254,8 @@ function showApp() {
   applyBranding(currentUser || {});
   document.querySelectorAll(".platform-only").forEach((item) => item.classList.toggle("hidden", !isPlatform()));
   document.querySelectorAll(".manager-only").forEach((item) => item.classList.toggle("hidden", !canManageCrm()));
+  const canExport = ["platform_admin", "tenant_admin", "coordinator"].includes(currentUser?.role);
+  document.querySelectorAll("#exportCustomers, #exportPayments").forEach((item) => item.classList.toggle("hidden", !canExport));
 }
 
 function showLogin() {
@@ -252,6 +296,30 @@ async function loadAdminData() {
   state.admin = { overview, roles, tenants, projects, users };
 }
 
+async function loadGovernanceData() {
+  const allowed = (...sections) => menuHasSection(...sections);
+  const selectedModuleTenant = isPlatform() ? (document.querySelector("#moduleTenantFilter")?.value || state.admin.tenants[0]?.id || "") : "";
+  const moduleTenant = selectedModuleTenant ? `?tenant_id=${selectedModuleTenant}` : "";
+  const auditParams = queryParams({
+    tenant_id: isPlatform() ? document.querySelector("#auditTenantFilter")?.value || "" : "",
+    module: document.querySelector("#auditModuleFilter")?.value || ""
+  });
+  const [permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health] = await Promise.all([
+    allowed("roles-permissions") ? apiMaybe("/api/governance/permissions", []) : [],
+    allowed("roles-permissions") ? apiMaybe("/api/governance/roles", []) : [],
+    allowed("company-users", "roles-permissions") ? apiMaybe("/api/governance/users", []) : [],
+    allowed("modules", "tenant-modules") ? apiMaybe(`/api/governance/modules${moduleTenant}`, []) : [],
+    allowed("tenant-settings", "branding") ? apiMaybe("/api/governance/settings", null) : null,
+    allowed("audit", "governance") ? apiMaybe(`/api/governance/audit-logs?${auditParams}`, []) : [],
+    allowed("parties") ? apiMaybe("/api/governance/parties", []) : [],
+    allowed("plans") ? apiMaybe("/api/subscriptions/plans", []) : [],
+    allowed("subscriptions", "governance") ? apiMaybe("/api/governance/subscriptions", []) : [],
+    allowed("system-health", "governance") ? apiMaybe("/api/health", null) : null
+  ]);
+  state.governance = { permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health };
+  if (settings) applyBranding(settings);
+}
+
 async function loadCoreData() {
   const [menu, roleDashboard] = await Promise.all([
     api("/api/menu/me"),
@@ -278,12 +346,12 @@ function queryParams(params) {
 
 async function loadCrmData() {
   const [options, dashboard, promises, payments, channels, typifications] = await Promise.all([
-    api("/api/crm/options"),
-    api("/api/crm/dashboard"),
-    api("/api/crm/promises"),
-    api("/api/crm/payments"),
-    api("/api/crm/channels"),
-    api("/api/crm/typifications")
+    apiMaybe("/api/crm/options", { tenants: [], projects: [], users: [], channels: [] }),
+    apiMaybe("/api/crm/dashboard", null),
+    apiMaybe("/api/crm/promises", []),
+    apiMaybe("/api/crm/payments", []),
+    apiMaybe("/api/crm/channels", []),
+    apiMaybe("/api/crm/typifications", [])
   ]);
   state.crm.options = options;
   state.crm.dashboard = dashboard;
@@ -327,6 +395,7 @@ async function refreshAll() {
   await loadCoreData();
   renderDynamicMenu();
   await loadAdminData();
+  await loadGovernanceData();
   await loadTypifications();
   if (menuHasSection("queue", "customers", "promises", "payments", "agreements", "channels", "reports")) {
     await optionalLoad("Datos CRM", loadCrmData);
@@ -353,6 +422,7 @@ function fillSelects() {
   const projectOptions = optionList(state.crm.options.projects, "id", "label");
   const userOptions = optionList(state.crm.options.users, "id", "label");
   const customerOptions = optionList(state.crm.customers?.items || [], "id", "name");
+  const permissionOptions = optionList(state.governance.permissions, "code", "code");
 
   document.querySelectorAll('select[name="tenant_id"]').forEach((select) => {
     const current = select.value;
@@ -378,6 +448,20 @@ function fillSelects() {
 
   const roleSelect = document.querySelector('#userForm select[name="role"]');
   if (roleSelect) roleSelect.innerHTML = optionList(state.admin.roles, "value", "label");
+  document.querySelectorAll('#roleForm select[name="permission_codes"]').forEach((select) => {
+    const selected = new Set(Array.from(select.selectedOptions).map((option) => option.value));
+    select.innerHTML = permissionOptions;
+    Array.from(select.options).forEach((option) => {
+      option.selected = selected.has(option.value);
+    });
+  });
+  ["#moduleTenantFilter", "#auditTenantFilter"].forEach((selector) => {
+    const select = document.querySelector(selector);
+    if (!select) return;
+    const current = select.value || state.admin.tenants[0]?.id || "";
+    select.innerHTML = `<option value="">${selector === "#auditTenantFilter" ? "Todas las empresas" : "Selecciona empresa"}</option>${adminTenantOptions}`;
+    if (current) select.value = current;
+  });
 
   const parentSelect = document.querySelector('#typificationForm select[name="parent_id"]');
   if (parentSelect) {
@@ -1213,6 +1297,92 @@ function renderTypifications() {
   document.querySelector("#typificationTable").innerHTML = table(["Tipificacion", "Padre", "Estado", "Reglas", ""], rows, "No hay tipificaciones configuradas.");
 }
 
+function renderGovernanceTables() {
+  const governance = state.governance;
+  const tenants = state.admin.tenants || [];
+  const activeTenants = tenants.filter((tenant) => tenant.status === "active").length;
+  const activeModules = governance.modules.filter((module) => module.enabled && module.is_enabled).length;
+  renderCardSet("#governanceCards", [
+    { label: "Empresas activas", value: activeTenants, detail: "Tenants cliente con operacion habilitada.", tone: "green" },
+    { label: "Suscripciones", value: governance.subscriptions.length, detail: "Contratos visibles para Icodeup plataforma.", tone: "blue" },
+    { label: "Modulos activos", value: activeModules, detail: "Capacidades habilitadas en la empresa seleccionada.", tone: "yellow" },
+    { label: "Eventos auditoria", value: governance.audit.length, detail: "Acciones recientes trazadas.", tone: "neutral" },
+  ]);
+  renderAlertSet("#governanceAlerts", [
+    { title: "Gobierno separado", body: "El menu dinamico separa Icodeup, administracion de empresa y operacion final.", tone: "green" },
+    { title: "Permisos por accion", body: "Las rutas criticas validan modulo, tenant y permiso antes de responder.", tone: "blue" },
+  ]);
+
+  const planRows = governance.plans.map((plan) => `<tr><td><strong>${escapeHtml(plan.name)}</strong><small>${escapeHtml(plan.code)}</small></td><td>${money(plan.monthly_price || plan.base_price || 0)}</td><td>${plan.max_users || "Ilimitado"}</td><td>${plan.max_projects || "Ilimitado"}</td><td>${plan.max_records || plan.max_customers || "Ilimitado"}</td><td>${plan.includes_ai ? "Si" : "No"}</td></tr>`).join("");
+  document.querySelector("#planTable") && (document.querySelector("#planTable").innerHTML = table(["Plan", "Precio", "Usuarios", "Proyectos", "Registros", "IA"], planRows, "No hay planes configurados."));
+
+  const subscriptionRows = governance.subscriptions.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.status)}</small></td><td>${escapeHtml(item.plan)}</td><td>${escapeHtml(item.billing_cycle)}</td><td>${item.active_modules}</td></tr>`).join("");
+  document.querySelector("#subscriptionTable") && (document.querySelector("#subscriptionTable").innerHTML = table(["Empresa", "Plan", "Ciclo", "Modulos"], subscriptionRows, "No hay suscripciones."));
+  document.querySelector("#governanceSubscriptions") && (document.querySelector("#governanceSubscriptions").innerHTML = table(["Empresa", "Plan", "Estado", "Modulos"], subscriptionRows, "Sin datos comerciales."));
+
+  const moduleRows = governance.modules.map((module) => {
+    const enabled = module.enabled && module.is_enabled;
+    const action = isPlatform() && document.querySelector("#moduleTenantFilter")?.value ? `<button class="table-button" data-toggle-module="${escapeHtml(module.code)}" data-enabled="${enabled}" type="button">${enabled ? "Desactivar" : "Activar"}</button>` : "";
+    return `<tr><td><strong>${escapeHtml(module.name)}</strong><small>${escapeHtml(module.code)}</small></td><td>${escapeHtml(module.category)}</td><td><span class="badge ${enabled ? "risk-bajo" : "risk-alto"}">${enabled ? "Activo" : "Inactivo"}</span></td><td>${escapeHtml(module.description || "")}</td><td>${action}</td></tr>`;
+  }).join("");
+  ["#moduleTable", "#tenantModuleTable"].forEach((selector) => {
+    const target = document.querySelector(selector);
+    if (target) target.innerHTML = table(["Modulo", "Categoria", "Estado", "Descripcion", ""], moduleRows, "No hay modulos disponibles.");
+  });
+
+  const settings = governance.settings;
+  if (settings) {
+    const summary = `
+      <article><span>Empresa</span><strong>${escapeHtml(settings.name)}</strong><p>${escapeHtml(settings.slug)}</p></article>
+      <article><span>Documento</span><strong>${escapeHtml(settings.document_number || "-")}</strong><p>${escapeHtml(settings.document_type || "-")}</p></article>
+      <article><span>Zona horaria</span><strong>${escapeHtml(settings.timezone)}</strong><p>Configuracion local de la operacion.</p></article>
+      <article><span>Colores</span><strong>${escapeHtml(settings.primary_color)}</strong><p>${escapeHtml(settings.secondary_color)}</p></article>
+    `;
+    document.querySelector("#tenantSettingsSummary") && (document.querySelector("#tenantSettingsSummary").innerHTML = summary);
+    const form = document.querySelector("#brandingForm");
+    if (form && !form.dataset.loaded) {
+      form.elements.name.value = settings.name || "";
+      form.elements.logo_url.value = settings.logo_url || "";
+      form.elements.primary_color.value = settings.primary_color || "#15956f";
+      form.elements.secondary_color.value = settings.secondary_color || "#2563eb";
+      form.elements.timezone.value = settings.timezone || "America/Bogota";
+      form.elements.login_headline.value = settings.login_headline || "";
+      form.elements.login_subheadline.value = settings.login_subheadline || "";
+      form.dataset.loaded = "true";
+    }
+  }
+
+  const roleRows = governance.roles.map((role) => `<tr><td><strong>${escapeHtml(role.name)}</strong><small>${escapeHtml(role.code)}</small></td><td>${role.is_system_role ? "Sistema" : "Empresa"}</td><td>${role.permission_codes.length}</td><td>${role.user_count}</td><td>${role.is_active ? "Activo" : "Inactivo"}</td></tr>`).join("");
+  document.querySelector("#roleTable") && (document.querySelector("#roleTable").innerHTML = table(["Rol", "Tipo", "Permisos", "Usuarios", "Estado"], roleRows, "No hay roles."));
+
+  const roleOptions = optionList(governance.roles.filter((role) => role.is_active), "id", "name");
+  const userRows = governance.users.map((user) => `<tr><td><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></td><td>${escapeHtml(user.role_name || user.role)}</td><td>${escapeHtml(user.status)}</td><td><select data-user-role="${user.id}">${roleOptions}</select></td></tr>`).join("");
+  document.querySelector("#companyUserTable") && (document.querySelector("#companyUserTable").innerHTML = table(["Usuario", "Rol actual", "Estado", "Asignar rol"], userRows, "No hay usuarios visibles."));
+  document.querySelectorAll("[data-user-role]").forEach((select) => {
+    const user = governance.users.find((item) => String(item.id) === String(select.dataset.userRole));
+    if (user?.role_id) select.value = String(user.role_id);
+  });
+
+  const auditRows = governance.audit.map((item) => `<tr><td>${dateOnly(item.created_at)}</td><td>${escapeHtml(item.module || "-")}</td><td>${escapeHtml(item.action)}</td><td>${escapeHtml(item.object_type || item.entity_type)}</td><td>${escapeHtml(item.object_id || item.entity_id || "-")}</td><td>${escapeHtml(item.user_id || "-")}</td></tr>`).join("");
+  document.querySelector("#auditTable") && (document.querySelector("#auditTable").innerHTML = table(["Fecha", "Modulo", "Accion", "Objeto", "ID", "Usuario"], auditRows, "No hay eventos de auditoria."));
+  document.querySelector("#governanceAuditMini") && (document.querySelector("#governanceAuditMini").innerHTML = table(["Fecha", "Modulo", "Accion", "Objeto"], governance.audit.slice(0, 6).map((item) => `<tr><td>${dateOnly(item.created_at)}</td><td>${escapeHtml(item.module || "-")}</td><td>${escapeHtml(item.action)}</td><td>${escapeHtml(item.object_type || item.entity_type)}</td></tr>`).join(""), "Sin actividad reciente."));
+
+  const partyRows = governance.parties.map((party) => `<tr><td><strong>${escapeHtml(party.display_name)}</strong><small>${escapeHtml(party.legal_name || "")}</small></td><td>${escapeHtml([party.document_type, party.document_number].filter(Boolean).join(" ") || "-")}</td><td>${escapeHtml(party.phone || "-")}</td><td>${escapeHtml(party.email || "-")}</td><td>${[party.is_customer ? "Cliente" : "", party.is_debtor ? "Deudor" : "", party.is_prospect ? "Prospecto" : ""].filter(Boolean).join(", ") || "-"}</td></tr>`).join("");
+  document.querySelector("#partyTable") && (document.querySelector("#partyTable").innerHTML = table(["Tercero", "Documento", "Telefono", "Email", "Roles"], partyRows, "No hay terceros maestros."));
+
+  const health = governance.health;
+  if (health && document.querySelector("#systemHealthPanel")) {
+    document.querySelector("#systemHealthPanel").innerHTML = `
+      <article><span>Aplicacion</span><strong>${escapeHtml(health.app)}</strong><p>${escapeHtml(health.environment)}</p></article>
+      <article><span>Puerto</span><strong>${escapeHtml(health.port)}</strong><p>Servicio FastAPI local.</p></article>
+      <article><span>Base de datos</span><strong>${health.database?.ok ? "Conectada" : "Error"}</strong><p>${escapeHtml(health.database?.detail || "")}</p></article>
+    `;
+  }
+
+  const tasks = (state.crm.queue?.items || []).slice(0, 10).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.document)}</small></td><td>${money(item.balance)}</td><td>${escapeHtml(item.risk)}</td><td>${escapeHtml(item.next_action || "Gestionar")}</td><td><button class="table-button" data-open-customer="${item.id}" type="button">Abrir</button></td></tr>`).join("");
+  document.querySelector("#taskTable") && (document.querySelector("#taskTable").innerHTML = table(["Cliente", "Saldo", "Riesgo", "Siguiente accion", ""], tasks, "No hay tareas asignadas."));
+}
+
 function renderAll() {
   fillSelects();
   renderRoleDashboard();
@@ -1224,6 +1394,7 @@ function renderAll() {
   renderPayments();
   renderChannels();
   renderAdminTables();
+  renderGovernanceTables();
   renderModuleInsights();
 }
 
@@ -1366,6 +1537,49 @@ function setupForms() {
       is_default: form.elements.is_default.checked
     }));
   });
+  document.querySelector("#roleForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitJson(event.currentTarget, "/api/governance/roles", (form) => ({
+      name: form.elements.name.value,
+      code: form.elements.code.value || null,
+      description: form.elements.description.value || null,
+      permission_codes: Array.from(form.elements.permission_codes.selectedOptions).map((option) => option.value)
+    }));
+  });
+  document.querySelector("#brandingForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    await api("/api/governance/settings", {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: form.elements.name.value,
+        logo_url: form.elements.logo_url.value || null,
+        primary_color: form.elements.primary_color.value || null,
+        secondary_color: form.elements.secondary_color.value || null,
+        timezone: form.elements.timezone.value || "America/Bogota",
+        login_headline: form.elements.login_headline.value || null,
+        login_subheadline: form.elements.login_subheadline.value || null
+      })
+    });
+    form.dataset.loaded = "";
+    await refreshAll();
+  });
+  document.querySelector("#partyForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitJson(event.currentTarget, "/api/governance/parties", (form) => ({
+      party_type: form.elements.party_type.value,
+      display_name: form.elements.display_name.value,
+      document_type: form.elements.document_type.value || null,
+      document_number: form.elements.document_number.value || null,
+      email: form.elements.email.value || null,
+      phone: form.elements.phone.value || null,
+      city: form.elements.city.value || null,
+      is_customer: form.elements.is_customer.checked,
+      is_debtor: form.elements.is_debtor.checked,
+      is_prospect: form.elements.is_prospect.checked,
+      notes: form.elements.notes.value || null
+    }));
+  });
 }
 
 function setupEvents() {
@@ -1392,6 +1606,29 @@ function setupEvents() {
       await loadTypifications();
       renderAll();
     }
+    const toggleModule = event.target.closest("[data-toggle-module]");
+    if (toggleModule) {
+      const tenantId = document.querySelector("#moduleTenantFilter")?.value;
+      if (!tenantId) return alert("Selecciona una empresa para modificar modulos.");
+      const enabled = toggleModule.dataset.enabled === "true";
+      await api(`/api/governance/modules/${tenantId}`, {
+        method: "PUT",
+        body: JSON.stringify([{ module_code: toggleModule.dataset.toggleModule, enabled: !enabled }])
+      });
+      await loadGovernanceData();
+      renderAll();
+    }
+  });
+  document.addEventListener("change", async (event) => {
+    const roleSelect = event.target.closest("[data-user-role]");
+    if (roleSelect && roleSelect.value) {
+      await api(`/api/governance/users/${roleSelect.dataset.userRole}/role`, {
+        method: "PUT",
+        body: JSON.stringify({ role_id: Number(roleSelect.value) })
+      });
+      await loadGovernanceData();
+      renderAll();
+    }
   });
   document.querySelector("#queueSearch").addEventListener("input", async () => {
     state.queuePage = 1;
@@ -1412,6 +1649,33 @@ function setupEvents() {
     state.customerPage = 1;
     await loadCustomers();
     renderCustomers();
+  });
+  document.querySelector("#moduleTenantFilter").addEventListener("change", async () => {
+    await loadGovernanceData();
+    renderAll();
+  });
+  document.querySelector("#refreshAudit").addEventListener("click", async () => {
+    await loadGovernanceData();
+    renderAll();
+  });
+  document.querySelector("#partySearch").addEventListener("input", async (event) => {
+    const q = event.target.value.trim();
+    state.governance.parties = await apiMaybe(`/api/governance/parties?${queryParams({ q })}`, []);
+    renderGovernanceTables();
+  });
+  document.querySelector("#exportCustomers").addEventListener("click", async () => {
+    try {
+      await downloadCsv("/api/crm/customers/export", "clientes_icodeup360.csv");
+    } catch (error) {
+      alert(error.message);
+    }
+  });
+  document.querySelector("#exportPayments").addEventListener("click", async () => {
+    try {
+      await downloadCsv("/api/crm/payments/export", "pagos_icodeup360.csv");
+    } catch (error) {
+      alert(error.message);
+    }
   });
   document.querySelector("#queuePrev").addEventListener("click", async () => {
     state.queuePage = Math.max(1, state.queuePage - 1);

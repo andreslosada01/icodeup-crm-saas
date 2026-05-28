@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.db.session import get_db
 from app.models import CommunicationChannel, Tenant, User
 from app.schemas.crm import CommunicationChannelCreate, CommunicationChannelOut
+from app.services.access_control import require_permission
 
 from .access import ensure_manage_access, ensure_read_access, is_platform, project_for_access
 
@@ -18,6 +19,7 @@ router = APIRouter()
 
 @router.get("/channels", response_model=list[CommunicationChannelOut])
 def list_channels(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CommunicationChannelOut]:
+    require_permission(db, user, "integrations.channels.view")
     ensure_read_access(user)
     query = select(CommunicationChannel).order_by(CommunicationChannel.kind, CommunicationChannel.label)
     if not is_platform(user):
@@ -28,6 +30,7 @@ def list_channels(db: Session = Depends(get_db), user: User = Depends(current_us
 
 @router.post("/channels", response_model=CommunicationChannelOut, status_code=status.HTTP_201_CREATED)
 def create_channel(payload: CommunicationChannelCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> CommunicationChannelOut:
+    require_permission(db, user, "integrations.channels.create")
     ensure_manage_access(user)
     tenant_id = payload.tenant_id if is_platform(user) and payload.tenant_id else user.tenant_id
     tenant = db.get(Tenant, tenant_id)

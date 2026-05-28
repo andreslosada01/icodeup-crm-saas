@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.models import Document, LegalCase, Payment, PaymentAgreement, User
 from app.schemas.documents import DocumentCreate, DocumentOut, DocumentPatch
 from app.services.audit_service import record_audit
-from app.services.access_control import require_active_module
+from app.services.access_control import require_active_module, require_permission
 
 
 router = APIRouter(dependencies=[Depends(require_active_module("documents"))])
@@ -75,6 +75,7 @@ def document_for_access(db: Session, document_id: int, user: User, write: bool =
 
 @router.get("", response_model=list[DocumentOut])
 def list_documents(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Document]:
+    require_permission(db, user, "documents.view")
     ensure_document_read(user)
     query = select(Document).order_by(Document.created_at.desc())
     if not is_platform(user):
@@ -88,6 +89,7 @@ def list_documents(db: Session = Depends(get_db), user: User = Depends(current_u
 
 @router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
 def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Document:
+    require_permission(db, user, "documents.create")
     ensure_document_manage(user)
     tenant_id = payload.tenant_id if is_platform(user) and payload.tenant_id else user.tenant_id
     validate_document_relations(db, payload, tenant_id, user)
@@ -103,12 +105,14 @@ def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user
 
 @router.get("/{document_id}", response_model=DocumentOut)
 def get_document(document_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Document:
+    require_permission(db, user, "documents.view")
     ensure_document_read(user)
     return document_for_access(db, document_id, user)
 
 
 @router.patch("/{document_id}", response_model=DocumentOut)
 def update_document(document_id: int, payload: DocumentPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Document:
+    require_permission(db, user, "documents.update")
     document = document_for_access(db, document_id, user, write=True)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(document, field, value)

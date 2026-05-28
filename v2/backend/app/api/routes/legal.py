@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models import LegalAction, LegalCase, LegalDeadline, LegalHearing, User
 from app.schemas.legal import LegalActionCreate, LegalActionOut, LegalCaseCreate, LegalCaseOut, LegalCasePatch, LegalDeadlineOut, LegalHearingCreate, LegalHearingOut
 from app.services.audit_service import record_audit
-from app.services.access_control import require_active_module
+from app.services.access_control import require_active_module, require_permission
 
 
 router = APIRouter(dependencies=[Depends(require_active_module("legal"))])
@@ -49,6 +49,7 @@ def validate_lawyer(db: Session, tenant_id: int, assigned_lawyer_id: int | None)
 
 @router.get("/cases", response_model=list[LegalCaseOut])
 def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalCase]:
+    require_permission(db, user, "legal.cases.view")
     ensure_legal_read(user)
     if user.role == PLATFORM_ADMIN:
         query = select(LegalCase).order_by(LegalCase.created_at.desc())
@@ -61,6 +62,7 @@ def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)
 
 @router.post("/cases", response_model=LegalCaseOut, status_code=status.HTTP_201_CREATED)
 def create_case(payload: LegalCaseCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalCase:
+    require_permission(db, user, "legal.cases.create")
     ensure_legal_manage(user)
     customer = customer_for_access(db, payload.customer_id, user, write=False)
     validate_lawyer(db, customer.tenant_id, payload.assigned_lawyer_id)
@@ -80,12 +82,14 @@ def create_case(payload: LegalCaseCreate, db: Session = Depends(get_db), user: U
 
 @router.get("/cases/{case_id}", response_model=LegalCaseOut)
 def get_case(case_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalCase:
+    require_permission(db, user, "legal.cases.view")
     ensure_legal_read(user)
     return legal_case_for_access(db, case_id, user)
 
 
 @router.patch("/cases/{case_id}", response_model=LegalCaseOut)
 def update_case(case_id: int, payload: LegalCasePatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalCase:
+    require_permission(db, user, "legal.cases.update")
     legal_case = legal_case_for_access(db, case_id, user, write=True)
     updates = payload.model_dump(exclude_unset=True)
     if "assigned_lawyer_id" in updates:
@@ -99,6 +103,7 @@ def update_case(case_id: int, payload: LegalCasePatch, db: Session = Depends(get
 
 @router.post("/cases/{case_id}/actions", response_model=LegalActionOut, status_code=status.HTTP_201_CREATED)
 def create_action(case_id: int, payload: LegalActionCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalAction:
+    require_permission(db, user, "legal.cases.update")
     legal_case = legal_case_for_access(db, case_id, user, write=True)
     action = LegalAction(tenant_id=legal_case.tenant_id, legal_case_id=legal_case.id, user_id=user.id, **payload.model_dump())
     legal_case.next_deadline_at = payload.next_deadline_at or legal_case.next_deadline_at
@@ -112,6 +117,7 @@ def create_action(case_id: int, payload: LegalActionCreate, db: Session = Depend
 
 @router.get("/deadlines", response_model=list[LegalDeadlineOut])
 def list_deadlines(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalDeadline]:
+    require_permission(db, user, "legal.deadlines.view")
     ensure_legal_read(user)
     if user.role == PLATFORM_ADMIN:
         query = select(LegalDeadline).order_by(LegalDeadline.due_at.asc())
@@ -124,6 +130,7 @@ def list_deadlines(db: Session = Depends(get_db), user: User = Depends(current_u
 
 @router.post("/cases/{case_id}/hearings", response_model=LegalHearingOut, status_code=status.HTTP_201_CREATED)
 def create_hearing(case_id: int, payload: LegalHearingCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalHearing:
+    require_permission(db, user, "legal.cases.update")
     legal_case = legal_case_for_access(db, case_id, user, write=True)
     hearing = LegalHearing(tenant_id=legal_case.tenant_id, legal_case_id=legal_case.id, **payload.model_dump())
     db.add(hearing)

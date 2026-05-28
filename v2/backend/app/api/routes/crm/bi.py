@@ -10,6 +10,7 @@ from app.api.deps import current_user
 from app.db.session import get_db
 from app.models import CommunicationChannel, Customer, ManagementActivity, Payment, PaymentPromise, Project, User
 from app.schemas.crm import BIResponse
+from app.services.access_control import require_permission
 
 from .access import customer_query, ensure_read_access, is_platform, project_for_access
 from .utils import activity_is_stale, aging_bucket_label, clamp, next_action_for, recovery_probability, semaphore_status
@@ -26,6 +27,7 @@ def business_intelligence(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> dict:
+    require_permission(db, user, "reports.view")
     ensure_read_access(user)
     now = datetime.now(timezone.utc)
     query = customer_query(db, user)

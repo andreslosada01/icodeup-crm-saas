@@ -70,7 +70,7 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">IcodeUp CRM</p>
+            <p class="eyebrow">Icodeup 360</p>
             <h1 id="sectionTitle">Tablero ejecutivo</h1>
           </div>
           <div class="user-pill">
@@ -151,6 +151,173 @@
           </article>
         </section>
 
+        <section id="governance" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div><h2>Gobierno SaaS Icodeup</h2><p>Control global de empresas, licenciamiento, modulos, seguridad y salud operacional.</p></div>
+            </div>
+            <div id="governanceCards" class="intelligence-grid"></div>
+            <div id="governanceAlerts" class="compact-alert-list horizontal-alerts"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel"><h2>Suscripciones recientes</h2><div id="governanceSubscriptions" class="table-wrap"></div></article>
+            <article class="chart-panel"><h2>Actividad global</h2><div id="governanceAuditMini" class="table-wrap"></div></article>
+          </div>
+        </section>
+
+        <section id="plans" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Planes comerciales</h2><p>Inventario de planes SaaS para licenciar empresas por usuarios, modulos y capacidad.</p></div>
+            </div>
+            <div id="planTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="subscriptions" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Suscripciones por empresa</h2><p>Vista comercial global para seguimiento de estado, ciclo y modulos activos.</p></div>
+            </div>
+            <div id="subscriptionTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="modules" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Activacion de modulos</h2><p>Solo Icodeup puede activar o desactivar capacidades contratadas por empresa.</p></div>
+              <div class="inline-controls"><select id="moduleTenantFilter" aria-label="Empresa para modulos"></select></div>
+            </div>
+            <div id="moduleTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="tenant-settings" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Mi empresa</h2><p>Datos base de la empresa autenticada y configuracion operacional.</p></div>
+            </div>
+            <div id="tenantSettingsSummary" class="settings-summary"></div>
+          </article>
+        </section>
+
+        <section id="company-users" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Usuarios de mi empresa</h2><p>Usuarios visibles dentro del tenant autenticado.</p></div>
+            </div>
+            <div id="companyUserTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="roles-permissions" class="section">
+          <div class="two-column">
+            <article class="panel">
+              <h2>Nuevo rol interno</h2>
+              <form id="roleForm" class="form-grid">
+                <label>Nombre<input name="name" required placeholder="Analista senior" /></label>
+                <label>Codigo<input name="code" placeholder="analista_senior" /></label>
+                <label class="wide">Descripcion<textarea name="description"></textarea></label>
+                <label class="wide">Permisos<select name="permission_codes" multiple size="9"></select></label>
+                <button type="submit">Crear rol</button>
+              </form>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <div><h2>Roles y permisos</h2><p>Roles de sistema y roles propios de la empresa.</p></div>
+              </div>
+              <div id="roleTable" class="table-wrap"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="tenant-modules" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Modulos contratados</h2><p>Consulta de capacidades habilitadas para la empresa.</p></div>
+            </div>
+            <div id="tenantModuleTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="branding" class="section">
+          <article class="panel">
+            <h2>Branding y experiencia</h2>
+            <form id="brandingForm" class="form-grid">
+              <label>Nombre visible<input name="name" /></label>
+              <label>Logo URL<input name="logo_url" /></label>
+              <label>Color primario<input name="primary_color" type="color" /></label>
+              <label>Color secundario<input name="secondary_color" type="color" /></label>
+              <label>Zona horaria<input name="timezone" placeholder="America/Bogota" /></label>
+              <label class="wide">Mensaje login<input name="login_headline" /></label>
+              <label class="wide">Submensaje login<textarea name="login_subheadline"></textarea></label>
+              <button type="submit">Guardar branding</button>
+            </form>
+          </article>
+        </section>
+
+        <section id="audit" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Auditoria</h2><p>Trazabilidad de acciones criticas filtrada por alcance autorizado.</p></div>
+              <div class="inline-controls">
+                <select id="auditTenantFilter" aria-label="Empresa auditoria"></select>
+                <input id="auditModuleFilter" placeholder="Modulo" />
+                <button id="refreshAudit" class="table-button" type="button">Actualizar</button>
+              </div>
+            </div>
+            <div id="auditTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="system-health" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Salud del sistema</h2><p>Estado tecnico visible para gobierno interno de Icodeup.</p></div>
+            </div>
+            <div id="systemHealthPanel" class="settings-summary"></div>
+          </article>
+        </section>
+
+        <section id="parties" class="section">
+          <div class="two-column">
+            <article class="panel">
+              <h2>Nuevo tercero maestro</h2>
+              <form id="partyForm" class="form-grid">
+                <label>Tipo<select name="party_type"><option value="person">Persona</option><option value="company">Empresa</option></select></label>
+                <label>Nombre visible<input name="display_name" required /></label>
+                <label>Tipo documento<input name="document_type" placeholder="CC, NIT" /></label>
+                <label>Documento<input name="document_number" /></label>
+                <label>Email<input name="email" type="email" /></label>
+                <label>Telefono<input name="phone" /></label>
+                <label>Ciudad<input name="city" /></label>
+                <label class="checkbox-row"><input name="is_customer" type="checkbox" /> Cliente</label>
+                <label class="checkbox-row"><input name="is_debtor" type="checkbox" /> Deudor</label>
+                <label class="checkbox-row"><input name="is_prospect" type="checkbox" /> Prospecto</label>
+                <label class="wide">Notas<textarea name="notes"></textarea></label>
+                <button type="submit">Crear tercero</button>
+              </form>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <div><h2>Terceros maestros</h2><p>Base 360 para CRM, cobranzas, juridico y ventas.</p></div>
+                <input id="partySearch" type="search" placeholder="Buscar tercero" />
+              </div>
+              <div id="partyTable" class="table-wrap"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="tasks" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Mis tareas</h2><p>Vista operacional enfocada en pendientes asignados y siguientes acciones.</p></div>
+            </div>
+            <div id="taskTable" class="table-wrap"></div>
+          </article>
+        </section>
+
         <section id="queue" class="section">
           <article class="module-intelligence">
             <div class="panel-head">
@@ -214,7 +381,7 @@
           <article class="panel">
             <div class="panel-head">
               <div><h2>Clientes</h2><p>Busqueda paginada para asesores y lideres.</p></div>
-              <div class="inline-controls"><input id="customerSearch" type="search" placeholder="Buscar cliente" /></div>
+              <div class="inline-controls"><input id="customerSearch" type="search" placeholder="Buscar cliente" /><button id="exportCustomers" class="table-button" type="button">Exportar CSV</button></div>
             </div>
             <div id="customerTable" class="table-wrap"></div>
             <div class="pager"><button id="customerPrev" type="button">Anterior</button><span id="customerPageLabel">Pagina 1</span><button id="customerNext" type="button">Siguiente</button></div>
@@ -256,7 +423,10 @@
               </form>
             </article>
             <article class="panel">
-              <h2>Pagos recientes</h2>
+              <div class="panel-head">
+                <div><h2>Pagos recientes</h2></div>
+                <button id="exportPayments" class="table-button" type="button">Exportar CSV</button>
+              </div>
               <div id="paymentTable" class="table-wrap"></div>
             </article>
           </div>

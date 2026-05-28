@@ -28,14 +28,39 @@
 ## Permisos
 
 - Menu respeta `required_permission_code`.
+- Menu respeta `required_permission`.
 - Platform admin tiene permisos globales.
 - Admin empresa ve solo menu de empresa.
 - Lider ve menu operativo autorizado.
 - Usuario operativo ve solo su operacion.
+- Usuario sin permiso recibe 403 aunque intente entrar por URL.
+- Permisos por accion validan `view`, `create`, `update`, `export`, `assign` y `configure` segun modulo.
+
+## Gobierno SaaS vs tenant
+
+- SuperAdmin ve `governance`, `plans`, `subscriptions`, `modules`, `audit` y `system-health`.
+- Admin Empresa no ve `governance`, `plans`, `subscriptions` ni `system-health`.
+- Admin Empresa ve `tenant-settings`, `company-users`, `roles-permissions`, `tenant-modules`, `branding` y auditoria de su tenant.
+- Usuario operativo no ve secciones administrativas.
+- Admin Empresa no puede activar modulos por URL.
+
+## Exportes
+
+- `/api/crm/customers/export` exige `crm.clients.export`.
+- `/api/crm/payments/export` exige `collections.payments.export`.
+- Agent recibe 403 en exportes si no tiene permiso.
+- Admin Empresa exporta solo datos de su tenant.
+- Platform admin puede exportar globalmente o filtrar por tenant cuando la ruta lo permita.
 
 ## Auditoria
 
 - Crear usuario registra auditoria.
+- Crear rol registra auditoria.
+- Asignar rol registra auditoria.
+- Cambiar permisos de rol registra auditoria.
+- Cambiar branding/configuracion tenant registra auditoria.
+- Activar/desactivar modulo registra auditoria.
+- Crear tercero maestro registra auditoria.
 - Crear cliente registra auditoria.
 - Importar clientes registra auditoria.
 - Crear promesa registra auditoria.
