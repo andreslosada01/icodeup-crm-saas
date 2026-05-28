@@ -25,6 +25,7 @@ from app.schemas.administration import (
     UserUpdate,
     role_options,
 )
+from app.services.access_control import sync_user_profile
 from app.services.audit_service import record_audit
 
 
@@ -79,7 +80,14 @@ def list_tenants(db: Session = Depends(get_db)) -> list[dict]:
 
 @router.post("/tenants", response_model=TenantAdminOut, status_code=status.HTTP_201_CREATED)
 def create_tenant(payload: TenantCreate, db: Session = Depends(get_db), user: User = Depends(require_platform_admin)) -> dict:
-    tenant = Tenant(name=payload.name.strip(), slug=payload.slug, tax_id=payload.tax_id, notes=payload.notes)
+    tenant = Tenant(
+        name=payload.name.strip(),
+        slug=payload.slug,
+        tax_id=payload.tax_id,
+        document_type="NIT",
+        document_number=payload.tax_id,
+        notes=payload.notes,
+    )
     db.add(tenant)
     commit_or_conflict(db)
     record_audit(db, user, "tenant", "create", tenant.id, tenant.id, after={"name": tenant.name, "slug": tenant.slug})
@@ -160,6 +168,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), platform_use
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    sync_user_profile(db, user)
     commit_or_conflict(db)
     record_audit(db, platform_user, "user", "create", user.id, user.tenant_id, after={"email": user.email, "role": user.role})
     db.commit()
@@ -181,6 +190,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
         setattr(user, field, value.strip() if isinstance(value, str) else value)
     if project_ids is not None:
         AdministrationRepository(db).set_user_projects(user, project_ids)
+    sync_user_profile(db, user)
     commit_or_conflict(db)
     return next(row for row in AdministrationRepository(db).list_users(user.tenant_id) if row["id"] == user.id)
 

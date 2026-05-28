@@ -13,9 +13,10 @@ from app.db.session import get_db
 from app.models import Document, LegalCase, Payment, PaymentAgreement, User
 from app.schemas.documents import DocumentCreate, DocumentOut, DocumentPatch
 from app.services.audit_service import record_audit
+from app.services.access_control import require_active_module
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_module("documents"))])
 DOCUMENT_MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
 DOCUMENT_READ_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR, QUALITY_SUPERVISOR, AGENT}
 

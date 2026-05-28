@@ -61,7 +61,7 @@ def init_database() -> dict:
     except OSError:
         return {"ok": False, "detail": f"PostgreSQL no escucha en {host}:{port}."}
     try:
-        from app.models import audit, crm, documents, identity, legal, sales, subscription, tenant  # noqa: F401
+        from app.models import audit, configuration, crm, documents, identity, legal, menu, party, sales, security, subscription, tenant  # noqa: F401
         from app.db.migrations import apply_compatibility_migrations
 
         Base.metadata.create_all(bind=engine)

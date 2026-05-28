@@ -3,26 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>IcodeUp CRM</title>
+    <title>Icodeup 360</title>
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
     <main id="loginView" class="login-shell">
-      <section class="login-stage" aria-label="Acceso IcodeUp CRM">
+      <section class="login-stage" aria-label="Acceso Icodeup 360">
         <div class="brand-panel">
           <img src="/assets/icodeup-logo.png" alt="IcodeUp" class="brand-logo" />
           <div>
-            <p class="eyebrow">CRM de cobranzas inteligente</p>
-            <h1>Operacion, analitica y omnicanalidad en una sola plataforma.</h1>
+            <p class="eyebrow">Icodeup 360</p>
+            <h1>Plataforma Inteligente de Operaciones Empresariales.</h1>
             <p class="lead">
-              Gestiona carteras, equipos, riesgos y resultados con una experiencia corporativa segura,
-              moderna y orientada a decisiones.
+              Un core SaaS modular para operar empresas, datos, equipos, procesos y decisiones con seguridad,
+              trazabilidad y analitica accionable.
             </p>
           </div>
           <div class="capability-grid" aria-label="Capacidades">
-            <span>IA aplicada</span>
-            <span>Omnicanalidad</span>
-            <span>Gestion de riesgos</span>
+            <span>Core SaaS</span>
+            <span>Modulos activos</span>
+            <span>Gobierno seguro</span>
             <span>Analitica ejecutiva</span>
           </div>
         </div>
@@ -30,8 +30,8 @@
         <form id="loginForm" class="login-card">
           <div>
             <p class="eyebrow">Acceso seguro</p>
-            <h2>Ingresar al CRM</h2>
-            <p>Usa tu usuario corporativo para abrir tu entorno operativo.</p>
+            <h2>Icodeup 360</h2>
+            <p>Ingresa a tu workspace empresarial con modulos, permisos y datos aislados por organizacion.</p>
           </div>
           <label>Email<input id="email" type="email" autocomplete="username" placeholder="usuario@empresa.com" required /></label>
           <label>Contrasena<input id="password" type="password" autocomplete="current-password" required /></label>
@@ -44,7 +44,7 @@
     <main id="appView" class="app-shell hidden">
       <aside class="sidebar">
         <img src="/assets/icodeup-logo.png" alt="IcodeUp" class="sidebar-logo" />
-        <nav aria-label="Navegacion principal">
+        <nav id="mainNav" aria-label="Navegacion principal">
           <button class="nav-item active" data-section="dashboard">Tablero</button>
           <button class="nav-item" data-section="queue">Cola de gestion</button>
           <button class="nav-item" data-section="customers">Clientes</button>
@@ -86,6 +86,7 @@
             <article class="metric-card"><span>Recuperado</span><strong id="metricRecovered">$ 0</strong></article>
             <article class="metric-card"><span>Contacto</span><strong id="metricContact">0%</strong></article>
           </div>
+          <div id="roleDashboard" class="role-dashboard"></div>
           <div id="dashboardPulse" class="intelligence-grid executive-pulse"></div>
           <div class="dashboard-grid">
             <article class="chart-panel">

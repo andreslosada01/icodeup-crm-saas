@@ -11,9 +11,10 @@ from app.db.session import get_db
 from app.models import Customer, Lead, Opportunity, User
 from app.schemas.sales import LeadCreate, LeadOut, LeadPatch, OpportunityCreate, OpportunityOut, OpportunityPatch
 from app.services.audit_service import record_audit
+from app.services.access_control import require_active_module
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_module("sales"))])
 SALES_MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
 SALES_READ_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR, AGENT}
 

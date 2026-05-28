@@ -11,9 +11,10 @@ from app.db.session import get_db
 from app.models import LegalAction, LegalCase, LegalDeadline, LegalHearing, User
 from app.schemas.legal import LegalActionCreate, LegalActionOut, LegalCaseCreate, LegalCaseOut, LegalCasePatch, LegalDeadlineOut, LegalHearingCreate, LegalHearingOut
 from app.services.audit_service import record_audit
+from app.services.access_control import require_active_module
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_active_module("legal"))])
 LEGAL_MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
 LEGAL_READ_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR, QUALITY_SUPERVISOR, AGENT}
 

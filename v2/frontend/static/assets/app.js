@@ -2,6 +2,7 @@ let token = localStorage.getItem("icodeup_v2_token") || "";
 let currentUser = JSON.parse(localStorage.getItem("icodeup_v2_user") || "null");
 
 const state = {
+  core: { menu: null, roleDashboard: null },
   admin: { overview: null, tenants: [], projects: [], users: [], roles: [], typifications: [] },
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], channels: [], typifications: [] },
   selectedCustomer: null,
@@ -165,10 +166,50 @@ function canManageCrm() {
   return ["platform_admin", "tenant_admin", "coordinator"].includes(currentUser?.role);
 }
 
+function applyBranding(source = {}) {
+  const primary = source.primary_color || currentUser?.primary_color || "#15956f";
+  const secondary = source.secondary_color || currentUser?.secondary_color || "#2563eb";
+  document.documentElement.style.setProperty("--primary", primary);
+  document.documentElement.style.setProperty("--primary-dark", primary);
+  document.documentElement.style.setProperty("--blue", secondary);
+}
+
+function renderDynamicMenu() {
+  const nav = document.querySelector("#mainNav");
+  if (!nav) return;
+  const items = state.core.menu?.items || [];
+  if (!items.length) return;
+  nav.innerHTML = items
+    .map((item, index) => `<button class="nav-item ${index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${escapeHtml(item.label)}</button>`)
+    .join("");
+  const allowedSections = new Set(items.map((item) => item.section));
+  document.querySelectorAll(".section").forEach((section) => {
+    section.classList.remove("active-section");
+    section.classList.toggle("menu-disabled", !allowedSections.has(section.id));
+  });
+  const firstSection = items[0]?.section || "dashboard";
+  document.querySelector(`#${firstSection}`)?.classList.add("active-section");
+  document.querySelector("#sectionTitle").textContent = titles[firstSection] || items[0]?.label || "Icodeup 360";
+}
+
+function menuHasSection(...sections) {
+  const allowedSections = new Set((state.core.menu?.items || []).map((item) => item.section));
+  return sections.some((section) => allowedSections.has(section));
+}
+
+async function optionalLoad(label, loader) {
+  try {
+    await loader();
+  } catch (error) {
+    console.warn(`${label}: ${error.message}`);
+  }
+}
+
 function showApp() {
   loginView.classList.add("hidden");
   appView.classList.remove("hidden");
   document.querySelector("#sessionUser").textContent = currentUser ? `${currentUser.name} - ${currentUser.role}` : "Sesion activa";
+  applyBranding(currentUser || {});
   document.querySelectorAll(".platform-only").forEach((item) => item.classList.toggle("hidden", !isPlatform()));
   document.querySelectorAll(".manager-only").forEach((item) => item.classList.toggle("hidden", !canManageCrm()));
 }
@@ -209,6 +250,16 @@ async function loadAdminData() {
     api("/api/admin/users")
   ]);
   state.admin = { overview, roles, tenants, projects, users };
+}
+
+async function loadCoreData() {
+  const [menu, roleDashboard] = await Promise.all([
+    api("/api/menu/me"),
+    api("/api/dashboard/me")
+  ]);
+  state.core.menu = menu;
+  state.core.roleDashboard = roleDashboard;
+  applyBranding(menu.tenant || {});
 }
 
 async function loadTypifications() {
@@ -273,10 +324,16 @@ async function loadBi() {
 }
 
 async function refreshAll() {
+  await loadCoreData();
+  renderDynamicMenu();
   await loadAdminData();
   await loadTypifications();
-  await loadCrmData();
-  await loadBi();
+  if (menuHasSection("queue", "customers", "promises", "payments", "agreements", "channels", "reports")) {
+    await optionalLoad("Datos CRM", loadCrmData);
+  }
+  if (menuHasSection("reports")) {
+    await optionalLoad("BI", loadBi);
+  }
   renderAll();
 }
 
@@ -437,6 +494,50 @@ function renderDashboardStacks() {
       `
     )
     .join("");
+}
+
+function renderRoleDashboard() {
+  const container = document.querySelector("#roleDashboard");
+  if (!container) return;
+  const data = state.core.roleDashboard;
+  if (!data) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = `
+    <article class="role-dashboard-head">
+      <div>
+        <p class="eyebrow">${escapeHtml(data.audience || "workspace")}</p>
+        <h2>${escapeHtml(data.title || "Icodeup 360")}</h2>
+      </div>
+      <span>${dateOnly(data.generated_at)}</span>
+    </article>
+    <div class="intelligence-grid">
+      ${(data.cards || [])
+        .map(
+          (card) => `
+            <article class="analysis-card ${escapeHtml(card.tone || "neutral")}">
+              <span>${escapeHtml(card.label)}</span>
+              <strong>${escapeHtml(typeof card.value === "number" ? card.value.toLocaleString("es-CO") : card.value)}</strong>
+              <p>${escapeHtml(card.detail || "")}</p>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+    <div class="compact-alert-list horizontal-alerts">
+      ${(data.alerts || [])
+        .map(
+          (alert) => `
+            <article class="mini-alert ${escapeHtml(alert.tone || "neutral")}">
+              <strong>${escapeHtml(alert.title)}</strong>
+              <p>${escapeHtml(alert.body || "")}</p>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function renderDashboard() {
@@ -1114,6 +1215,7 @@ function renderTypifications() {
 
 function renderAll() {
   fillSelects();
+  renderRoleDashboard();
   renderDashboard();
   renderBI();
   renderQueue();
@@ -1147,15 +1249,17 @@ async function submitJson(form, endpoint, buildPayload) {
 }
 
 function setupNavigation() {
-  document.querySelectorAll(".nav-item").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (button.classList.contains("hidden")) return;
-      document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
-      document.querySelectorAll(".section").forEach((section) => section.classList.remove("active-section"));
-      button.classList.add("active");
-      document.querySelector(`#${button.dataset.section}`).classList.add("active-section");
-      document.querySelector("#sectionTitle").textContent = titles[button.dataset.section] || "IcodeUp CRM";
-    });
+  document.querySelector("#mainNav").addEventListener("click", (event) => {
+    const button = event.target.closest(".nav-item");
+    if (!button || button.classList.contains("hidden")) return;
+    const section = document.querySelector(`#${button.dataset.section}`);
+    if (!section) return;
+    document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
+    document.querySelectorAll(".section").forEach((item) => item.classList.remove("active-section"));
+    button.classList.add("active");
+    section.classList.remove("menu-disabled");
+    section.classList.add("active-section");
+    document.querySelector("#sectionTitle").textContent = titles[button.dataset.section] || button.textContent || "Icodeup 360";
   });
 }
 

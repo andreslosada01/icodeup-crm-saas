@@ -20,11 +20,13 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="active", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     tenant = relationship("Tenant", back_populates="users")
     leader = relationship("User", remote_side=[id], back_populates="team_members")
     team_members = relationship("User", back_populates="leader")
     project_assignments = relationship("UserProjectAssignment", back_populates="user", cascade="all, delete-orphan")
+    profile = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class UserProjectAssignment(Base):

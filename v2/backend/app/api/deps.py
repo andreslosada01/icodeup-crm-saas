@@ -1,9 +1,10 @@
 from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
-from app.models import User
+from app.models import User, UserProfile
 
 
 def current_user(
@@ -22,7 +23,9 @@ def current_user(
     return user
 
 
-def require_platform_admin(user: User = Depends(current_user)) -> User:
-    if user.role != "platform_admin":
+def require_platform_admin(user: User = Depends(current_user), db: Session = Depends(get_db)) -> User:
+    profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+    allowed = user.role == "platform_admin" or bool(profile and profile.is_platform_admin)
+    if not allowed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo IcodeUp plataforma.")
     return user

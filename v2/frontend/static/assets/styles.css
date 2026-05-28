@@ -47,6 +47,10 @@ button:disabled {
   display: none !important;
 }
 
+.menu-disabled {
+  display: none !important;
+}
+
 .login-shell {
   min-height: 100vh;
   display: grid;
@@ -475,6 +479,34 @@ nav {
 
 .executive-pulse {
   margin-bottom: 16px;
+}
+
+.role-dashboard {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.role-dashboard-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(21, 149, 111, 0.12), transparent),
+    #ffffff;
+}
+
+.role-dashboard-head h2 {
+  margin-bottom: 0;
+}
+
+.role-dashboard-head span {
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .analysis-card {
