@@ -12,7 +12,13 @@ dependencies = [
   "psycopg[binary]",
   "bcrypt",
   "python-jose[cryptography]",
+  "pytest",
+  "httpx",
 ]
 
 [tool.uvicorn]
 factory = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

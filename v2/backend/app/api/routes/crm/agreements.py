@@ -130,6 +130,7 @@ def update_installment(
     if installment.paid_amount >= installment.amount:
         installment.status = "paid"
     agreement.status = "completed" if all(item.status == "paid" for item in agreement.installments) else agreement.status
+    record_audit(db, user, "payment_agreement_installment", "update", installment.id, agreement.tenant_id, after=payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(agreement)
     return agreement_to_out(db, agreement)

@@ -47,6 +47,8 @@ def export_payments(db: Session = Depends(get_db), user: User = Depends(current_
         customer = customer_map.get(payment.customer_id)
         writer.writerow([payment.tenant_id, payment.project_id, payment.customer_id, customer.name if customer else "", payment.amount, payment.paid_at, payment.method, payment.reference])
     output.seek(0)
+    record_audit(db, user, "payment", "export", None, user.tenant_id, module="collections", after={"payment_count": len(payments)})
+    db.commit()
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=pagos_icodeup360.csv"})
 
 

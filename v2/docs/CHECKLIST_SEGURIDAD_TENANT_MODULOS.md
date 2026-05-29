@@ -90,3 +90,59 @@
 - Documentos responde.
 - Ventas responde.
 - Reportes BI responde.
+
+## Fase 3 - Matriz por experiencia
+
+| Experiencia | Debe ver | Debe bloquear |
+| --- | --- | --- |
+| SuperAdmin Icodeup | Gobierno SaaS, tenants, planes, suscripciones, modulos, auditoria global, salud | Nada global si no esta autenticado |
+| Admin Empresa | Mi empresa, usuarios, roles, permisos, modulos contratados, branding, auditoria tenant, reportes tenant | Gobierno global, inventario comercial global, activar modulos por URL |
+| Usuario Operativo | Inicio, cola, clientes/terceros autorizados, tareas, documentos y reportes permitidos | Gobierno, roles, permisos, settings globales, exportes sin permiso |
+
+## Fase 3 - Matriz por modulo
+
+| Modulo | Validaciones obligatorias |
+| --- | --- |
+| core | usuario autenticado, tenant valido, menu por audiencia |
+| administration | admin empresa o platform admin, tenant propio, permisos de configuracion |
+| collections | modulo activo, permisos por accion, customer visible |
+| legal | modulo activo, permisos juridicos, customer y abogado mismo tenant |
+| documents | modulo activo, relaciones mismo tenant, limite storage |
+| sales | modulo activo, permisos comerciales, asignacion/tenant |
+| bi | permisos `reports.view` y `reports.export`, datos filtrados |
+| integrations | permisos de canales, no exponer secretos |
+
+## Fase 3 - Permisos criticos
+
+- Exportes: requieren permiso `*.export` y filtro por tenant.
+- Usuarios: crear/actualizar exige rol administrativo y limite de plan.
+- Roles: clientes no asignan permisos `platform.*`, `modules.configure` ni `health.view`.
+- Modulos: solo SuperAdmin Icodeup activa/desactiva.
+- Auditoria: admin empresa solo ve su tenant.
+- Juridico: casos y responsables deben pertenecer al mismo tenant.
+- Documentos: metadata valida relaciones y no cruza tenants.
+
+## Fase 3 - Validaciones obligatorias
+
+- Aislamiento por tenant en query params y relaciones.
+- Modulo activo antes de permitir URL directa.
+- Permiso activo antes de accion.
+- Rol/perfil compatible como fallback legacy.
+- Ownership/asignacion para agente.
+- No fuga por `tenant_id` en exportes.
+- No fuga documental por `customer_id`, `legal_case_id`, `payment_id` o `agreement_id`.
+- Auditoria sin passwords, tokens, secretos ni payload CSV completo.
+
+## Pre-merge a main
+
+- `python -m compileall .\v2\backend\app`
+- `node --check .\v2\frontend\static\assets\app.js`
+- `pytest`
+- Backend local inicia en `http://127.0.0.1:8020/`
+- `/api/health` responde.
+- Login por SuperAdmin, Admin Empresa y Agent.
+- Menu por rol correcto.
+- Modulo desactivado no aparece y bloquea URL.
+- Exportes de clientes y pagos requieren permiso.
+- Auditoria registra login, exportes y cambios criticos.
+- No versionar `.env`, bases locales, logs, media real ni secretos.

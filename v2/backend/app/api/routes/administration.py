@@ -27,6 +27,7 @@ from app.schemas.administration import (
 )
 from app.services.access_control import sync_user_profile
 from app.services.audit_service import record_audit
+from app.services.plan_limits import check_project_limit, check_user_limit
 
 
 router = APIRouter(dependencies=[Depends(require_platform_admin)])
@@ -96,13 +97,14 @@ def create_tenant(payload: TenantCreate, db: Session = Depends(get_db), user: Us
 
 
 @router.patch("/tenants/{tenant_id}", response_model=TenantAdminOut)
-def update_tenant(tenant_id: int, payload: TenantUpdate, db: Session = Depends(get_db)) -> dict:
+def update_tenant(tenant_id: int, payload: TenantUpdate, db: Session = Depends(get_db), user: User = Depends(require_platform_admin)) -> dict:
     tenant = db.get(Tenant, tenant_id)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada.")
     updates = payload.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(tenant, field, value.strip() if isinstance(value, str) else value)
+    record_audit(db, user, "tenant", "update", tenant.id, tenant.id, after=updates)
     commit_or_conflict(db)
     return next(row for row in AdministrationRepository(db).list_tenants() if row["id"] == tenant.id)
 
@@ -113,8 +115,9 @@ def list_projects(tenant_id: int | None = None, db: Session = Depends(get_db)) -
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> dict:
+def create_project(payload: ProjectCreate, db: Session = Depends(get_db), platform_user: User = Depends(require_platform_admin)) -> dict:
     validate_business_tenant(db.get(Tenant, payload.tenant_id))
+    check_project_limit(db, payload.tenant_id, user=platform_user)
     project = Project(
         tenant_id=payload.tenant_id,
         name=payload.name.strip(),
@@ -124,6 +127,8 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> dic
     )
     db.add(project)
     commit_or_conflict(db)
+    record_audit(db, platform_user, "project", "create", project.id, project.tenant_id, after={"name": project.name, "code": project.code})
+    db.commit()
     return next(row for row in AdministrationRepository(db).list_projects(project.tenant_id) if row["id"] == project.id)
 
 
@@ -148,6 +153,7 @@ def list_users(tenant_id: int | None = None, db: Session = Depends(get_db)) -> l
 def create_user(payload: UserCreate, db: Session = Depends(get_db), platform_user: User = Depends(require_platform_admin)) -> dict:
     validate_business_tenant(db.get(Tenant, payload.tenant_id))
     validate_leader(db, payload.tenant_id, payload.leader_id)
+    check_user_limit(db, payload.tenant_id, user=platform_user)
     user = User(
         tenant_id=payload.tenant_id,
         name=payload.name.strip(),
@@ -176,7 +182,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db), platform_use
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
-def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)) -> dict:
+def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db), platform_user: User = Depends(require_platform_admin)) -> dict:
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
@@ -191,6 +197,7 @@ def update_user(user_id: int, payload: UserUpdate, db: Session = Depends(get_db)
     if project_ids is not None:
         AdministrationRepository(db).set_user_projects(user, project_ids)
     sync_user_profile(db, user)
+    record_audit(db, platform_user, "user", "update", user.id, user.tenant_id, after={key: value for key, value in updates.items() if key != "password"})
     commit_or_conflict(db)
     return next(row for row in AdministrationRepository(db).list_users(user.tenant_id) if row["id"] == user.id)
 

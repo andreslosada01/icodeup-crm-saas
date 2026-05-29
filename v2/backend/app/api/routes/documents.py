@@ -14,6 +14,7 @@ from app.models import Document, LegalCase, Payment, PaymentAgreement, User
 from app.schemas.documents import DocumentCreate, DocumentOut, DocumentPatch
 from app.services.audit_service import record_audit
 from app.services.access_control import require_active_module, require_permission
+from app.services.plan_limits import check_storage_limit
 
 
 router = APIRouter(dependencies=[Depends(require_active_module("documents"))])
@@ -93,6 +94,7 @@ def create_document(payload: DocumentCreate, db: Session = Depends(get_db), user
     ensure_document_manage(user)
     tenant_id = payload.tenant_id if is_platform(user) and payload.tenant_id else user.tenant_id
     validate_document_relations(db, payload, tenant_id, user)
+    check_storage_limit(db, tenant_id, additional_mb=payload.size_bytes / (1024 * 1024), user=user)
     storage_path = payload.storage_path or f"tenants/{tenant_id}/documents/{safe_storage_name(payload.original_name)}"
     document = Document(tenant_id=tenant_id, uploaded_by_id=user.id, storage_path=storage_path, **payload.model_dump(exclude={"tenant_id", "storage_path"}))
     db.add(document)
@@ -114,8 +116,13 @@ def get_document(document_id: int, db: Session = Depends(get_db), user: User = D
 def update_document(document_id: int, payload: DocumentPatch, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Document:
     require_permission(db, user, "documents.update")
     document = document_for_access(db, document_id, user, write=True)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(exclude_unset=True)
+    if "size_bytes" in updates and updates["size_bytes"] is not None:
+        additional_bytes = max(0, int(updates["size_bytes"]) - document.size_bytes)
+        check_storage_limit(db, document.tenant_id, additional_mb=additional_bytes / (1024 * 1024), user=user)
+    for field, value in updates.items():
         setattr(document, field, value)
+    record_audit(db, user, "document", "update", document.id, document.tenant_id, after=updates)
     db.commit()
     db.refresh(document)
     return document

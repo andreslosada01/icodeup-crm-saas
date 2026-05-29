@@ -103,6 +103,7 @@ def update_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db),
         validate_sales_project_and_user(db, lead.tenant_id, updates.get("project_id", lead.project_id), updates.get("assigned_user_id", lead.assigned_user_id), user)
     for field, value in updates.items():
         setattr(lead, field, value)
+    record_audit(db, user, "lead", "update", lead.id, lead.tenant_id, after=updates)
     db.commit()
     db.refresh(lead)
     return lead
@@ -160,6 +161,7 @@ def update_opportunity(opportunity_id: int, payload: OpportunityPatch, db: Sessi
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cliente fuera de la empresa.")
     for field, value in updates.items():
         setattr(opportunity, field, value)
+    record_audit(db, user, "opportunity", "update", opportunity.id, opportunity.tenant_id, after=updates)
     db.commit()
     db.refresh(opportunity)
     return opportunity

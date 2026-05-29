@@ -16,6 +16,7 @@ from app.models import Customer, User
 from app.schemas.crm import CustomerCreate, CustomerListResponse, CustomerOut
 from app.services.audit_service import record_audit
 from app.services.access_control import require_permission
+from app.services.plan_limits import check_customer_limit
 
 from .access import customer_query, customer_to_out, ensure_manage_access, ensure_read_access, is_platform, project_for_access, validate_assigned_user
 from .utils import next_action_for, priority_score, risk_from_dpd
@@ -85,6 +86,8 @@ def export_customers(
     for customer in db.scalars(query.order_by(Customer.created_at.desc())):
         writer.writerow([customer.tenant_id, customer.project_id, customer.assigned_user_id, customer.name, customer.document, customer.phone, customer.email, customer.balance, customer.dpd, customer.status, customer.risk])
     output.seek(0)
+    record_audit(db, user, "customer", "export", None, user.tenant_id, module="crm", after={"tenant_id": tenant_id, "project_id": project_id})
+    db.commit()
     return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=clientes_icodeup360.csv"})
 
 
@@ -94,6 +97,7 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db), user
     ensure_manage_access(user)
     project = project_for_access(db, payload.project_id, user)
     tenant_id = project.tenant_id
+    check_customer_limit(db, tenant_id, user=user)
     validate_assigned_user(db, tenant_id, payload.assigned_user_id)
     risk = payload.risk or risk_from_dpd(payload.dpd, payload.balance)
     customer = Customer(

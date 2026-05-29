@@ -9,10 +9,50 @@ from sqlalchemy.orm import Session
 from app.models import AuditLog, User
 
 
+SENSITIVE_KEYS = {
+    "authorization",
+    "access_token",
+    "refresh_token",
+    "token",
+    "secret",
+    "secret_key",
+    "password",
+    "password_hash",
+    "api_key",
+    "private_key",
+    "config_json",
+    "configuration_json",
+    "csv_text",
+    "file_content",
+}
+
+
+def safe_audit_payload(value: Any, depth: int = 0) -> Any:
+    if value is None:
+        return None
+    if depth > 4:
+        return "[truncated]"
+    if isinstance(value, dict):
+        clean: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            key_normalized = key_text.lower()
+            if key_normalized in SENSITIVE_KEYS or "password" in key_normalized or "token" in key_normalized or "secret" in key_normalized:
+                clean[key_text] = "[redacted]"
+            else:
+                clean[key_text] = safe_audit_payload(item, depth + 1)
+        return clean
+    if isinstance(value, (list, tuple, set)):
+        return [safe_audit_payload(item, depth + 1) for item in list(value)[:100]]
+    if isinstance(value, str) and len(value) > 1000:
+        return f"{value[:1000]}...[truncated]"
+    return value
+
+
 def _json_or_none(value: Any) -> str | None:
     if value is None:
         return None
-    return json.dumps(value, default=str, ensure_ascii=True)
+    return json.dumps(safe_audit_payload(value), default=str, ensure_ascii=True)
 
 
 def record_audit(

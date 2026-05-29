@@ -96,6 +96,7 @@ def update_case(case_id: int, payload: LegalCasePatch, db: Session = Depends(get
         validate_lawyer(db, legal_case.tenant_id, updates["assigned_lawyer_id"])
     for field, value in updates.items():
         setattr(legal_case, field, value)
+    record_audit(db, user, "legal_case", "update", legal_case.id, legal_case.tenant_id, after=updates)
     db.commit()
     db.refresh(legal_case)
     return legal_case
@@ -110,6 +111,8 @@ def create_action(case_id: int, payload: LegalActionCreate, db: Session = Depend
     if payload.next_deadline_at:
         db.add(LegalDeadline(tenant_id=legal_case.tenant_id, legal_case_id=legal_case.id, title=f"Seguimiento: {payload.action_type}", due_at=payload.next_deadline_at, priority="medium"))
     db.add(action)
+    db.flush()
+    record_audit(db, user, "legal_action", "create", action.id, legal_case.tenant_id, after={"case_id": legal_case.id, "action_type": action.action_type})
     db.commit()
     db.refresh(action)
     return action
@@ -134,6 +137,8 @@ def create_hearing(case_id: int, payload: LegalHearingCreate, db: Session = Depe
     legal_case = legal_case_for_access(db, case_id, user, write=True)
     hearing = LegalHearing(tenant_id=legal_case.tenant_id, legal_case_id=legal_case.id, **payload.model_dump())
     db.add(hearing)
+    db.flush()
+    record_audit(db, user, "legal_hearing", "create", hearing.id, legal_case.tenant_id, after={"case_id": legal_case.id, "hearing_type": hearing.hearing_type})
     db.commit()
     db.refresh(hearing)
     return hearing

@@ -10,6 +10,7 @@ from app.models import Customer, ImportBatch, User
 from app.schemas.crm import ImportCustomersRequest, ImportCustomersResponse
 from app.services.audit_service import record_audit
 from app.services.access_control import require_permission
+from app.services.plan_limits import check_customer_limit
 
 from .access import ensure_manage_access, project_for_access, validate_assigned_user
 from .utils import next_action_for, parse_csv_records, parse_money, pick, priority_score, risk_from_dpd
@@ -24,8 +25,25 @@ def import_customers(payload: ImportCustomersRequest, db: Session = Depends(get_
     ensure_manage_access(user)
     project = project_for_access(db, payload.project_id, user)
     validate_assigned_user(db, project.tenant_id, payload.assigned_user_id)
+    records = parse_csv_records(payload.csv_text)
+    new_records = 0
+    for record in records:
+        name = pick(record, ["nombre", "cliente", "name"])
+        document = pick(record, ["documento", "cedula", "nit", "identificacion", "id"])
+        if not name or not document:
+            continue
+        existing = db.scalar(
+            select(Customer.id).where(
+                Customer.tenant_id == project.tenant_id,
+                Customer.project_id == project.id,
+                Customer.document == document.strip(),
+            )
+        )
+        if existing is None:
+            new_records += 1
+    check_customer_limit(db, project.tenant_id, increment=new_records, user=user)
     imported = updated = skipped = 0
-    for record in parse_csv_records(payload.csv_text):
+    for record in records:
         name = pick(record, ["nombre", "cliente", "name"])
         document = pick(record, ["documento", "cedula", "nit", "identificacion", "id"])
         if not name or not document:
