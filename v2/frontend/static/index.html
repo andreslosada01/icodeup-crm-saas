@@ -43,7 +43,23 @@
 
     <main id="appView" class="app-shell hidden">
       <aside class="sidebar">
-        <img src="/assets/icodeup-logo.png" alt="IcodeUp" class="sidebar-logo" />
+        <div class="sidebar-brand">
+          <img src="/assets/icodeup-logo.png" alt="IcodeUp" class="sidebar-logo" />
+          <div>
+            <strong>Icodeup 360</strong>
+            <span id="sidebarTenant">Workspace empresarial</span>
+          </div>
+        </div>
+        <div class="sidebar-context" aria-label="Contexto de sesion">
+          <article>
+            <span>Perfil</span>
+            <strong id="sidebarRole">Sesion activa</strong>
+          </article>
+          <article>
+            <span>Licencia</span>
+            <strong id="sidebarPlanBadge">Plan activo</strong>
+          </article>
+        </div>
         <nav id="mainNav" aria-label="Navegacion principal">
           <button class="nav-item active" data-section="dashboard">Tablero</button>
           <button class="nav-item" data-section="queue">Cola de gestion</button>
@@ -73,9 +89,13 @@
             <p class="eyebrow">Icodeup 360</p>
             <h1 id="sectionTitle">Tablero ejecutivo</h1>
           </div>
-          <div class="user-pill">
-            <span id="sessionUser">Sesion activa</span>
-            <button id="logoutButton" type="button">Salir</button>
+          <div class="topbar-meta">
+            <span id="topbarTenant" class="status-pill">Workspace activo</span>
+            <span id="systemStatusPill" class="status-pill status-pill-ok">Sistema operativo</span>
+            <div class="user-pill">
+              <span id="sessionUser">Sesion activa</span>
+              <button id="logoutButton" type="button">Salir</button>
+            </div>
           </div>
         </header>
 
@@ -87,6 +107,8 @@
             <article class="metric-card"><span>Contacto</span><strong id="metricContact">0%</strong></article>
           </div>
           <div id="roleDashboard" class="role-dashboard"></div>
+          <div id="experienceActions" class="quick-action-grid"></div>
+          <div id="experienceModules" class="module-catalog compact"></div>
           <div id="dashboardPulse" class="intelligence-grid executive-pulse"></div>
           <div class="dashboard-grid">
             <article class="chart-panel">
@@ -158,6 +180,8 @@
             </div>
             <div id="governanceCards" class="intelligence-grid"></div>
             <div id="governanceAlerts" class="compact-alert-list horizontal-alerts"></div>
+            <div id="governanceQuickActions" class="quick-action-grid"></div>
+            <div id="governanceModuleCatalog" class="module-catalog compact"></div>
           </article>
           <div class="dashboard-grid">
             <article class="chart-panel"><h2>Suscripciones recientes</h2><div id="governanceSubscriptions" class="table-wrap"></div></article>
@@ -170,6 +194,7 @@
             <div class="panel-head">
               <div><h2>Planes comerciales</h2><p>Inventario de planes SaaS para licenciar empresas por usuarios, modulos y capacidad.</p></div>
             </div>
+            <div id="planCards" class="plan-card-grid"></div>
             <div id="planTable" class="table-wrap"></div>
           </article>
         </section>
@@ -179,6 +204,7 @@
             <div class="panel-head">
               <div><h2>Suscripciones por empresa</h2><p>Vista comercial global para seguimiento de estado, ciclo y modulos activos.</p></div>
             </div>
+            <div id="subscriptionCards" class="plan-card-grid"></div>
             <div id="subscriptionTable" class="table-wrap"></div>
           </article>
         </section>
@@ -189,6 +215,7 @@
               <div><h2>Activacion de modulos</h2><p>Solo Icodeup puede activar o desactivar capacidades contratadas por empresa.</p></div>
               <div class="inline-controls"><select id="moduleTenantFilter" aria-label="Empresa para modulos"></select></div>
             </div>
+            <div id="moduleCatalog" class="module-catalog"></div>
             <div id="moduleTable" class="table-wrap"></div>
           </article>
         </section>
@@ -198,6 +225,8 @@
             <div class="panel-head">
               <div><h2>Mi empresa</h2><p>Datos base de la empresa autenticada y configuracion operacional.</p></div>
             </div>
+            <div id="tenantWorkspacePanel" class="workspace-profile"></div>
+            <div id="tenantPlanSummary" class="plan-usage-grid"></div>
             <div id="tenantSettingsSummary" class="settings-summary"></div>
           </article>
         </section>
@@ -227,6 +256,7 @@
               <div class="panel-head">
                 <div><h2>Roles y permisos</h2><p>Roles de sistema y roles propios de la empresa.</p></div>
               </div>
+              <div id="rolePermissionGuide" class="permission-guide"></div>
               <div id="roleTable" class="table-wrap"></div>
             </article>
           </div>
@@ -237,6 +267,7 @@
             <div class="panel-head">
               <div><h2>Modulos contratados</h2><p>Consulta de capacidades habilitadas para la empresa.</p></div>
             </div>
+            <div id="tenantModuleCatalog" class="module-catalog"></div>
             <div id="tenantModuleTable" class="table-wrap"></div>
           </article>
         </section>
@@ -435,13 +466,13 @@
         <section id="agreements" class="section">
           <article class="module-placeholder">
             <div>
-              <p class="eyebrow">Modulo en construccion</p>
+              <p class="eyebrow">Capacidad operativa</p>
               <h2>Acuerdos de pago</h2>
-              <p>Administracion de acuerdos, cuotas, cumplimiento, vencimientos y trazabilidad de recuperacion.</p>
+              <p>Administra acuerdos, cuotas, cumplimiento, vencimientos y trazabilidad de recuperacion desde una vista preparada para control ejecutivo.</p>
             </div>
             <div class="module-roadmap">
               <span>Endpoint base: /api/crm/agreements</span>
-              <span>Componentes proximos: calendario de cuotas, alertas de vencimiento y tablero de cumplimiento.</span>
+              <span>Activacion comercial sugerida: calendario de cuotas, alertas de vencimiento y tablero de cumplimiento.</span>
             </div>
           </article>
         </section>
@@ -449,13 +480,13 @@
         <section id="legal" class="section">
           <article class="module-placeholder">
             <div>
-              <p class="eyebrow">Modulo en construccion</p>
+              <p class="eyebrow">Collection & Legal CRM</p>
               <h2>Gestion juridica</h2>
-              <p>Expedientes, actuaciones, audiencias, vencimientos, etapas procesales y riesgo legal por cliente.</p>
+              <p>Centraliza expedientes, actuaciones, audiencias, vencimientos, etapas procesales y riesgo legal por cliente sin duplicar la vision 360 del tercero.</p>
             </div>
             <div class="module-roadmap">
               <span>Endpoint base: /api/legal</span>
-              <span>Componentes proximos: bandeja juridica, agenda de vencimientos y matriz de riesgo.</span>
+              <span>Activacion comercial sugerida: bandeja juridica, agenda de vencimientos y matriz de riesgo.</span>
             </div>
           </article>
         </section>
@@ -463,13 +494,13 @@
         <section id="documents" class="section">
           <article class="module-placeholder">
             <div>
-              <p class="eyebrow">Modulo en construccion</p>
+              <p class="eyebrow">Repositorio empresarial</p>
               <h2>Gestion documental</h2>
-              <p>Metadatos documentales vinculados a clientes, pagos, acuerdos y casos juridicos.</p>
+              <p>Organiza metadatos documentales vinculados a clientes, pagos, acuerdos y casos juridicos, con base lista para almacenamiento seguro por tenant.</p>
             </div>
             <div class="module-roadmap">
               <span>Endpoint base: /api/documents</span>
-              <span>Componentes proximos: carga binaria segura, versionado y carpetas por tenant.</span>
+              <span>Activacion comercial sugerida: carga binaria segura, versionado y carpetas por tenant.</span>
             </div>
           </article>
         </section>
@@ -477,13 +508,13 @@
         <section id="sales" class="section">
           <article class="module-placeholder">
             <div>
-              <p class="eyebrow">Modulo en construccion</p>
+              <p class="eyebrow">Expansion CRM 360</p>
               <h2>Ventas y CRM 360</h2>
-              <p>Base inicial para leads, oportunidades, pipeline comercial y evolucion futura fuera del core de cobranzas.</p>
+              <p>Base inicial para leads, oportunidades y pipeline comercial, preparada para evolucionar la plataforma hacia relacionamiento 360.</p>
             </div>
             <div class="module-roadmap">
               <span>Endpoint base: /api/sales</span>
-              <span>Componentes proximos: tablero comercial, pipeline y conversion a cliente.</span>
+              <span>Activacion comercial sugerida: tablero comercial, pipeline y conversion a cliente.</span>
             </div>
           </article>
         </section>
