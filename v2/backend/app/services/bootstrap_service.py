@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,9 +8,41 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN, ROLE_LABELS
 from app.core.security import hash_password
-from app.models import MenuItem, Module, Permission, Role, RolePermission, SaasPlan, Tenant, TenantConfiguration, TenantModule, User
+from app.models import (
+    CommunicationChannel,
+    Customer,
+    Document,
+    Lead,
+    LegalAction,
+    LegalCase,
+    LegalDeadline,
+    LegalHearing,
+    ManagementActivity,
+    MenuItem,
+    Module,
+    Opportunity,
+    Party,
+    Payment,
+    PaymentAgreement,
+    PaymentAgreementInstallment,
+    PaymentPromise,
+    Permission,
+    Project,
+    Role,
+    RolePermission,
+    SaasPlan,
+    Tenant,
+    TenantConfiguration,
+    TenantModule,
+    TenantSubscription,
+    TypificationNode,
+    User,
+    UserProjectAssignment,
+)
 from app.services.access_control import sync_user_profile
 
+
+DEMO_PASSWORD = "Demo360!2026"
 
 MODULE_DEFS = [
     ("core", "Core SaaS", "Base comun de empresas, usuarios, permisos y configuracion.", "core", 0, "grid", 1),
@@ -158,7 +190,7 @@ ROLE_PERMISSION_MAP = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "documents.read", "documents.view", "sales.read_own", "sales.leads.view", "sales.opportunities.view", "menu.view",
+        "collections.agreements.view", "documents.read", "documents.view", "sales.read_own", "sales.leads.view", "sales.opportunities.view", "menu.view",
     ],
 }
 
@@ -206,8 +238,81 @@ MENU_DEFS = [
     ("Mi operacion", "queue", "collections", "collections.queue.view", "operational_user", 10),
     ("Clientes / terceros", "customers", "crm", "crm.clients.view", "operational_user", 20),
     ("Tareas", "tasks", "collections", "collections.queue.view", "operational_user", 25),
-    ("Documentos", "documents", "documents", "documents.view", "operational_user", 30),
+    ("Promesas", "promises", "collections", "collections.promises.view", "operational_user", 30),
+    ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
+    ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
+    ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
 ]
+
+DEMO_TENANTS = [
+    {
+        "slug": "andina-servicios-financieros",
+        "name": "Andina Servicios Financieros S.A.S.",
+        "document_number": "900900001-1",
+        "plan": "business",
+        "modules": {"core", "administration", "crm", "collections", "legal", "documents", "bi", "sales", "integrations"},
+        "primary_color": "#15956f",
+        "secondary_color": "#2563eb",
+        "notes": "Tenant ficticio principal para demo comercial Collection & Legal CRM.",
+    },
+    {
+        "slug": "legal-recovery-group-demo",
+        "name": "Legal Recovery Group Demo",
+        "document_number": "900900002-2",
+        "plan": "professional",
+        "modules": {"core", "administration", "legal", "documents", "bi"},
+        "primary_color": "#235f74",
+        "secondary_color": "#7c3aed",
+        "notes": "Firma juridica ficticia para mostrar expedientes y documentos.",
+    },
+    {
+        "slug": "cooperativa-horizonte-demo",
+        "name": "Cooperativa Horizonte Demo",
+        "document_number": "900900003-3",
+        "plan": "starter",
+        "modules": {"core", "administration", "crm", "collections", "bi"},
+        "primary_color": "#15803d",
+        "secondary_color": "#0f766e",
+        "notes": "Cooperativa ficticia para mostrar cobranzas en plan Starter.",
+    },
+]
+
+ANDINA_PROJECTS = [
+    ("BANCO-FERIAS-CONSUMO", "Banco Ferias - Consumo Castigado", "Cartera de consumo castigado con saldos medios y mora avanzada.", 20),
+    ("COOP-FUTURO-MICRO", "Cooperativa Futuro - Microcredito", "Microcredito productivo con seguimiento preventivo y correctivo.", 15),
+    ("RETAIL-HOGAR-TARJETA", "Retail Hogar - Tarjeta Privada", "Tarjeta privada retail con promesas recurrentes.", 15),
+    ("CARTERA-JUDICIALIZADA", "Cartera Judicializada - Recuperacion Legal", "Expedientes prejuridicos y juridicos con control documental.", 10),
+]
+
+SECONDARY_PROJECTS = {
+    "legal-recovery-group-demo": [
+        ("LEGAL-DEMO-EXP", "Expedientes Judiciales Demo", "Gestion de casos juridicos y vencimientos procesales."),
+        ("LEGAL-DEMO-DOC", "Control Documental Legal", "Repositorio documental para procesos juridicos."),
+    ],
+    "cooperativa-horizonte-demo": [
+        ("HORIZONTE-MICRO", "Microcredito Horizonte Demo", "Cartera de microcredito con recaudo operativo."),
+    ],
+}
+
+DEMO_USER_DEFS = [
+    ("superadmin@demo.icodeup.local", "SuperAdmin Icodeup Demo", PLATFORM_ADMIN, "Gobierno SaaS Icodeup", None),
+    ("admin.andina@demo.icodeup.local", "Admin Empresa Andina", TENANT_ADMIN, "Administracion empresa", None),
+    ("coord.cobranzas.andina@demo.icodeup.local", "Coordinador de Cobranzas", COORDINATOR, "Lider operativo cobranzas", None),
+    ("gestor1.andina@demo.icodeup.local", "Gestor Demo Uno", AGENT, "Gestor de cartera", "coord.cobranzas.andina@demo.icodeup.local"),
+    ("gestor2.andina@demo.icodeup.local", "Gestor Demo Dos", AGENT, "Gestor de cartera", "coord.cobranzas.andina@demo.icodeup.local"),
+    ("calidad.andina@demo.icodeup.local", "Supervisor Calidad Demo", QUALITY_SUPERVISOR, "Supervisor de calidad", "coord.cobranzas.andina@demo.icodeup.local"),
+    ("abogado.andina@demo.icodeup.local", "Abogado Juridico Demo", COORDINATOR, "Abogado juridico", "admin.andina@demo.icodeup.local"),
+    ("comercial.andina@demo.icodeup.local", "Analista Comercial Demo", COORDINATOR, "Analista comercial", "admin.andina@demo.icodeup.local"),
+]
+
+DEMO_NAMES = [
+    "Cliente Demo Aurora", "Cliente Demo Boreal", "Cliente Demo Camino", "Cliente Demo Delta", "Cliente Demo Eclipse",
+    "Cliente Demo Farallones", "Cliente Demo Galeria", "Cliente Demo Horizonte", "Cliente Demo Indigo", "Cliente Demo Jardin",
+    "Cliente Demo Kpital", "Cliente Demo Laguna", "Cliente Demo Monteluz", "Cliente Demo Norte", "Cliente Demo Origen",
+    "Cliente Demo Paraiso", "Cliente Demo Quimbaya", "Cliente Demo Roble", "Cliente Demo Sabana", "Cliente Demo Terra",
+]
+
+DEMO_CITIES = ["Bogota", "Medellin", "Cali", "Barranquilla", "Bucaramanga", "Pereira", "Manizales", "Cartagena"]
 
 
 def _get_or_create_module(db: Session, code: str, name: str, description: str, category: str, base_price: int, icon: str, order: int) -> Module:
@@ -349,6 +454,547 @@ def _seed_tenant_configuration(db: Session, tenant: Tenant) -> None:
             db.add(TenantConfiguration(tenant_id=tenant.id, key=key, value_json=f'"{value}"', is_active=True))
 
 
+def _get_or_create_demo_tenant(db: Session, tenant_def: dict) -> Tenant:
+    tenant = db.scalar(select(Tenant).where(Tenant.slug == tenant_def["slug"]))
+    if tenant is None:
+        tenant = Tenant(name=tenant_def["name"], slug=tenant_def["slug"])
+        db.add(tenant)
+        db.flush()
+    tenant.name = tenant_def["name"]
+    tenant.tax_id = tenant_def["document_number"]
+    tenant.document_type = "NIT"
+    tenant.document_number = tenant_def["document_number"]
+    tenant.status = "active"
+    tenant.primary_color = tenant_def["primary_color"]
+    tenant.secondary_color = tenant_def["secondary_color"]
+    tenant.timezone = "America/Bogota"
+    tenant.logo_url = "/assets/icodeup-logo.png"
+    tenant.notes = tenant_def["notes"]
+    return tenant
+
+
+def _get_or_create_project(db: Session, tenant: Tenant, code: str, name: str, description: str) -> Project:
+    project = db.scalar(select(Project).where(Project.tenant_id == tenant.id, Project.code == code))
+    if project is None:
+        project = Project(tenant_id=tenant.id, code=code, name=name)
+        db.add(project)
+        db.flush()
+    project.name = name
+    project.description = description
+    project.status = "active"
+    return project
+
+
+def _get_or_create_demo_user(
+    db: Session,
+    tenant: Tenant,
+    email: str,
+    name: str,
+    role: str,
+    title: str,
+    leader_email: str | None = None,
+) -> User:
+    user = db.scalar(select(User).where(User.email == email.lower()))
+    if user is None:
+        user = User(
+            tenant_id=tenant.id,
+            name=name,
+            email=email.lower(),
+            role=role,
+            password_hash=hash_password(DEMO_PASSWORD),
+        )
+        db.add(user)
+        db.flush()
+    user.tenant_id = tenant.id
+    user.name = name
+    user.role = role
+    user.title = title
+    user.status = "active"
+    user.phone = user.phone or f"300000{user.id:04d}"
+    if leader_email:
+        leader = db.scalar(select(User).where(User.email == leader_email.lower()))
+        if leader is not None:
+            user.leader_id = leader.id
+    return user
+
+
+def _ensure_assignment(db: Session, user: User, project: Project) -> None:
+    existing = db.scalar(
+        select(UserProjectAssignment).where(
+            UserProjectAssignment.user_id == user.id,
+            UserProjectAssignment.project_id == project.id,
+        )
+    )
+    if existing is None:
+        db.add(UserProjectAssignment(user_id=user.id, project_id=project.id))
+
+
+def _ensure_subscription(db: Session, tenant: Tenant, plan_code: str) -> None:
+    plan = db.scalar(select(SaasPlan).where(SaasPlan.code == plan_code))
+    if plan is None:
+        return
+    subscription = db.scalar(select(TenantSubscription).where(TenantSubscription.tenant_id == tenant.id))
+    now = datetime.now(timezone.utc)
+    if subscription is None:
+        subscription = TenantSubscription(tenant_id=tenant.id, plan_id=plan.id, start_date=now)
+        db.add(subscription)
+    subscription.plan_id = plan.id
+    subscription.status = "active"
+    subscription.billing_cycle = "monthly"
+    subscription.renewal_date = now + timedelta(days=30)
+    subscription.notes = "Suscripcion ficticia de demostracion comercial."
+    tenant.plan_id = plan.id
+
+
+def _set_demo_modules(db: Session, tenant: Tenant, modules: dict[str, Module], enabled_codes: set[str]) -> None:
+    for module_code, module in modules.items():
+        tenant_module = db.scalar(
+            select(TenantModule).where(TenantModule.tenant_id == tenant.id, TenantModule.module_code == module_code)
+        )
+        enabled = module_code in enabled_codes
+        if tenant_module is None:
+            tenant_module = TenantModule(tenant_id=tenant.id, module_code=module_code, module_id=module.id)
+            db.add(tenant_module)
+        tenant_module.module_id = module.id
+        tenant_module.enabled = enabled
+        tenant_module.is_enabled = enabled
+        tenant_module.enabled_at = datetime.now(timezone.utc) if enabled and tenant_module.enabled_at is None else (tenant_module.enabled_at if enabled else None)
+        tenant_module.configuration_json = '{"demo": true}' if enabled else None
+
+
+def _ensure_channels(db: Session, tenant: Tenant, project: Project | None = None) -> None:
+    channel_defs = [
+        ("whatsapp", "Linea principal cobranzas demo", "3000000101", "WhatsApp Cloud API Demo"),
+        ("email", "Correo cobranzas demo", "cobranzas@demo.icodeup.local", "SMTP Demo"),
+        ("telephony", "Telefonia WebRTC demo", "sip:andina-demo@pbx.demo.local", "SIP/WebRTC Demo"),
+    ]
+    for kind, label, value, provider in channel_defs:
+        channel = db.scalar(select(CommunicationChannel).where(CommunicationChannel.tenant_id == tenant.id, CommunicationChannel.kind == kind, CommunicationChannel.value == value))
+        if channel is None:
+            channel = CommunicationChannel(tenant_id=tenant.id, project_id=project.id if project else None, kind=kind, label=label, value=value)
+            db.add(channel)
+        channel.label = label
+        channel.provider = provider
+        channel.is_default = True
+        channel.status = "active"
+        channel.config_json = '{"demo": true, "real_provider_connected": false}'
+
+
+def _ensure_typifications(db: Session, tenant: Tenant) -> dict[str, TypificationNode]:
+    tree = [
+        ("CONTACTO", "Contacto efectivo", None, "Contactado", False, False, "phone", 10),
+        ("PROMESA", "Promesa de pago", "CONTACTO", "Promesa", True, False, "whatsapp", 20),
+        ("PAGO", "Pago confirmado", "CONTACTO", "Pago", False, True, "email", 30),
+        ("NO_CONTACTO", "No contacto", None, "Sin contacto", False, False, "phone", 40),
+        ("ESCALAR_JURIDICO", "Escalar a juridico", None, "Escalado", False, False, "email", 50),
+        ("ACUERDO", "Acuerdo de pago", "CONTACTO", "Acuerdo", True, False, "phone", 60),
+    ]
+    nodes: dict[str, TypificationNode] = {}
+    for code, label, parent_code, next_status, requires_promise, requires_payment, channel, sort_order in tree:
+        node = db.scalar(select(TypificationNode).where(TypificationNode.tenant_id == tenant.id, TypificationNode.code == code))
+        if node is None:
+            node = TypificationNode(tenant_id=tenant.id, code=code, label=label)
+            db.add(node)
+            db.flush()
+        node.label = label
+        node.next_status = next_status
+        node.requires_promise = requires_promise
+        node.requires_payment = requires_payment
+        node.channel = channel
+        node.sort_order = sort_order
+        node.parent_id = nodes[parent_code].id if parent_code and parent_code in nodes else None
+        nodes[code] = node
+    return nodes
+
+
+def _ensure_party_for_customer(db: Session, tenant: Tenant, customer: Customer) -> None:
+    party = db.scalar(
+        select(Party).where(
+            Party.tenant_id == tenant.id,
+            Party.document_type == "CC-DEMO",
+            Party.document_number == customer.document,
+        )
+    )
+    if party is None:
+        party = Party(tenant_id=tenant.id, party_type="person", document_type="CC-DEMO", document_number=customer.document)
+        db.add(party)
+    party.display_name = customer.name
+    party.legal_name = customer.name
+    party.email = customer.email
+    party.phone = customer.phone
+    party.city = customer.city
+    party.status = "active"
+    party.is_customer = True
+    party.is_debtor = True
+    party.external_ref = f"DEMO-CUSTOMER-{customer.document}"
+    party.notes = "Tercero maestro ficticio generado para demo comercial."
+
+
+def _ensure_customer(
+    db: Session,
+    tenant: Tenant,
+    project: Project,
+    assigned_user: User,
+    index: int,
+    segment: str,
+    judicialized: bool = False,
+) -> Customer:
+    document = f"9001{index:05d}"
+    customer = db.scalar(select(Customer).where(Customer.tenant_id == tenant.id, Customer.document == document))
+    if customer is None:
+        customer = Customer(tenant_id=tenant.id, document=document, name=f"{DEMO_NAMES[index % len(DEMO_NAMES)]} {index:03d}")
+        db.add(customer)
+        db.flush()
+    dpd = (index * 7) % 125 + (90 if judicialized else 0)
+    balance = 780000 + (index * 365000)
+    customer.project_id = project.id
+    customer.assigned_user_id = assigned_user.id
+    customer.name = f"{DEMO_NAMES[index % len(DEMO_NAMES)]} {index:03d}"
+    customer.phone = f"3000{index:06d}"
+    customer.email = f"cliente.demo{index:03d}@demo.local"
+    customer.city = DEMO_CITIES[index % len(DEMO_CITIES)]
+    customer.segment = segment
+    customer.obligation = f"OBL-DEMO-{project.code}-{index:03d}"
+    customer.balance = balance
+    customer.original_balance = balance + 450000
+    customer.dpd = dpd
+    customer.risk = "Alto" if dpd >= 75 else "Medio" if dpd >= 25 else "Bajo"
+    customer.priority = min(100, int(dpd * 0.55) + int(balance / 1_000_000))
+    customer.status = "Escalado" if judicialized else ("Promesa" if index % 4 == 0 else "Contactado" if index % 3 == 0 else "Sin contacto")
+    customer.next_action = "Revisar expediente juridico" if judicialized else ("Confirmar promesa de pago" if index % 4 == 0 else "Gestion telefonica prioritaria")
+    customer.contactability = "Alta" if index % 3 == 0 else "Media" if index % 3 == 1 else "Baja"
+    customer.notes = "Registro ficticio para demo comercial Icodeup 360. No corresponde a persona real."
+    customer.last_contact_at = datetime.now(timezone.utc) - timedelta(days=index % 11)
+    customer.next_contact_at = datetime.now(timezone.utc) + timedelta(days=(index % 5) + 1)
+    _ensure_party_for_customer(db, tenant, customer)
+    return customer
+
+
+def _ensure_activity(db: Session, customer: Customer, user: User, typification: TypificationNode | None, channel: str, result: str, note: str, days_ago: int) -> None:
+    existing = db.scalar(select(ManagementActivity).where(ManagementActivity.customer_id == customer.id, ManagementActivity.note == note))
+    if existing is None:
+        db.add(
+            ManagementActivity(
+                tenant_id=customer.tenant_id,
+                project_id=customer.project_id,
+                customer_id=customer.id,
+                user_id=user.id,
+                typification_id=typification.id if typification else None,
+                channel=channel,
+                result=result,
+                note=note,
+                next_contact_at=datetime.now(timezone.utc) + timedelta(days=2),
+                created_at=datetime.now(timezone.utc) - timedelta(days=days_ago),
+            )
+        )
+
+
+def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, due_in_days: int, status: str) -> None:
+    existing = db.scalar(select(PaymentPromise).where(PaymentPromise.customer_id == customer.id, PaymentPromise.amount == amount, PaymentPromise.status == status))
+    if existing is None:
+        db.add(
+            PaymentPromise(
+                tenant_id=customer.tenant_id,
+                project_id=customer.project_id,
+                customer_id=customer.id,
+                user_id=user.id,
+                amount=amount,
+                due_date=datetime.now(timezone.utc) + timedelta(days=due_in_days),
+                channel="whatsapp",
+                status=status,
+            )
+        )
+
+
+def _ensure_payment(db: Session, customer: Customer, user: User, amount: int, days_ago: int) -> None:
+    reference = f"DEMO-PAGO-{customer.document}-{amount}"
+    existing = db.scalar(select(Payment).where(Payment.tenant_id == customer.tenant_id, Payment.reference == reference))
+    if existing is None:
+        db.add(
+            Payment(
+                tenant_id=customer.tenant_id,
+                project_id=customer.project_id,
+                customer_id=customer.id,
+                user_id=user.id,
+                amount=amount,
+                paid_at=datetime.now(timezone.utc) - timedelta(days=days_ago),
+                method="Transferencia demo",
+                reference=reference,
+            )
+        )
+
+
+def _ensure_agreement(db: Session, customer: Customer, user: User, installments: int, total_amount: int, status: str) -> PaymentAgreement:
+    note = f"DEMO-ACUERDO-{customer.document}"
+    agreement = db.scalar(select(PaymentAgreement).where(PaymentAgreement.customer_id == customer.id, PaymentAgreement.notes == note))
+    if agreement is None:
+        agreement = PaymentAgreement(
+            tenant_id=customer.tenant_id,
+            project_id=customer.project_id,
+            customer_id=customer.id,
+            user_id=user.id,
+            total_amount=total_amount,
+            installment_count=installments,
+            start_date=datetime.now(timezone.utc) - timedelta(days=7),
+            status=status,
+            notes=note,
+        )
+        db.add(agreement)
+        db.flush()
+    agreement.status = status
+    existing_installments = list(db.scalars(select(PaymentAgreementInstallment).where(PaymentAgreementInstallment.agreement_id == agreement.id)))
+    if not existing_installments:
+        amount = max(1, int(total_amount / installments))
+        for item in range(installments):
+            paid_amount = amount if item == 0 and status in {"active", "partial", "completed"} else 0
+            db.add(
+                PaymentAgreementInstallment(
+                    agreement_id=agreement.id,
+                    due_date=datetime.now(timezone.utc) + timedelta(days=(item + 1) * 15),
+                    amount=amount,
+                    paid_amount=paid_amount,
+                    status="paid" if paid_amount else ("overdue" if item == 1 and status == "overdue" else "pending"),
+                )
+            )
+    return agreement
+
+
+def _ensure_document(
+    db: Session,
+    tenant: Tenant,
+    user: User,
+    document_type: str,
+    original_name: str,
+    storage_path: str,
+    project_id: int | None = None,
+    customer_id: int | None = None,
+    legal_case_id: int | None = None,
+    agreement_id: int | None = None,
+    payment_id: int | None = None,
+) -> None:
+    document = db.scalar(select(Document).where(Document.tenant_id == tenant.id, Document.storage_path == storage_path))
+    if document is None:
+        document = Document(tenant_id=tenant.id, storage_path=storage_path, uploaded_by_id=user.id, document_type=document_type, original_name=original_name)
+        db.add(document)
+    document.project_id = project_id
+    document.customer_id = customer_id
+    document.legal_case_id = legal_case_id
+    document.agreement_id = agreement_id
+    document.payment_id = payment_id
+    document.mime_type = "application/pdf"
+    document.size_bytes = 256000
+    document.status = "active"
+    document.notes = "Metadato documental ficticio. No existe archivo real asociado en el repositorio."
+
+
+def _ensure_legal_case(db: Session, tenant: Tenant, customer: Customer, lawyer: User, index: int) -> LegalCase:
+    case_number = f"DEMO-LEGAL-{index:03d}"
+    legal_case = db.scalar(select(LegalCase).where(LegalCase.tenant_id == tenant.id, LegalCase.case_number == case_number))
+    if legal_case is None:
+        legal_case = LegalCase(
+            tenant_id=tenant.id,
+            project_id=customer.project_id,
+            customer_id=customer.id,
+            case_number=case_number,
+            process_type="Ejecutivo singular demo",
+        )
+        db.add(legal_case)
+        db.flush()
+    legal_case.assigned_lawyer_id = lawyer.id
+    legal_case.court_name = f"Juzgado Demo {index:02d}"
+    legal_case.amount = customer.balance
+    legal_case.status = "open" if index % 5 else "closed"
+    legal_case.stage = ["Recibido", "En estudio", "Radicado", "En tramite", "Audiencia programada"][index % 5]
+    legal_case.risk = "high" if customer.dpd > 120 else "medium"
+    legal_case.next_action = "Preparar actuacion juridica demo"
+    legal_case.next_deadline_at = datetime.now(timezone.utc) + timedelta(days=(index % 12) + 3)
+    legal_case.notes = "Caso juridico ficticio para demostracion comercial."
+    actions = [
+        ("Revision documental", "Validacion de pagare y contrato demo."),
+        ("Radicacion", "Radicacion ficticia de demanda demo."),
+        ("Seguimiento", "Control de termino procesal demo."),
+    ]
+    for offset, (action_type, description) in enumerate(actions):
+        existing = db.scalar(select(LegalAction).where(LegalAction.legal_case_id == legal_case.id, LegalAction.action_type == action_type))
+        if existing is None:
+            db.add(
+                LegalAction(
+                    tenant_id=tenant.id,
+                    legal_case_id=legal_case.id,
+                    user_id=lawyer.id,
+                    action_type=action_type,
+                    description=description,
+                    action_date=datetime.now(timezone.utc) - timedelta(days=offset + 1),
+                    next_deadline_at=datetime.now(timezone.utc) + timedelta(days=offset + 7),
+                )
+            )
+    hearing = db.scalar(select(LegalHearing).where(LegalHearing.legal_case_id == legal_case.id, LegalHearing.hearing_type == "Audiencia demo"))
+    if hearing is None:
+        db.add(
+            LegalHearing(
+                tenant_id=tenant.id,
+                legal_case_id=legal_case.id,
+                hearing_type="Audiencia demo",
+                scheduled_at=datetime.now(timezone.utc) + timedelta(days=20 + index),
+                location="Sala virtual demo",
+                status="scheduled",
+                notes="Audiencia ficticia para flujo comercial.",
+            )
+        )
+    deadline = db.scalar(select(LegalDeadline).where(LegalDeadline.legal_case_id == legal_case.id, LegalDeadline.title == "Vencimiento procesal demo"))
+    if deadline is None:
+        db.add(
+            LegalDeadline(
+                tenant_id=tenant.id,
+                legal_case_id=legal_case.id,
+                title="Vencimiento procesal demo",
+                due_at=datetime.now(timezone.utc) + timedelta(days=(index % 15) + 2),
+                status="open",
+                priority="high" if index % 2 == 0 else "medium",
+            )
+        )
+    return legal_case
+
+
+def _ensure_sales_demo(db: Session, tenant: Tenant, project: Project, owner: User) -> None:
+    lead_defs = [
+        ("BPO Andes Demo", "bpo-andes@demo.local", "BPO de cobranzas", "Propuesta", "proposal", 65, "open"),
+        ("Fintech Prisma Demo", "fintech-prisma@demo.local", "Fintech", "Negociacion", "negotiation", 55, "open"),
+        ("Cooperativa Norte Demo", "cooperativa-norte@demo.local", "Cooperativa", "Ganada", "closed_won", 100, "won"),
+        ("Retail Nova Demo", "retail-nova@demo.local", "Retail", "Perdida", "closed_lost", 0, "lost"),
+        ("Firma Legal Beta Demo", "legal-beta@demo.local", "Firma juridica", "Calificacion", "qualification", 35, "open"),
+        ("Servicios Omega Demo", "servicios-omega@demo.local", "Servicios", "Contacto", "discovery", 25, "open"),
+    ]
+    for idx, (company, email, interest, status, stage, probability, opportunity_status) in enumerate(lead_defs, start=1):
+        lead = db.scalar(select(Lead).where(Lead.tenant_id == tenant.id, Lead.email == email))
+        if lead is None:
+            lead = Lead(tenant_id=tenant.id, email=email, name=f"Contacto Demo {idx:02d}")
+            db.add(lead)
+            db.flush()
+        lead.project_id = project.id
+        lead.assigned_user_id = owner.id
+        lead.company = company
+        lead.document = f"9100{idx:05d}"
+        lead.phone = f"3001{idx:06d}"
+        lead.source = "Demo comercial"
+        lead.interest = interest
+        lead.status = status.lower().replace(" ", "_")
+        lead.priority = "high" if probability >= 55 else "medium"
+        lead.notes = "Lead ficticio para mostrar evolucion CRM 360."
+        opportunity = db.scalar(select(Opportunity).where(Opportunity.tenant_id == tenant.id, Opportunity.lead_id == lead.id))
+        if opportunity is None:
+            opportunity = Opportunity(tenant_id=tenant.id, lead_id=lead.id, name=f"Icodeup 360 - {company}")
+            db.add(opportunity)
+        opportunity.project_id = project.id
+        opportunity.assigned_user_id = owner.id
+        opportunity.amount = 8_000_000 + (idx * 1_500_000)
+        opportunity.stage = stage
+        opportunity.probability = probability
+        opportunity.expected_close_date = datetime.now(timezone.utc) + timedelta(days=20 + idx)
+        opportunity.status = opportunity_status
+        opportunity.lost_reason = "No aplica en demo" if opportunity_status != "lost" else "Presupuesto aplazado demo"
+        opportunity.notes = "Oportunidad ficticia para demo comercial."
+
+
+def _seed_secondary_demo_tenants(db: Session, tenants: dict[str, Tenant], modules: dict[str, Module]) -> None:
+    for tenant_def in DEMO_TENANTS[1:]:
+        tenant = tenants[tenant_def["slug"]]
+        _ensure_subscription(db, tenant, tenant_def["plan"])
+        _set_demo_modules(db, tenant, modules, tenant_def["modules"])
+        admin = _get_or_create_demo_user(db, tenant, f"admin.{tenant.slug}@demo.icodeup.local", f"Admin {tenant.name}", TENANT_ADMIN, "Administrador demo")
+        for code, name, description in SECONDARY_PROJECTS.get(tenant.slug, []):
+            project = _get_or_create_project(db, tenant, code, name, description)
+            _ensure_assignment(db, admin, project)
+        _seed_tenant_configuration(db, tenant)
+
+
+def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_tenant: Tenant) -> None:
+    tenants = {tenant_def["slug"]: _get_or_create_demo_tenant(db, tenant_def) for tenant_def in DEMO_TENANTS}
+    andina = tenants["andina-servicios-financieros"]
+    _ensure_subscription(db, andina, "business")
+    _set_demo_modules(db, andina, modules, DEMO_TENANTS[0]["modules"])
+    _seed_tenant_configuration(db, andina)
+
+    platform_demo = _get_or_create_demo_user(db, platform_tenant, DEMO_USER_DEFS[0][0], DEMO_USER_DEFS[0][1], DEMO_USER_DEFS[0][2], DEMO_USER_DEFS[0][3])
+    platform_demo.leader_id = None
+
+    users: dict[str, User] = {}
+    for email, name, role, title, leader_email in DEMO_USER_DEFS[1:]:
+        users[email] = _get_or_create_demo_user(db, andina, email, name, role, title, leader_email)
+
+    projects = [
+        _get_or_create_project(db, andina, code, name, description)
+        for code, name, description, _count in ANDINA_PROJECTS
+    ]
+    for project in projects:
+        for user in users.values():
+            _ensure_assignment(db, user, project)
+    _ensure_channels(db, andina, projects[0])
+    typifications = _ensure_typifications(db, andina)
+
+    gestor_1 = users["gestor1.andina@demo.icodeup.local"]
+    gestor_2 = users["gestor2.andina@demo.icodeup.local"]
+    lawyer = users["abogado.andina@demo.icodeup.local"]
+    commercial = users["comercial.andina@demo.icodeup.local"]
+    global_index = 1
+    for project_idx, (code, _name, _description, count) in enumerate(ANDINA_PROJECTS):
+        project = next(item for item in projects if item.code == code)
+        for _ in range(count):
+            assigned = gestor_1 if global_index % 2 else gestor_2
+            segment = ["Consumo castigado", "Microcredito", "Tarjeta privada", "Judicializado"][project_idx]
+            judicialized = code == "CARTERA-JUDICIALIZADA"
+            customer = _ensure_customer(db, andina, project, assigned, global_index, segment, judicialized)
+            _ensure_activity(db, customer, assigned, typifications.get("CONTACTO"), "phone", "Llamada efectiva", f"DEMO FASE 5 gestion telefonica {customer.document}", global_index % 10)
+            if global_index % 3 == 0:
+                _ensure_activity(db, customer, assigned, typifications.get("PROMESA"), "whatsapp", "Promesa generada", f"DEMO FASE 5 promesa whatsapp {customer.document}", 2)
+                _ensure_promise(db, customer, assigned, max(120000, int(customer.balance * 0.12)), 5 + (global_index % 12), "Vigente")
+            if global_index % 5 == 0:
+                _ensure_promise(db, customer, assigned, max(90000, int(customer.balance * 0.08)), -2, "Vencida")
+            if global_index % 4 == 0:
+                _ensure_payment(db, customer, assigned, max(80000, int(customer.balance * 0.07)), global_index % 14)
+            if global_index % 6 == 0:
+                agreement = _ensure_agreement(db, customer, assigned, 4, max(400000, int(customer.balance * 0.45)), "active" if global_index % 12 else "overdue")
+                _ensure_document(
+                    db,
+                    andina,
+                    assigned,
+                    "acuerdo de pago",
+                    f"acuerdo_demo_{customer.document}.pdf",
+                    f"tenants/demo/andina/acuerdos/acuerdo_demo_{customer.document}.pdf",
+                    project_id=customer.project_id,
+                    customer_id=customer.id,
+                    agreement_id=agreement.id,
+                )
+            if global_index <= 18:
+                _ensure_document(
+                    db,
+                    andina,
+                    assigned,
+                    "pagare",
+                    f"pagare_demo_{customer.document}.pdf",
+                    f"tenants/demo/andina/documentos/pagare_demo_{customer.document}.pdf",
+                    project_id=customer.project_id,
+                    customer_id=customer.id,
+                )
+            if judicialized:
+                legal_case = _ensure_legal_case(db, andina, customer, lawyer, global_index)
+                _ensure_activity(db, customer, lawyer, typifications.get("ESCALAR_JURIDICO"), "email", "Escalamiento juridico", f"DEMO FASE 5 escalamiento juridico {customer.document}", 1)
+                _ensure_document(
+                    db,
+                    andina,
+                    lawyer,
+                    "demanda",
+                    f"demanda_demo_{customer.document}.pdf",
+                    f"tenants/demo/andina/juridico/demanda_demo_{customer.document}.pdf",
+                    project_id=customer.project_id,
+                    customer_id=customer.id,
+                    legal_case_id=legal_case.id,
+                )
+            global_index += 1
+
+    _ensure_sales_demo(db, andina, projects[0], commercial)
+    _seed_secondary_demo_tenants(db, tenants, modules)
+
 def bootstrap_platform(db: Session) -> None:
     if not settings.platform_admin_email or not settings.platform_admin_password:
         return
@@ -398,6 +1044,9 @@ def bootstrap_platform(db: Session) -> None:
         _seed_tenant_configuration(db, existing_tenant)
 
     _seed_tenant_modules(db, modules)
+    if settings.enable_demo_seeds or settings.enable_demo_data:
+        _seed_phase5_demo_data(db, modules, tenant)
+
     for existing_user in db.scalars(select(User)):
         sync_user_profile(db, existing_user)
 

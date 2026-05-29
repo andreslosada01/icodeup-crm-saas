@@ -440,6 +440,12 @@ nav {
   background: rgba(243, 165, 31, 0.12);
 }
 
+.demo-mode-badge {
+  color: #7a4f00;
+  border-color: rgba(243, 165, 31, 0.4);
+  background: rgba(243, 165, 31, 0.16);
+}
+
 .user-pill {
   display: flex;
   align-items: center;

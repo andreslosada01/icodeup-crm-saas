@@ -320,6 +320,14 @@ function activePlanLabel() {
   return subscription?.plan || "Plan empresarial";
 }
 
+function isDemoContext() {
+  const tenant = activeTenant();
+  const user = menuUser();
+  const email = String(user.email || currentUser?.email || "").toLowerCase();
+  const tenantSlug = String(tenant.slug || "").toLowerCase();
+  return email.endsWith("@demo.icodeup.local") || tenantSlug.includes("demo") || tenantSlug.includes("andina-servicios-financieros");
+}
+
 function sectionCategory(item) {
   return sectionCategories[item.section] || (item.audience === "platform_admin" ? "Gobierno SaaS" : "Operacion");
 }
@@ -357,6 +365,8 @@ function renderShellContext() {
   document.querySelector("#sidebarPlanBadge") && (document.querySelector("#sidebarPlanBadge").textContent = plan);
   document.querySelector("#topbarTenant") && (document.querySelector("#topbarTenant").textContent = `${tenantName} · ${audience}`);
   document.querySelector("#systemStatusPill") && (document.querySelector("#systemStatusPill").textContent = "Sistema operativo");
+  const demoBadge = document.querySelector("#demoModeBadge");
+  if (demoBadge) demoBadge.classList.toggle("hidden", !isDemoContext());
 }
 
 function menuModules() {

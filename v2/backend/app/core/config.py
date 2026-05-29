@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     tenant_mode: str = "shared_schema"
     platform_tenant_slug: str = "icodeup-platform"
     enable_demo_seeds: bool = False
+    enable_demo_data: bool = False
     platform_admin_email: str = ""
     platform_admin_password: str = ""
 
