@@ -8,10 +8,10 @@ from app.api.deps import current_user
 from app.api.routes.crm.access import customer_for_access, customer_query, project_for_access
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
 from app.db.session import get_db
-from app.models import LegalAction, LegalCase, LegalDeadline, LegalHearing, User
+from app.models import Customer, LegalAction, LegalCase, LegalDeadline, LegalHearing, User
 from app.schemas.legal import LegalActionCreate, LegalActionOut, LegalCaseCreate, LegalCaseOut, LegalCasePatch, LegalDeadlineOut, LegalHearingCreate, LegalHearingOut
 from app.services.audit_service import record_audit
-from app.services.access_control import require_active_module, require_permission
+from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, require_active_module, require_permission, user_has_permission
 
 
 router = APIRouter(dependencies=[Depends(require_active_module("legal"))])
@@ -19,12 +19,16 @@ LEGAL_MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
 LEGAL_READ_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR, QUALITY_SUPERVISOR, AGENT}
 
 
-def ensure_legal_read(user: User) -> None:
+def ensure_legal_read(db: Session, user: User) -> None:
+    if user_has_permission(db, user, "legal.cases.view") or user_has_permission(db, user, "legal.deadlines.view"):
+        return
     if user.role not in LEGAL_READ_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso al modulo juridico.")
 
 
-def ensure_legal_manage(user: User) -> None:
+def ensure_legal_manage(db: Session, user: User) -> None:
+    if user_has_permission(db, user, "legal.cases.create") or user_has_permission(db, user, "legal.cases.update"):
+        return
     if user.role not in LEGAL_MANAGE_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permiso para gestionar casos juridicos.")
 
@@ -33,9 +37,16 @@ def legal_case_for_access(db: Session, case_id: int, user: User, write: bool = F
     legal_case = db.get(LegalCase, case_id)
     if legal_case is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Caso juridico no encontrado.")
-    customer_for_access(db, legal_case.customer_id, user, write=write)
+    if not is_platform_admin(db, user):
+        if legal_case.tenant_id != user.tenant_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Caso juridico fuera de tu empresa.")
+        profile_role = get_profile_role_code(db, user)
+        if profile_role == "lawyer" and not is_company_admin(db, user) and legal_case.assigned_lawyer_id != user.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Caso juridico no asignado.")
+        elif profile_role not in {"lawyer", "legal_director"}:
+            customer_for_access(db, legal_case.customer_id, user, write=write)
     if write:
-        ensure_legal_manage(user)
+        ensure_legal_manage(db, user)
     return legal_case
 
 
@@ -45,14 +56,35 @@ def validate_lawyer(db: Session, tenant_id: int, assigned_lawyer_id: int | None)
     lawyer = db.get(User, assigned_lawyer_id)
     if lawyer is None or lawyer.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El abogado asignado no pertenece a la empresa.")
+    if not user_has_permission(db, lawyer, "legal.cases.view"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El abogado asignado no tiene permisos juridicos.")
+
+
+def customer_for_legal_create(db: Session, customer_id: int, user: User) -> Customer:
+    customer = db.get(Customer, customer_id)
+    if customer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado.")
+    if is_platform_admin(db, user):
+        return customer
+    if customer.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cliente fuera de tu empresa.")
+    profile_role = get_profile_role_code(db, user)
+    if profile_role in {"lawyer", "legal_director"} or is_company_admin(db, user):
+        return customer
+    return customer_for_access(db, customer_id, user, write=False)
 
 
 @router.get("/cases", response_model=list[LegalCaseOut])
 def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalCase]:
     require_permission(db, user, "legal.cases.view")
-    ensure_legal_read(user)
-    if user.role == PLATFORM_ADMIN:
+    ensure_legal_read(db, user)
+    profile_role = get_profile_role_code(db, user)
+    if is_platform_admin(db, user):
         query = select(LegalCase).order_by(LegalCase.created_at.desc())
+    elif is_company_admin(db, user) or profile_role == "legal_director":
+        query = select(LegalCase).where(LegalCase.tenant_id == user.tenant_id).order_by(LegalCase.created_at.desc())
+    elif profile_role == "lawyer":
+        query = select(LegalCase).where(LegalCase.tenant_id == user.tenant_id, LegalCase.assigned_lawyer_id == user.id).order_by(LegalCase.created_at.desc())
     else:
         visible_customers = list(db.scalars(customer_query(db, user)))
         customer_ids = [customer.id for customer in visible_customers]
@@ -63,8 +95,8 @@ def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)
 @router.post("/cases", response_model=LegalCaseOut, status_code=status.HTTP_201_CREATED)
 def create_case(payload: LegalCaseCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalCase:
     require_permission(db, user, "legal.cases.create")
-    ensure_legal_manage(user)
-    customer = customer_for_access(db, payload.customer_id, user, write=False)
+    ensure_legal_manage(db, user)
+    customer = customer_for_legal_create(db, payload.customer_id, user)
     validate_lawyer(db, customer.tenant_id, payload.assigned_lawyer_id)
     legal_case = LegalCase(
         tenant_id=customer.tenant_id,
@@ -83,7 +115,7 @@ def create_case(payload: LegalCaseCreate, db: Session = Depends(get_db), user: U
 @router.get("/cases/{case_id}", response_model=LegalCaseOut)
 def get_case(case_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LegalCase:
     require_permission(db, user, "legal.cases.view")
-    ensure_legal_read(user)
+    ensure_legal_read(db, user)
     return legal_case_for_access(db, case_id, user)
 
 
@@ -121,8 +153,8 @@ def create_action(case_id: int, payload: LegalActionCreate, db: Session = Depend
 @router.get("/deadlines", response_model=list[LegalDeadlineOut])
 def list_deadlines(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalDeadline]:
     require_permission(db, user, "legal.deadlines.view")
-    ensure_legal_read(user)
-    if user.role == PLATFORM_ADMIN:
+    ensure_legal_read(db, user)
+    if is_platform_admin(db, user):
         query = select(LegalDeadline).order_by(LegalDeadline.due_at.asc())
     else:
         cases = list_cases(db, user)

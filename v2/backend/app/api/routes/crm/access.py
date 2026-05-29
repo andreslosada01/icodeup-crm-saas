@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
-from app.models import Customer, ManagementActivity, Project, Tenant, TypificationNode, User
+from app.models import Customer, LegalCase, ManagementActivity, Project, Tenant, TypificationNode, User
 from app.schemas.crm import ActivityOut, CustomerOut
+from app.services.access_control import get_profile_role_code
 
 
 MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
@@ -47,7 +48,14 @@ def customer_for_access(db: Session, customer_id: int, user: User, write: bool =
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado.")
     if not is_platform(user) and customer.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cliente fuera de tu empresa.")
+    profile_role = get_profile_role_code(db, user)
     if user.role == AGENT and customer.assigned_user_id != user.id:
+        if not write and profile_role in {"sales_advisor", "sales_leader", "legal_director"}:
+            return customer
+        if not write and profile_role == "lawyer":
+            has_case = db.scalar(select(LegalCase.id).where(LegalCase.customer_id == customer.id, LegalCase.assigned_lawyer_id == user.id))
+            if has_case:
+                return customer
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cliente no asignado al gestor.")
     if write and user.role == QUALITY_SUPERVISOR:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Calidad tiene acceso de lectura.")
@@ -67,6 +75,12 @@ def customer_query(db: Session, user: User):
     if not is_platform(user):
         query = query.where(Customer.tenant_id == user.tenant_id)
     if user.role == AGENT:
+        profile_role = get_profile_role_code(db, user)
+        if profile_role in {"sales_advisor", "sales_leader", "legal_director"}:
+            return query
+        if profile_role == "lawyer":
+            legal_customer_ids = select(LegalCase.customer_id).where(LegalCase.tenant_id == user.tenant_id, LegalCase.assigned_lawyer_id == user.id)
+            return query.where(Customer.id.in_(legal_customer_ids))
         query = query.where(Customer.assigned_user_id == user.id)
     return query
 

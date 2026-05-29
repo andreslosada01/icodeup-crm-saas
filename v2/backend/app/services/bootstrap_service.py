@@ -38,6 +38,7 @@ from app.models import (
     TypificationNode,
     User,
     UserProjectAssignment,
+    UserProfile,
 )
 from app.services.access_control import sync_user_profile
 
@@ -190,8 +191,69 @@ ROLE_PERMISSION_MAP = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "sales.read_own", "sales.leads.view", "sales.opportunities.view", "menu.view",
+        "collections.agreements.view", "documents.read", "documents.view", "menu.view",
     ],
+}
+
+SPECIALIZED_ROLE_DEFS = {
+    "legal_director": {
+        "name": "Director Juridico",
+        "description": "Gestion juridica integral del tenant con documentos y lectura de clientes.",
+        "permissions": [
+            "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
+            "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
+            "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
+            "reports.view", "audit.logs.view",
+        ],
+    },
+    "lawyer": {
+        "name": "Abogado",
+        "description": "Gestion juridica de casos y documentos sin permisos amplios de cobranzas.",
+        "permissions": [
+            "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
+            "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
+            "documents.read", "documents.view", "documents.create",
+        ],
+    },
+    "sales_leader": {
+        "name": "Lider Comercial",
+        "description": "Gestion comercial del tenant con tablero y clientes en lectura.",
+        "permissions": [
+            "menu.view", "crm.read", "crm.clients.view", "sales.manage",
+            "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export",
+            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
+            "reports.view",
+        ],
+    },
+    "sales_advisor": {
+        "name": "Asesor Comercial",
+        "description": "Gestion de leads y oportunidades sin acceso a juridico ni cobranzas.",
+        "permissions": [
+            "menu.view", "crm.read", "crm.clients.view", "sales.read_own", "sales.manage",
+            "sales.leads.view", "sales.leads.create", "sales.leads.update",
+            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
+        ],
+    },
+    "collections_leader": {
+        "name": "Lider de Cobranzas",
+        "description": "Lider operativo de cobranza con permisos configurables equivalentes al coordinador.",
+        "permissions": ROLE_PERMISSION_MAP[COORDINATOR],
+    },
+    "collections_agent": {
+        "name": "Gestor de Cobranzas",
+        "description": "Gestor operativo con alcance asignado y permisos configurables.",
+        "permissions": ROLE_PERMISSION_MAP[AGENT],
+    },
+    "tenant_auditor": {
+        "name": "Auditor Tenant",
+        "description": "Lectura, auditoria y reportes del tenant sin gestion operativa.",
+        "permissions": [
+            "menu.view", "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
+            "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
+            "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
+            "reports.view", "audit.logs.view",
+        ],
+    },
 }
 
 MENU_DEFS = [
@@ -301,8 +363,8 @@ DEMO_USER_DEFS = [
     ("gestor1.andina@demo.icodeup.local", "Gestor Demo Uno", AGENT, "Gestor de cartera", "coord.cobranzas.andina@demo.icodeup.local"),
     ("gestor2.andina@demo.icodeup.local", "Gestor Demo Dos", AGENT, "Gestor de cartera", "coord.cobranzas.andina@demo.icodeup.local"),
     ("calidad.andina@demo.icodeup.local", "Supervisor Calidad Demo", QUALITY_SUPERVISOR, "Supervisor de calidad", "coord.cobranzas.andina@demo.icodeup.local"),
-    ("abogado.andina@demo.icodeup.local", "Abogado Juridico Demo", COORDINATOR, "Abogado juridico", "admin.andina@demo.icodeup.local"),
-    ("comercial.andina@demo.icodeup.local", "Analista Comercial Demo", COORDINATOR, "Analista comercial", "admin.andina@demo.icodeup.local"),
+    ("abogado.andina@demo.icodeup.local", "Abogado Juridico Demo", AGENT, "Abogado juridico", "admin.andina@demo.icodeup.local"),
+    ("comercial.andina@demo.icodeup.local", "Analista Comercial Demo", AGENT, "Analista comercial", "admin.andina@demo.icodeup.local"),
 ]
 
 DEMO_NAMES = [
@@ -391,6 +453,52 @@ def _seed_roles_and_permissions(db: Session, modules: dict[str, Module]) -> dict
             if permission.id not in existing:
                 db.add(RolePermission(role_id=role.id, permission_id=permission.id))
     return roles
+
+
+def _replace_role_permissions(db: Session, role: Role, permission_codes: list[str]) -> None:
+    permissions = list(db.scalars(select(Permission).where(Permission.code.in_(permission_codes)))) if permission_codes else []
+    permission_by_code = {item.code: item for item in permissions}
+    missing = sorted(set(permission_codes) - set(permission_by_code))
+    if missing:
+        raise RuntimeError(f"Permisos no encontrados para rol {role.code}: {', '.join(missing)}")
+    current = list(db.scalars(select(RolePermission).where(RolePermission.role_id == role.id)))
+    target_ids = {item.id for item in permissions}
+    current_ids = {item.permission_id for item in current}
+    for item in current:
+        if item.permission_id not in target_ids:
+            db.delete(item)
+    for permission in permissions:
+        if permission.id not in current_ids:
+            db.add(RolePermission(role_id=role.id, permission_id=permission.id))
+
+
+def _ensure_specialized_roles_for_tenant(db: Session, tenant: Tenant) -> dict[str, Role]:
+    roles: dict[str, Role] = {}
+    for code, definition in SPECIALIZED_ROLE_DEFS.items():
+        role = db.scalar(select(Role).where(Role.tenant_id == tenant.id, Role.code == code))
+        if role is None:
+            role = Role(tenant_id=tenant.id, code=code, name=definition["name"], is_system_role=False)
+            db.add(role)
+            db.flush()
+        role.name = definition["name"]
+        role.description = definition["description"]
+        role.is_active = True
+        role.is_system_role = False
+        _replace_role_permissions(db, role, list(definition["permissions"]))
+        roles[code] = role
+    return roles
+
+
+def _assign_profile_role(db: Session, user: User, role: Role) -> None:
+    profile = db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+    if profile is None:
+        profile = UserProfile(user_id=user.id, tenant_id=user.tenant_id)
+        db.add(profile)
+    profile.tenant_id = user.tenant_id
+    profile.role_id = role.id
+    profile.status = user.status
+    profile.is_platform_admin = user.role == PLATFORM_ADMIN
+    profile.is_company_admin = user.role == TENANT_ADMIN
 
 
 def _seed_menu(db: Session, modules: dict[str, Module]) -> None:
@@ -921,6 +1029,14 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
     users: dict[str, User] = {}
     for email, name, role, title, leader_email in DEMO_USER_DEFS[1:]:
         users[email] = _get_or_create_demo_user(db, andina, email, name, role, title, leader_email)
+
+    specialized_roles = _ensure_specialized_roles_for_tenant(db, andina)
+    _assign_profile_role(db, users["coord.cobranzas.andina@demo.icodeup.local"], specialized_roles["collections_leader"])
+    _assign_profile_role(db, users["gestor1.andina@demo.icodeup.local"], specialized_roles["collections_agent"])
+    _assign_profile_role(db, users["gestor2.andina@demo.icodeup.local"], specialized_roles["collections_agent"])
+    _assign_profile_role(db, users["calidad.andina@demo.icodeup.local"], specialized_roles["tenant_auditor"])
+    _assign_profile_role(db, users["abogado.andina@demo.icodeup.local"], specialized_roles["lawyer"])
+    _assign_profile_role(db, users["comercial.andina@demo.icodeup.local"], specialized_roles["sales_advisor"])
 
     projects = [
         _get_or_create_project(db, andina, code, name, description)

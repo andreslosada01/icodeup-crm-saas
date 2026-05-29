@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
 from app.models import MenuItem, Tenant, User
-from app.services.access_control import get_current_tenant, is_company_admin, is_platform_admin, user_has_module, user_has_permission
+from app.services.access_control import get_current_tenant, get_profile_role_code, is_company_admin, is_platform_admin, user_has_module, user_has_permission
 
 
 AUDIENCE_BY_ROLE = {
@@ -17,8 +17,21 @@ AUDIENCE_BY_ROLE = {
     AGENT: "operational_user",
 }
 
+AUDIENCE_BY_PROFILE_ROLE = {
+    "legal_director": "operational_leader",
+    "lawyer": "operational_leader",
+    "sales_leader": "operational_leader",
+    "sales_advisor": "operational_leader",
+    "collections_leader": "operational_leader",
+    "collections_agent": "operational_user",
+    "tenant_auditor": "operational_leader",
+}
 
-def user_audience(user: User) -> str:
+
+def user_audience(db: Session, user: User) -> str:
+    profile_role_code = get_profile_role_code(db, user)
+    if profile_role_code in AUDIENCE_BY_PROFILE_ROLE:
+        return AUDIENCE_BY_PROFILE_ROLE[profile_role_code]
     return AUDIENCE_BY_ROLE.get(user.role, "operational_user")
 
 
@@ -27,7 +40,7 @@ def _audience_allowed(item_audience: str, user: User, db: Session) -> bool:
         return item_audience == "platform_admin"
     if is_company_admin(db, user):
         return item_audience == "company_admin"
-    if user.role in {COORDINATOR, QUALITY_SUPERVISOR}:
+    if user_audience(db, user) == "operational_leader":
         return item_audience == "operational_leader"
     return item_audience == "operational_user"
 
@@ -80,7 +93,8 @@ def build_menu(db: Session, user: User) -> dict:
             "name": user.name,
             "email": user.email,
             "role": user.role,
-            "audience": user_audience(user),
+            "profile_role": get_profile_role_code(db, user),
+            "audience": user_audience(db, user),
             "is_platform_admin": is_platform_admin(db, user),
             "is_company_admin": is_company_admin(db, user),
         },

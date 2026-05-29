@@ -46,7 +46,8 @@ La empresa ficticia Andina Servicios Financieros administra varias carteras. En 
 - Gerente: visibilidad ejecutiva y control de decisiones.
 - Lider: productividad, cargas y alertas.
 - Gestor: cola priorizada y registro rapido.
-- Abogado: vencimientos, actuaciones y documentos.
+- Abogado: vencimientos, actuaciones y documentos sin visibilidad comercial o de gobierno.
+- Comercial: leads, oportunidades y pipeline sin acceso juridico ni administrativo.
 - Auditor: trazabilidad y controles.
 - Admin: usuarios, roles, modulos y configuracion.
 
@@ -54,6 +55,7 @@ La empresa ficticia Andina Servicios Financieros administra varias carteras. En 
 
 - "No es solo un CRM; es un core operativo modular para cartera y juridico."
 - "Cada empresa ve solo su informacion, sus usuarios y sus modulos."
+- "Cada perfil ve una experiencia distinta: gobierno, administracion, cobranza, juridico o ventas."
 - "La plataforma permite empezar por cobranzas y crecer hacia juridico, documentos, BI e integraciones."
 - "Los datos de esta demo son ficticios; el flujo es el que se usaria en una operacion real."
 
@@ -74,6 +76,7 @@ La empresa ficticia Andina Servicios Financieros administra varias carteras. En 
 ## Roadmap honesto
 
 - Fase actual: demo comercial con data ficticia y flujo end-to-end.
+- Fase 6: endurecimiento de perfiles especializados para Abogado y Comercial sin romper compatibilidad legacy.
 - Siguiente fase: pulido de demo, pruebas visuales, scripts de carga y empaquetamiento comercial.
 - Fases futuras: integraciones reales, storage seguro, IA/scoring avanzado y frontend React/Vite.
 

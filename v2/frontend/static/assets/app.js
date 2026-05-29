@@ -48,7 +48,14 @@ const roleLabels = {
   tenant_admin: "Admin empresa",
   coordinator: "Lider operativo",
   quality_supervisor: "Supervisor calidad",
-  agent: "Usuario operativo"
+  agent: "Usuario operativo",
+  legal_director: "Director juridico",
+  lawyer: "Abogado",
+  sales_leader: "Lider comercial",
+  sales_advisor: "Asesor comercial",
+  collections_leader: "Lider de cobranzas",
+  collections_agent: "Gestor de cobranzas",
+  tenant_auditor: "Auditor"
 };
 
 const audienceLabels = {
@@ -305,7 +312,7 @@ function activeTenant() {
   return state.core.menu?.tenant || currentUser || {};
 }
 
-function roleLabel(role = menuUser().role) {
+function roleLabel(role = menuUser().profile_role || menuUser().role) {
   return roleLabels[role] || role || "Usuario";
 }
 
@@ -355,7 +362,7 @@ function renderShellContext() {
   const tenant = activeTenant();
   const user = menuUser();
   const tenantName = tenant.name || currentUser?.tenant_name || "Workspace activo";
-  const profile = roleLabel(user.role || currentUser?.role);
+  const profile = roleLabel(user.profile_role || user.role || currentUser?.role);
   const audience = audienceLabel(user.audience);
   const plan = activePlanLabel();
   const sessionText = user.name ? `${user.name} - ${profile}` : currentUser ? `${currentUser.name} - ${profile}` : "Sesion activa";
@@ -900,7 +907,7 @@ function renderRoleDashboard() {
       <div>
         <p class="eyebrow">${escapeHtml(audienceLabel(audience))}</p>
         <h2>${escapeHtml(data.title || "Icodeup 360")}</h2>
-        <p>Workspace: ${escapeHtml(tenant.name || "Empresa activa")} · Perfil: ${escapeHtml(roleLabel(user.role))}</p>
+        <p>Workspace: ${escapeHtml(tenant.name || "Empresa activa")} · Perfil: ${escapeHtml(roleLabel(user.profile_role || user.role))}</p>
       </div>
       <span>${dateOnly(data.generated_at)}</span>
     </article>

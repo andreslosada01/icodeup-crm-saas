@@ -32,10 +32,12 @@
 ## 4. Flujo Juridico
 
 1. Iniciar como `abogado.andina@demo.icodeup.local`.
-2. Abrir Juridico.
-3. Consultar casos demo.
-4. Revisar etapa, riesgo y vencimiento.
-5. Explicar actuaciones, audiencias y documentos asociados.
+2. Confirmar que el menu se concentra en Inicio, Juridico, Documentos y Clientes en lectura.
+3. Abrir Juridico.
+4. Consultar casos demo asignados.
+5. Revisar etapa, riesgo y vencimiento.
+6. Explicar actuaciones, audiencias y documentos asociados.
+7. Recalcar que el abogado no ve Gobierno SaaS, ventas ni cobranzas completas.
 
 ## 5. Flujo Documental
 
@@ -47,10 +49,12 @@
 ## 6. Flujo Comercial
 
 1. Iniciar como `comercial.andina@demo.icodeup.local`.
-2. Abrir Ventas.
-3. Consultar leads demo.
-4. Revisar oportunidades y etapas del pipeline.
-5. Explicar que el producto puede crecer hacia CRM 360.
+2. Confirmar que el menu se concentra en Inicio, Ventas y Clientes en lectura.
+3. Abrir Ventas.
+4. Consultar leads demo asignados.
+5. Revisar oportunidades y etapas del pipeline.
+6. Explicar que el producto puede crecer hacia CRM 360.
+7. Recalcar que el asesor comercial no ve Gobierno SaaS, juridico ni documentos si no tiene permiso.
 
 ## 7. Flujo Ejecutivo
 

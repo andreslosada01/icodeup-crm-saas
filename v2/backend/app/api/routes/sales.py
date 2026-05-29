@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.models import Customer, Lead, Opportunity, User
 from app.schemas.sales import LeadCreate, LeadOut, LeadPatch, OpportunityCreate, OpportunityOut, OpportunityPatch
 from app.services.audit_service import record_audit
-from app.services.access_control import require_active_module, require_permission
+from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, require_active_module, require_permission, user_has_permission
 
 
 router = APIRouter(dependencies=[Depends(require_active_module("sales"))])
@@ -19,14 +19,32 @@ SALES_MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
 SALES_READ_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR, AGENT}
 
 
-def ensure_sales_read(user: User) -> None:
+def ensure_sales_read(db: Session, user: User) -> None:
+    if user_has_permission(db, user, "sales.leads.view") or user_has_permission(db, user, "sales.opportunities.view"):
+        return
     if user.role not in SALES_READ_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin acceso comercial.")
 
 
-def ensure_sales_manage(user: User) -> None:
+def ensure_sales_manage(db: Session, user: User) -> None:
+    if (
+        user_has_permission(db, user, "sales.leads.create")
+        or user_has_permission(db, user, "sales.leads.update")
+        or user_has_permission(db, user, "sales.opportunities.create")
+        or user_has_permission(db, user, "sales.opportunities.update")
+    ):
+        return
     if user.role not in SALES_MANAGE_ROLES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sin permiso para gestionar ventas.")
+
+
+def sales_assigned_only(db: Session, user: User) -> bool:
+    profile_role = get_profile_role_code(db, user)
+    if is_platform_admin(db, user) or is_company_admin(db, user):
+        return False
+    if profile_role == "sales_leader":
+        return False
+    return user.role == AGENT or profile_role == "sales_advisor"
 
 
 def tenant_from_payload(payload_tenant_id: int | None, user: User) -> int:
@@ -47,10 +65,10 @@ def lead_for_access(db: Session, lead_id: int, user: User, write: bool = False) 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lead no encontrado.")
     if not is_platform(user) and lead.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lead fuera de tu empresa.")
-    if user.role == AGENT and lead.assigned_user_id != user.id:
+    if sales_assigned_only(db, user) and lead.assigned_user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lead no asignado.")
     if write:
-        ensure_sales_manage(user)
+        ensure_sales_manage(db, user)
     return lead
 
 
@@ -60,21 +78,21 @@ def opportunity_for_access(db: Session, opportunity_id: int, user: User, write: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Oportunidad no encontrada.")
     if not is_platform(user) and opportunity.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Oportunidad fuera de tu empresa.")
-    if user.role == AGENT and opportunity.assigned_user_id != user.id:
+    if sales_assigned_only(db, user) and opportunity.assigned_user_id != user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Oportunidad no asignada.")
     if write:
-        ensure_sales_manage(user)
+        ensure_sales_manage(db, user)
     return opportunity
 
 
 @router.get("/leads", response_model=list[LeadOut])
 def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Lead]:
     require_permission(db, user, "sales.leads.view")
-    ensure_sales_read(user)
+    ensure_sales_read(db, user)
     query = select(Lead).order_by(Lead.created_at.desc())
     if not is_platform(user):
         query = query.where(Lead.tenant_id == user.tenant_id)
-    if user.role == AGENT:
+    if sales_assigned_only(db, user):
         query = query.where(Lead.assigned_user_id == user.id)
     return list(db.scalars(query))
 
@@ -82,10 +100,11 @@ def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)
 @router.post("/leads", response_model=LeadOut, status_code=status.HTTP_201_CREATED)
 def create_lead(payload: LeadCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Lead:
     require_permission(db, user, "sales.leads.create")
-    ensure_sales_manage(user)
+    ensure_sales_manage(db, user)
     tenant_id = tenant_from_payload(payload.tenant_id, user)
-    validate_sales_project_and_user(db, tenant_id, payload.project_id, payload.assigned_user_id, user)
-    lead = Lead(tenant_id=tenant_id, **payload.model_dump(exclude={"tenant_id"}))
+    assigned_user_id = payload.assigned_user_id or (user.id if sales_assigned_only(db, user) else None)
+    validate_sales_project_and_user(db, tenant_id, payload.project_id, assigned_user_id, user)
+    lead = Lead(tenant_id=tenant_id, **payload.model_dump(exclude={"tenant_id", "assigned_user_id"}), assigned_user_id=assigned_user_id)
     db.add(lead)
     db.flush()
     record_audit(db, user, "lead", "create", lead.id, lead.tenant_id, after={"name": lead.name, "status": lead.status})
@@ -112,11 +131,11 @@ def update_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db),
 @router.get("/opportunities", response_model=list[OpportunityOut])
 def list_opportunities(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Opportunity]:
     require_permission(db, user, "sales.opportunities.view")
-    ensure_sales_read(user)
+    ensure_sales_read(db, user)
     query = select(Opportunity).order_by(Opportunity.created_at.desc())
     if not is_platform(user):
         query = query.where(Opportunity.tenant_id == user.tenant_id)
-    if user.role == AGENT:
+    if sales_assigned_only(db, user):
         query = query.where(Opportunity.assigned_user_id == user.id)
     return list(db.scalars(query))
 
@@ -124,9 +143,10 @@ def list_opportunities(db: Session = Depends(get_db), user: User = Depends(curre
 @router.post("/opportunities", response_model=OpportunityOut, status_code=status.HTTP_201_CREATED)
 def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Opportunity:
     require_permission(db, user, "sales.opportunities.create")
-    ensure_sales_manage(user)
+    ensure_sales_manage(db, user)
     tenant_id = tenant_from_payload(payload.tenant_id, user)
-    validate_assigned_user(db, tenant_id, payload.assigned_user_id)
+    assigned_user_id = payload.assigned_user_id or (user.id if sales_assigned_only(db, user) else None)
+    validate_assigned_user(db, tenant_id, assigned_user_id)
     if payload.lead_id:
         lead = lead_for_access(db, payload.lead_id, user)
         if lead.tenant_id != tenant_id:
@@ -135,7 +155,7 @@ def create_opportunity(payload: OpportunityCreate, db: Session = Depends(get_db)
         customer = customer_for_access(db, payload.customer_id, user)
         if customer.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Cliente fuera de la empresa.")
-    opportunity = Opportunity(tenant_id=tenant_id, **payload.model_dump(exclude={"tenant_id"}))
+    opportunity = Opportunity(tenant_id=tenant_id, **payload.model_dump(exclude={"tenant_id", "assigned_user_id"}), assigned_user_id=assigned_user_id)
     db.add(opportunity)
     db.flush()
     record_audit(db, user, "opportunity", "create", opportunity.id, opportunity.tenant_id, after={"name": opportunity.name, "stage": opportunity.stage})
