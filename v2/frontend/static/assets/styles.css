@@ -486,6 +486,13 @@ nav {
   margin-bottom: 16px;
 }
 
+.dashboard-grid > *,
+.panel,
+.chart-panel,
+.module-intelligence {
+  min-width: 0;
+}
+
 .dashboard-grid.three-up {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

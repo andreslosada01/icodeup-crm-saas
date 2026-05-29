@@ -609,13 +609,14 @@ function queryParams(params) {
 }
 
 async function loadCrmData() {
+  const allowed = (...sections) => menuHasSection(...sections);
   const [options, dashboard, promises, payments, channels, typifications] = await Promise.all([
     apiMaybe("/api/crm/options", { tenants: [], projects: [], users: [], channels: [] }),
-    apiMaybe("/api/crm/dashboard", null),
-    apiMaybe("/api/crm/promises", []),
-    apiMaybe("/api/crm/payments", []),
-    apiMaybe("/api/crm/channels", []),
-    apiMaybe("/api/crm/typifications", [])
+    allowed("dashboard", "queue", "customers", "reports") ? apiMaybe("/api/crm/dashboard", null) : null,
+    allowed("promises") ? apiMaybe("/api/crm/promises", []) : [],
+    allowed("payments") ? apiMaybe("/api/crm/payments", []) : [],
+    allowed("channels") ? apiMaybe("/api/crm/channels", []) : [],
+    canManageCrm() || allowed("queue", "customers") ? apiMaybe("/api/crm/typifications", []) : []
   ]);
   state.crm.options = options;
   state.crm.dashboard = dashboard;
