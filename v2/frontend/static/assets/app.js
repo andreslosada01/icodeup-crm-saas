@@ -43,6 +43,95 @@ const titles = {
   tasks: "Mis tareas"
 };
 
+const roleLabels = {
+  platform_admin: "SuperAdmin Icodeup",
+  tenant_admin: "Admin empresa",
+  coordinator: "Lider operativo",
+  quality_supervisor: "Supervisor calidad",
+  agent: "Usuario operativo"
+};
+
+const audienceLabels = {
+  platform_admin: "Gobierno SaaS Icodeup",
+  company_admin: "Administracion de empresa",
+  operational_leader: "Liderazgo operativo",
+  operational_user: "Operacion diaria"
+};
+
+const sectionCategories = {
+  governance: "Gobierno SaaS",
+  tenants: "Gobierno SaaS",
+  plans: "Gobierno SaaS",
+  subscriptions: "Gobierno SaaS",
+  modules: "Gobierno SaaS",
+  "system-health": "Gobierno SaaS",
+  "tenant-settings": "Administracion",
+  "company-users": "Administracion",
+  "roles-permissions": "Administracion",
+  "tenant-modules": "Administracion",
+  branding: "Administracion",
+  audit: "Administracion",
+  users: "Administracion",
+  projects: "Administracion",
+  typifications: "Administracion",
+  dashboard: "Operacion",
+  tasks: "Operacion",
+  queue: "Operacion",
+  customers: "Operacion",
+  promises: "Operacion",
+  payments: "Operacion",
+  agreements: "Operacion",
+  legal: "Operacion",
+  documents: "Operacion",
+  sales: "Operacion",
+  channels: "Operacion",
+  parties: "Operacion",
+  reports: "Analitica"
+};
+
+const sectionModules = {
+  dashboard: "core",
+  governance: "administration",
+  tenants: "administration",
+  plans: "administration",
+  subscriptions: "administration",
+  modules: "administration",
+  "tenant-settings": "administration",
+  "company-users": "administration",
+  "roles-permissions": "administration",
+  "tenant-modules": "administration",
+  branding: "administration",
+  audit: "administration",
+  "system-health": "administration",
+  users: "administration",
+  projects: "administration",
+  typifications: "collections",
+  tasks: "collections",
+  queue: "collections",
+  customers: "collections",
+  promises: "collections",
+  payments: "collections",
+  agreements: "collections",
+  legal: "legal",
+  documents: "documents",
+  sales: "sales",
+  channels: "integrations",
+  parties: "crm",
+  reports: "bi"
+};
+
+const moduleCopy = {
+  crm: { name: "CRM 360", category: "Operacion", description: "Terceros, clientes, relaciones y trazabilidad transversal." },
+  core: { name: "Core SaaS", category: "Core", description: "Identidad, tenants, permisos, auditoria y base de operacion segura." },
+  administration: { name: "Administracion", category: "Administracion", description: "Usuarios, roles, configuracion, branding y gobierno de empresa." },
+  collections: { name: "Cobranzas", category: "Operacion", description: "Cola, clientes, promesas, pagos, acuerdos y recuperacion de cartera." },
+  legal: { name: "Juridico", category: "Operacion", description: "Casos, actuaciones, audiencias, vencimientos y riesgo legal." },
+  documents: { name: "Documentos", category: "Operacion", description: "Metadatos documentales asociados a terceros, pagos, acuerdos y casos." },
+  sales: { name: "Ventas", category: "Expansion", description: "Leads, oportunidades y pipeline para evolucionar hacia CRM 360." },
+  bi: { name: "BI y analitica", category: "Analitica", description: "KPIs, scoring, semaforos, alertas y tableros ejecutivos." },
+  integrations: { name: "Integraciones", category: "Integraciones", description: "Base para WhatsApp, correo, telefonia, APIs y automatizaciones." }
+};
+
 const loginView = document.querySelector("#loginView");
 const appView = document.querySelector("#appView");
 const loginResult = document.querySelector("#loginResult");
@@ -167,7 +256,7 @@ async function api(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) logout();
-    throw new Error(payload.detail || "Error de comunicacion.");
+    throw new Error(payload.detail || "No fue posible completar la solicitud. Intenta nuevamente o contacta al administrador.");
   }
   return payload;
 }
@@ -208,6 +297,154 @@ function canManageCrm() {
   return ["platform_admin", "tenant_admin", "coordinator"].includes(currentUser?.role);
 }
 
+function menuUser() {
+  return state.core.menu?.user || currentUser || {};
+}
+
+function activeTenant() {
+  return state.core.menu?.tenant || currentUser || {};
+}
+
+function roleLabel(role = menuUser().role) {
+  return roleLabels[role] || role || "Usuario";
+}
+
+function audienceLabel(audience = menuUser().audience) {
+  return audienceLabels[audience] || audience || "Workspace";
+}
+
+function activePlanLabel() {
+  const tenant = activeTenant();
+  if (tenant.is_platform || menuUser().is_platform_admin || isPlatform()) return "Plataforma Icodeup";
+  const subscription = (state.governance.subscriptions || []).find((item) => Number(item.tenant_id) === Number(tenant.id));
+  return subscription?.plan || "Plan empresarial";
+}
+
+function sectionCategory(item) {
+  return sectionCategories[item.section] || (item.audience === "platform_admin" ? "Gobierno SaaS" : "Operacion");
+}
+
+function moduleMeta(code, fallback = {}) {
+  const key = code || fallback.code || sectionModules[fallback.section] || "core";
+  return {
+    code: key,
+    name: fallback.name || moduleCopy[key]?.name || fallback.label || key,
+    category: fallback.category || moduleCopy[key]?.category || "Modulo",
+    description: fallback.description || moduleCopy[key]?.description || "Capacidad modular disponible bajo permisos y plan contratado.",
+  };
+}
+
+function moduleEnabled(module) {
+  return module.enabled !== false && module.is_enabled !== false;
+}
+
+function limitText(value) {
+  const numeric = Number(value);
+  return numeric > 0 ? numeric.toLocaleString("es-CO") : "Sin limite definido";
+}
+
+function renderShellContext() {
+  const tenant = activeTenant();
+  const user = menuUser();
+  const tenantName = tenant.name || currentUser?.tenant_name || "Workspace activo";
+  const profile = roleLabel(user.role || currentUser?.role);
+  const audience = audienceLabel(user.audience);
+  const plan = activePlanLabel();
+  const sessionText = user.name ? `${user.name} - ${profile}` : currentUser ? `${currentUser.name} - ${profile}` : "Sesion activa";
+  document.querySelector("#sessionUser") && (document.querySelector("#sessionUser").textContent = sessionText);
+  document.querySelector("#sidebarTenant") && (document.querySelector("#sidebarTenant").textContent = tenantName);
+  document.querySelector("#sidebarRole") && (document.querySelector("#sidebarRole").textContent = profile);
+  document.querySelector("#sidebarPlanBadge") && (document.querySelector("#sidebarPlanBadge").textContent = plan);
+  document.querySelector("#topbarTenant") && (document.querySelector("#topbarTenant").textContent = `${tenantName} · ${audience}`);
+  document.querySelector("#systemStatusPill") && (document.querySelector("#systemStatusPill").textContent = "Sistema operativo");
+}
+
+function menuModules() {
+  const modules = new Map();
+  (state.core.menu?.items || []).forEach((item) => {
+    const code = item.module_code || sectionModules[item.section] || "core";
+    const meta = moduleMeta(code, { label: item.label, section: item.section });
+    if (!modules.has(code)) modules.set(code, { ...meta, enabled: true, is_enabled: true, source: "menu" });
+  });
+  return Array.from(modules.values());
+}
+
+function renderQuickActions(selector, actions) {
+  const container = document.querySelector(selector);
+  if (!container) return;
+  container.innerHTML = (actions || [])
+    .map(
+      (action) => `
+        <button class="quick-action-card" data-section-jump="${escapeHtml(action.section)}" type="button">
+          <span>${escapeHtml(action.label)}</span>
+          <strong>${escapeHtml(action.title)}</strong>
+          <small>${escapeHtml(action.detail || "")}</small>
+        </button>
+      `
+    )
+    .join("");
+}
+
+function renderModuleCatalog(selector, modules, options = {}) {
+  const container = document.querySelector(selector);
+  if (!container) return;
+  const catalog = (modules || []).map((module) => {
+    const meta = moduleMeta(module.code || module.module_code, module);
+    return {
+      ...meta,
+      enabled: moduleEnabled(module),
+      contracted: module.enabled !== false,
+      selected: module.source === "menu",
+      action: options.admin
+        ? moduleEnabled(module)
+          ? "Gestionar desde gobierno SaaS"
+          : "Activacion comercial disponible"
+        : moduleEnabled(module)
+          ? "Disponible para este workspace"
+          : "Solicita activacion a Icodeup Advisors"
+    };
+  });
+  container.innerHTML = catalog.length
+    ? catalog
+        .map(
+          (module) => `
+            <article class="module-card ${module.enabled ? "enabled" : "locked"}">
+              <div>
+                <span>${escapeHtml(module.category)}</span>
+                <strong>${escapeHtml(module.name)}</strong>
+              </div>
+              <p>${escapeHtml(module.description)}</p>
+              <small>${module.enabled ? "Activo" : "No activo"} · ${escapeHtml(module.action)}</small>
+            </article>
+          `
+        )
+        .join("")
+    : `<article class="empty-state"><strong>Sin modulos visibles</strong><p>Cuando tu plan tenga modulos activos, apareceran en este catalogo.</p></article>`;
+}
+
+function renderPlanCards(selector, plans) {
+  const container = document.querySelector(selector);
+  if (!container) return;
+  container.innerHTML = (plans || []).length
+    ? plans
+        .map(
+          (plan) => `
+            <article class="plan-card">
+              <span>${escapeHtml(plan.code || "plan")}</span>
+              <strong>${escapeHtml(plan.name)}</strong>
+              <p>${escapeHtml(plan.description || "Plan comercial para licenciar capacidades de Icodeup 360.")}</p>
+              <div class="plan-limits">
+                <small>Usuarios: ${escapeHtml(limitText(plan.max_users))}</small>
+                <small>Proyectos: ${escapeHtml(limitText(plan.max_projects))}</small>
+                <small>Registros: ${escapeHtml(limitText(plan.max_records || plan.max_customers))}</small>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    : `<article class="empty-state"><strong>Planes por configurar</strong><p>Los planes comerciales apareceran aqui cuando Icodeup los active para venta.</p></article>`;
+}
+
 function applyBranding(source = {}) {
   const primary = source.primary_color || currentUser?.primary_color || "#15956f";
   const secondary = source.secondary_color || currentUser?.secondary_color || "#2563eb";
@@ -221,8 +458,23 @@ function renderDynamicMenu() {
   if (!nav) return;
   const items = state.core.menu?.items || [];
   if (!items.length) return;
-  nav.innerHTML = items
-    .map((item, index) => `<button class="nav-item ${index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${escapeHtml(item.label)}</button>`)
+  const grouped = items.reduce((acc, item) => {
+    const category = sectionCategory(item);
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(item);
+    return acc;
+  }, {});
+  nav.innerHTML = Object.entries(grouped)
+    .map(
+      ([category, groupItems]) => `
+        <div class="nav-group">
+          <p>${escapeHtml(category)}</p>
+          ${groupItems
+            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}"><span>${escapeHtml(item.label)}</span></button>`)
+            .join("")}
+        </div>
+      `
+    )
     .join("");
   const allowedSections = new Set(items.map((item) => item.section));
   document.querySelectorAll(".section").forEach((section) => {
@@ -232,6 +484,7 @@ function renderDynamicMenu() {
   const firstSection = items[0]?.section || "dashboard";
   document.querySelector(`#${firstSection}`)?.classList.add("active-section");
   document.querySelector("#sectionTitle").textContent = titles[firstSection] || items[0]?.label || "Icodeup 360";
+  renderShellContext();
 }
 
 function menuHasSection(...sections) {
@@ -250,7 +503,7 @@ async function optionalLoad(label, loader) {
 function showApp() {
   loginView.classList.add("hidden");
   appView.classList.remove("hidden");
-  document.querySelector("#sessionUser").textContent = currentUser ? `${currentUser.name} - ${currentUser.role}` : "Sesion activa";
+  renderShellContext();
   applyBranding(currentUser || {});
   document.querySelectorAll(".platform-only").forEach((item) => item.classList.toggle("hidden", !isPlatform()));
   document.querySelectorAll(".manager-only").forEach((item) => item.classList.toggle("hidden", !canManageCrm()));
@@ -274,13 +527,22 @@ function logout() {
 async function loadHealth() {
   const dot = document.querySelector("#healthDot");
   const text = document.querySelector("#healthText");
+  const pill = document.querySelector("#systemStatusPill");
   try {
     const data = await api("/api/health");
     dot.className = data.database?.ok ? "status-ok" : "status-bad";
     text.textContent = data.database?.ok ? "PostgreSQL conectado" : "Base no conectada";
+    if (pill) {
+      pill.textContent = data.database?.ok ? "Sistema operativo" : "Revisar base de datos";
+      pill.className = data.database?.ok ? "status-pill status-pill-ok" : "status-pill status-pill-warn";
+    }
   } catch (error) {
     dot.className = "status-bad";
     text.textContent = error.message;
+    if (pill) {
+      pill.textContent = "Salud no disponible";
+      pill.className = "status-pill status-pill-warn";
+    }
   }
 }
 
@@ -318,6 +580,7 @@ async function loadGovernanceData() {
   ]);
   state.governance = { permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health };
   if (settings) applyBranding(settings);
+  renderShellContext();
 }
 
 async function loadCoreData() {
@@ -328,6 +591,7 @@ async function loadCoreData() {
   state.core.menu = menu;
   state.core.roleDashboard = roleDashboard;
   applyBranding(menu.tenant || {});
+  renderShellContext();
 }
 
 async function loadTypifications() {
@@ -580,6 +844,35 @@ function renderDashboardStacks() {
     .join("");
 }
 
+function actionsForAudience(audience) {
+  if (audience === "platform_admin") {
+    return [
+      { label: "Gobierno SaaS", title: "Empresas y suscripciones", detail: "Control comercial y operativo global.", section: "governance" },
+      { label: "Licenciamiento", title: "Planes y modulos", detail: "Revisa capacidades contratadas por tenant.", section: "plans" },
+      { label: "Control", title: "Auditoria global", detail: "Trazabilidad de acciones criticas.", section: "audit" },
+    ];
+  }
+  if (audience === "company_admin") {
+    return [
+      { label: "Mi empresa", title: "Configuracion tenant", detail: "Branding, usuarios y parametros.", section: "tenant-settings" },
+      { label: "Accesos", title: "Roles y permisos", detail: "Define acciones por modulo contratado.", section: "roles-permissions" },
+      { label: "Operacion", title: "Reportes de empresa", detail: "Analitica y salud operativa.", section: "reports" },
+    ];
+  }
+  if (audience === "operational_leader") {
+    return [
+      { label: "Equipo", title: "Cola de gestion", detail: "Prioriza casos por riesgo y SLA.", section: "queue" },
+      { label: "Recuperacion", title: "Promesas y pagos", detail: "Controla compromisos y recaudo.", section: "promises" },
+      { label: "Decision", title: "Reportes BI", detail: "Consulta semaforos y oportunidades.", section: "reports" },
+    ];
+  }
+  return [
+    { label: "Hoy", title: "Mis tareas", detail: "Pendientes y siguientes acciones.", section: "tasks" },
+    { label: "Gestion", title: "Cola asignada", detail: "Clientes priorizados para contactar.", section: "queue" },
+    { label: "Seguimiento", title: "Clientes", detail: "Consulta tu base operativa.", section: "customers" },
+  ];
+}
+
 function renderRoleDashboard() {
   const container = document.querySelector("#roleDashboard");
   if (!container) return;
@@ -588,11 +881,15 @@ function renderRoleDashboard() {
     container.innerHTML = "";
     return;
   }
+  const user = menuUser();
+  const tenant = activeTenant();
+  const audience = user.audience || data.audience || "operational_user";
   container.innerHTML = `
     <article class="role-dashboard-head">
       <div>
-        <p class="eyebrow">${escapeHtml(data.audience || "workspace")}</p>
+        <p class="eyebrow">${escapeHtml(audienceLabel(audience))}</p>
         <h2>${escapeHtml(data.title || "Icodeup 360")}</h2>
+        <p>Workspace: ${escapeHtml(tenant.name || "Empresa activa")} · Perfil: ${escapeHtml(roleLabel(user.role))}</p>
       </div>
       <span>${dateOnly(data.generated_at)}</span>
     </article>
@@ -622,6 +919,8 @@ function renderRoleDashboard() {
         .join("")}
     </div>
   `;
+  renderQuickActions("#experienceActions", actionsForAudience(audience).filter((action) => menuHasSection(action.section)));
+  renderModuleCatalog("#experienceModules", menuModules());
 }
 
 function renderDashboard() {
@@ -1312,11 +1611,38 @@ function renderGovernanceTables() {
     { title: "Gobierno separado", body: "El menu dinamico separa Icodeup, administracion de empresa y operacion final.", tone: "green" },
     { title: "Permisos por accion", body: "Las rutas criticas validan modulo, tenant y permiso antes de responder.", tone: "blue" },
   ]);
+  renderQuickActions(
+    "#governanceQuickActions",
+    [
+      { label: "Empresas", title: "Crear o revisar tenants", detail: "Inventario comercial y operativo.", section: "tenants" },
+      { label: "Suscripciones", title: "Control de licencias", detail: "Planes, modulos y estado comercial.", section: "subscriptions" },
+      { label: "Salud", title: "Ver sistema", detail: "Base de datos y servicio.", section: "system-health" },
+    ].filter((action) => menuHasSection(action.section))
+  );
+  renderModuleCatalog("#governanceModuleCatalog", governance.modules, { admin: true });
 
   const planRows = governance.plans.map((plan) => `<tr><td><strong>${escapeHtml(plan.name)}</strong><small>${escapeHtml(plan.code)}</small></td><td>${money(plan.monthly_price || plan.base_price || 0)}</td><td>${plan.max_users || "Ilimitado"}</td><td>${plan.max_projects || "Ilimitado"}</td><td>${plan.max_records || plan.max_customers || "Ilimitado"}</td><td>${plan.includes_ai ? "Si" : "No"}</td></tr>`).join("");
+  renderPlanCards("#planCards", governance.plans);
   document.querySelector("#planTable") && (document.querySelector("#planTable").innerHTML = table(["Plan", "Precio", "Usuarios", "Proyectos", "Registros", "IA"], planRows, "No hay planes configurados."));
 
   const subscriptionRows = governance.subscriptions.map((item) => `<tr><td><strong>${escapeHtml(item.tenant_name)}</strong><small>${escapeHtml(item.status)}</small></td><td>${escapeHtml(item.plan)}</td><td>${escapeHtml(item.billing_cycle)}</td><td>${item.active_modules}</td></tr>`).join("");
+  document.querySelector("#subscriptionCards") && (document.querySelector("#subscriptionCards").innerHTML = governance.subscriptions.length
+    ? governance.subscriptions
+        .map(
+          (item) => `
+            <article class="plan-card">
+              <span>${escapeHtml(item.status || "suscripcion")}</span>
+              <strong>${escapeHtml(item.tenant_name)}</strong>
+              <p>Plan ${escapeHtml(item.plan || "sin plan asignado")} con ${escapeHtml(item.active_modules || 0)} modulos activos.</p>
+              <div class="plan-limits">
+                <small>Ciclo: ${escapeHtml(item.billing_cycle || "-")}</small>
+                <small>Estado: ${escapeHtml(item.status || "-")}</small>
+              </div>
+            </article>
+          `
+        )
+        .join("")
+    : `<article class="empty-state"><strong>Sin suscripciones visibles</strong><p>Cuando existan contratos activos, este panel resumira su estado comercial.</p></article>`);
   document.querySelector("#subscriptionTable") && (document.querySelector("#subscriptionTable").innerHTML = table(["Empresa", "Plan", "Ciclo", "Modulos"], subscriptionRows, "No hay suscripciones."));
   document.querySelector("#governanceSubscriptions") && (document.querySelector("#governanceSubscriptions").innerHTML = table(["Empresa", "Plan", "Estado", "Modulos"], subscriptionRows, "Sin datos comerciales."));
 
@@ -1329,15 +1655,37 @@ function renderGovernanceTables() {
     const target = document.querySelector(selector);
     if (target) target.innerHTML = table(["Modulo", "Categoria", "Estado", "Descripcion", ""], moduleRows, "No hay modulos disponibles.");
   });
+  renderModuleCatalog("#moduleCatalog", governance.modules, { admin: true });
+  renderModuleCatalog("#tenantModuleCatalog", governance.modules);
 
   const settings = governance.settings;
   if (settings) {
+    const subscription = (governance.subscriptions || []).find((item) => Number(item.tenant_id) === Number(settings.id || settings.tenant_id || activeTenant().id));
     const summary = `
       <article><span>Empresa</span><strong>${escapeHtml(settings.name)}</strong><p>${escapeHtml(settings.slug)}</p></article>
       <article><span>Documento</span><strong>${escapeHtml(settings.document_number || "-")}</strong><p>${escapeHtml(settings.document_type || "-")}</p></article>
       <article><span>Zona horaria</span><strong>${escapeHtml(settings.timezone)}</strong><p>Configuracion local de la operacion.</p></article>
       <article><span>Colores</span><strong>${escapeHtml(settings.primary_color)}</strong><p>${escapeHtml(settings.secondary_color)}</p></article>
     `;
+    const workspacePanel = `
+      <article>
+        <p class="eyebrow">Administracion tenant</p>
+        <h2>${escapeHtml(settings.name || "Mi empresa")}</h2>
+        <p>Este panel resume la identidad operativa de la empresa autenticada. La configuracion impacta solo este workspace.</p>
+      </article>
+      <article>
+        <span>Plan actual</span>
+        <strong>${escapeHtml(subscription?.plan || activePlanLabel())}</strong>
+        <p>${escapeHtml(subscription?.status || "Operacion permitida por compatibilidad")}</p>
+      </article>
+    `;
+    document.querySelector("#tenantWorkspacePanel") && (document.querySelector("#tenantWorkspacePanel").innerHTML = workspacePanel);
+    document.querySelector("#tenantPlanSummary") && (document.querySelector("#tenantPlanSummary").innerHTML = `
+      <article><span>Usuarios</span><strong>${escapeHtml(String(governance.users.length))}</strong><p>Usuarios visibles para este alcance.</p></article>
+      <article><span>Roles</span><strong>${escapeHtml(String(governance.roles.length))}</strong><p>Roles activos y de sistema.</p></article>
+      <article><span>Modulos</span><strong>${escapeHtml(String(governance.modules.filter(moduleEnabled).length))}</strong><p>Capacidades contratadas o habilitadas.</p></article>
+      <article><span>Auditoria</span><strong>${escapeHtml(String(governance.audit.length))}</strong><p>Eventos recientes disponibles.</p></article>
+    `);
     document.querySelector("#tenantSettingsSummary") && (document.querySelector("#tenantSettingsSummary").innerHTML = summary);
     const form = document.querySelector("#brandingForm");
     if (form && !form.dataset.loaded) {
@@ -1353,6 +1701,10 @@ function renderGovernanceTables() {
   }
 
   const roleRows = governance.roles.map((role) => `<tr><td><strong>${escapeHtml(role.name)}</strong><small>${escapeHtml(role.code)}</small></td><td>${role.is_system_role ? "Sistema" : "Empresa"}</td><td>${role.permission_codes.length}</td><td>${role.user_count}</td><td>${role.is_active ? "Activo" : "Inactivo"}</td></tr>`).join("");
+  document.querySelector("#rolePermissionGuide") && (document.querySelector("#rolePermissionGuide").innerHTML = `
+    <article><strong>Permisos por accion</strong><p>Los permisos definen que puede ver, crear, editar, exportar, asignar o configurar cada rol dentro de los modulos contratados.</p></article>
+    <article><strong>Roles protegidos</strong><p>Los roles de sistema conservan reglas base. Los roles de empresa permiten adaptar la operacion sin tocar codigo.</p></article>
+  `);
   document.querySelector("#roleTable") && (document.querySelector("#roleTable").innerHTML = table(["Rol", "Tipo", "Permisos", "Usuarios", "Estado"], roleRows, "No hay roles."));
 
   const roleOptions = optionList(governance.roles.filter((role) => role.is_active), "id", "name");
@@ -1375,7 +1727,7 @@ function renderGovernanceTables() {
     document.querySelector("#systemHealthPanel").innerHTML = `
       <article><span>Aplicacion</span><strong>${escapeHtml(health.app)}</strong><p>${escapeHtml(health.environment)}</p></article>
       <article><span>Puerto</span><strong>${escapeHtml(health.port)}</strong><p>Servicio FastAPI local.</p></article>
-      <article><span>Base de datos</span><strong>${health.database?.ok ? "Conectada" : "Error"}</strong><p>${escapeHtml(health.database?.detail || "")}</p></article>
+      <article><span>Base de datos</span><strong>${health.database?.ok ? "Conectada" : "Revisar"}</strong><p>${escapeHtml(health.database?.detail || "")}</p></article>
     `;
   }
 
