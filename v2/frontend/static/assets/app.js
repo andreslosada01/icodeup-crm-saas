@@ -4,7 +4,7 @@ let currentUser = JSON.parse(localStorage.getItem("icodeup_v2_user") || "null");
 const state = {
   core: { menu: null, roleDashboard: null },
   admin: { overview: null, tenants: [], projects: [], users: [], roles: [], typifications: [] },
-  governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null },
+  governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null, securityInsights: [], effectiveAccess: null },
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], channels: [], typifications: [] },
   selectedCustomer: null,
   selectedActivities: [],
@@ -583,7 +583,7 @@ async function loadGovernanceData() {
     tenant_id: isPlatform() ? document.querySelector("#auditTenantFilter")?.value || "" : "",
     module: document.querySelector("#auditModuleFilter")?.value || ""
   });
-  const [permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health] = await Promise.all([
+  const [permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health, securityInsights] = await Promise.all([
     allowed("roles-permissions") ? apiMaybe("/api/governance/permissions", []) : [],
     allowed("roles-permissions") ? apiMaybe("/api/governance/roles", []) : [],
     allowed("company-users", "roles-permissions") ? apiMaybe("/api/governance/users", []) : [],
@@ -593,9 +593,14 @@ async function loadGovernanceData() {
     allowed("parties") ? apiMaybe("/api/governance/parties", []) : [],
     allowed("plans") ? apiMaybe("/api/subscriptions/plans", []) : [],
     allowed("subscriptions", "governance") ? apiMaybe("/api/governance/subscriptions", []) : [],
-    allowed("system-health", "governance") ? apiMaybe("/api/health", null) : null
+    allowed("system-health", "governance") ? apiMaybe("/api/health", null) : null,
+    allowed("company-users", "roles-permissions", "tenant-modules") ? apiMaybe("/api/governance/security-insights", []) : []
   ]);
-  state.governance = { permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health };
+  const selectedAccessId = state.governance.effectiveAccess?.user?.id;
+  state.governance = { permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health, securityInsights, effectiveAccess: state.governance.effectiveAccess };
+  if (selectedAccessId && !users.some((item) => Number(item.id) === Number(selectedAccessId))) {
+    state.governance.effectiveAccess = null;
+  }
   if (settings) applyBranding(settings);
   renderShellContext();
 }
@@ -1614,11 +1619,201 @@ function renderTypifications() {
   document.querySelector("#typificationTable").innerHTML = table(["Tipificacion", "Padre", "Estado", "Reglas", ""], rows, "No hay tipificaciones configuradas.");
 }
 
+function severityClass(severity = "low") {
+  return severity === "critical" || severity === "high" ? "risk-alto" : severity === "medium" ? "risk-medio" : "risk-bajo";
+}
+
+function permissionModuleSet(permissionCodes = []) {
+  const modules = new Set();
+  permissionCodes.forEach((code) => {
+    if (code.includes(".")) modules.add(code.split(".")[0]);
+  });
+  return Array.from(modules).sort();
+}
+
+function permissionIsCritical(code = "") {
+  return code.startsWith("platform.") || code.endsWith(".export") || ["users.create", "users.update", "users.assign", "roles.manage", "roles.configure", "modules.configure", "audit.logs.view", "tenant.settings.configure"].includes(code);
+}
+
+function renderSecurityInsights() {
+  const container = document.querySelector("#securityInsights");
+  if (!container) return;
+  const insights = state.governance.securityInsights || [];
+  container.innerHTML = insights.length
+    ? insights.slice(0, 6).map((item) => `
+      <article class="security-insight ${escapeHtml(item.severity || "low")}">
+        <span>${escapeHtml(item.severity || "info")}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.description || "")}</p>
+        <small>${escapeHtml(item.action || "")}</small>
+      </article>
+    `).join("")
+    : `<article class="empty-state"><strong>Sin alertas visibles</strong><p>Cuando existan riesgos de configuracion, permisos o modulos, se mostraran aqui.</p></article>`;
+}
+
+function renderCompanyUserCards() {
+  const container = document.querySelector("#companyUserCards");
+  if (!container) return;
+  const users = state.governance.users || [];
+  container.innerHTML = users.length
+    ? users.map((user) => {
+      const risk = user.risk_flags?.[0] || { severity: "low", label: "Sin alertas" };
+      const modules = (user.visible_modules || []).slice(0, 5).map((module) => `<span>${escapeHtml(module)}</span>`).join("");
+      return `
+        <article class="effective-user-card">
+          <div>
+            <span class="badge ${severityClass(risk.severity)}">${escapeHtml(risk.label)}</span>
+            <strong>${escapeHtml(user.name)}</strong>
+            <small>${escapeHtml(user.email)}</small>
+          </div>
+          <p><b>Perfil:</b> ${escapeHtml(user.business_profile || user.role_name || user.role)}</p>
+          <p><b>Legacy:</b> ${escapeHtml(user.legacy_role_label || user.role)} · <b>Especializado:</b> ${escapeHtml(user.specialized_role_code || "fallback")}</p>
+          <div class="mini-chip-row">${modules || "<span>Sin modulos</span>"}</div>
+          <footer>
+            <small>${escapeHtml(String(user.permission_count || 0))} permisos · ${escapeHtml(String(user.visible_module_count || 0))} modulos</small>
+            <button class="table-button" data-user-access="${user.id}" type="button">Ver perfil efectivo</button>
+          </footer>
+        </article>
+      `;
+    }).join("")
+    : `<article class="empty-state"><strong>Sin usuarios visibles</strong><p>Cuando existan usuarios de la empresa, este panel explicara sus accesos.</p></article>`;
+}
+
+function renderEffectiveAccessPanel() {
+  const container = document.querySelector("#effectiveAccessPanel");
+  if (!container) return;
+  const access = state.governance.effectiveAccess;
+  if (!access) {
+    container.innerHTML = `<article class="empty-state"><strong>Selecciona un usuario</strong><p>Abre el perfil efectivo para ver rol legacy, rol especializado, modulos visibles, restricciones y permisos efectivos.</p></article>`;
+    return;
+  }
+  const permissionGroups = Object.entries(access.permission_groups || {});
+  const modules = access.modules || [];
+  const critical = access.critical_permissions || [];
+  container.innerHTML = `
+    <article class="effective-access-head">
+      <div>
+        <p class="eyebrow">Perfil efectivo</p>
+        <h2>${escapeHtml(access.user.name)}</h2>
+        <p>${escapeHtml(access.user.email)} · ${escapeHtml(access.tenant.name)}</p>
+      </div>
+      <span class="badge ${critical.length ? "risk-alto" : "risk-bajo"}">${critical.length ? `${critical.length} permisos criticos` : "Sin permisos criticos"}</span>
+    </article>
+    <div class="effective-access-grid">
+      <article>
+        <span>Rol legacy</span>
+        <strong>${escapeHtml(access.legacy_role.label || access.legacy_role.code)}</strong>
+        <p>${escapeHtml(access.legacy_role.description)}</p>
+      </article>
+      <article>
+        <span>Rol especializado</span>
+        <strong>${escapeHtml(access.specialized_role.name || "Fallback legacy")}</strong>
+        <p>${escapeHtml(access.specialized_role.description || "Perfil funcional usado para permisos granulares.")}</p>
+      </article>
+      <article>
+        <span>Permisos efectivos</span>
+        <strong>${escapeHtml(String(access.permission_count || 0))}</strong>
+        <p>Acciones permitidas por rol, modulos y tenant.</p>
+      </article>
+      <article>
+        <span>Recomendacion</span>
+        <strong>${escapeHtml(access.business_profile || "Usuario")}</strong>
+        <p>${escapeHtml(access.recommendation || "")}</p>
+      </article>
+    </div>
+    <div class="access-columns">
+      <section>
+        <h3>Permisos por modulo</h3>
+        ${permissionGroups.length ? permissionGroups.map(([module, items]) => `
+          <details open>
+            <summary>${escapeHtml(module)} · ${items.length}</summary>
+            <div class="mini-chip-row">${items.slice(0, 20).map((item) => `<span class="${item.critical ? "danger-chip" : ""}">${escapeHtml(item.code)}</span>`).join("")}</div>
+          </details>
+        `).join("") : `<p class="muted">Sin permisos efectivos.</p>`}
+      </section>
+      <section>
+        <h3>Modulos visibles</h3>
+        <div class="mini-module-list">
+          ${modules.map((module) => `<article><strong>${escapeHtml(module.name)}</strong><span class="badge ${module.visible ? "risk-bajo" : "risk-medio"}">${module.visible ? "Visible" : "Oculto"}</span><p>${escapeHtml(module.reason)}</p></article>`).join("")}
+        </div>
+      </section>
+    </div>
+    <div class="permission-guide">
+      ${(access.restrictions || []).map((item) => `<article><strong>Restriccion</strong><p>${escapeHtml(item)}</p></article>`).join("")}
+      ${(access.risk_flags || []).map((item) => `<article><strong>${escapeHtml(item.label)}</strong><p>${escapeHtml(item.detail)}</p></article>`).join("")}
+    </div>
+  `;
+}
+
+function renderRoleMatrix() {
+  const container = document.querySelector("#roleMatrixCards");
+  if (!container) return;
+  const moduleFilter = document.querySelector("#roleModuleFilter")?.value || "";
+  const riskFilter = document.querySelector("#roleRiskFilter")?.value || "";
+  const moduleSelect = document.querySelector("#roleModuleFilter");
+  if (moduleSelect && !moduleSelect.dataset.loaded) {
+    const moduleOptions = Array.from(new Set((state.governance.permissions || []).map((item) => item.module_code).filter(Boolean))).sort();
+    moduleSelect.innerHTML = `<option value="">Todos</option>${moduleOptions.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join("")}`;
+    moduleSelect.dataset.loaded = "true";
+  }
+  const roles = (state.governance.roles || []).filter((role) => {
+    const codes = role.permission_codes || [];
+    if (moduleFilter && !codes.some((code) => code.startsWith(`${moduleFilter}.`) || code === moduleFilter)) return false;
+    if (riskFilter === "critical" && !codes.some(permissionIsCritical)) return false;
+    if (riskFilter === "export" && !codes.some((code) => code.endsWith(".export"))) return false;
+    if (riskFilter === "admin" && !codes.some((code) => code.startsWith("users.") || code.startsWith("roles.") || code.startsWith("platform.") || code === "modules.configure")) return false;
+    return true;
+  });
+  container.innerHTML = roles.length
+    ? roles.map((role) => {
+      const modules = permissionModuleSet(role.permission_codes || []);
+      const criticalCount = (role.permission_codes || []).filter(permissionIsCritical).length;
+      return `
+        <article class="role-matrix-card">
+          <span>${role.is_system_role ? "Sistema" : "Empresa"}</span>
+          <strong>${escapeHtml(role.name)}</strong>
+          <small>${escapeHtml(role.code)}</small>
+          <p>${escapeHtml(role.description || "Rol sin descripcion.")}</p>
+          <div class="mini-chip-row">${modules.slice(0, 8).map((module) => `<span>${escapeHtml(module)}</span>`).join("") || "<span>Sin modulos</span>"}</div>
+          <footer>
+            <small>${role.permission_codes.length} permisos · ${role.user_count} usuarios</small>
+            <span class="badge ${criticalCount ? "risk-alto" : "risk-bajo"}">${criticalCount ? `${criticalCount} criticos` : "Sin criticos"}</span>
+          </footer>
+        </article>
+      `;
+    }).join("")
+    : `<article class="empty-state"><strong>Sin roles para el filtro</strong><p>Ajusta el modulo o tipo de permiso para ver mas resultados.</p></article>`;
+}
+
+function renderTenantModuleInsights() {
+  const container = document.querySelector("#tenantModuleInsights");
+  if (!container) return;
+  const modules = state.governance.modules || [];
+  container.innerHTML = modules.length
+    ? modules.slice(0, 8).map((module) => {
+      const enabled = module.enabled && module.is_enabled;
+      return `
+        <article class="module-insight ${enabled ? "enabled" : "locked"}">
+          <span>${escapeHtml(module.category || "Modulo")}</span>
+          <strong>${escapeHtml(module.name)}</strong>
+          <p>${escapeHtml(module.commercial_recommendation || "")}</p>
+          <small>${escapeHtml(String(module.users_with_access || 0))} usuarios · ${escapeHtml(String(module.related_permission_count || 0))} permisos</small>
+        </article>
+      `;
+    }).join("")
+    : `<article class="empty-state"><strong>Sin modulos visibles</strong><p>Los modulos contratados apareceran aqui con impacto y recomendaciones.</p></article>`;
+}
+
 function renderGovernanceTables() {
   const governance = state.governance;
   const tenants = state.admin.tenants || [];
   const activeTenants = tenants.filter((tenant) => tenant.status === "active").length;
   const activeModules = governance.modules.filter((module) => module.enabled && module.is_enabled).length;
+  renderSecurityInsights();
+  renderCompanyUserCards();
+  renderEffectiveAccessPanel();
+  renderRoleMatrix();
+  renderTenantModuleInsights();
   renderCardSet("#governanceCards", [
     { label: "Empresas activas", value: activeTenants, detail: "Tenants cliente con operacion habilitada.", tone: "green" },
     { label: "Suscripciones", value: governance.subscriptions.length, detail: "Contratos visibles para Icodeup plataforma.", tone: "blue" },
@@ -1667,11 +1862,11 @@ function renderGovernanceTables() {
   const moduleRows = governance.modules.map((module) => {
     const enabled = module.enabled && module.is_enabled;
     const action = isPlatform() && document.querySelector("#moduleTenantFilter")?.value ? `<button class="table-button" data-toggle-module="${escapeHtml(module.code)}" data-enabled="${enabled}" type="button">${enabled ? "Desactivar" : "Activar"}</button>` : "";
-    return `<tr><td><strong>${escapeHtml(module.name)}</strong><small>${escapeHtml(module.code)}</small></td><td>${escapeHtml(module.category)}</td><td><span class="badge ${enabled ? "risk-bajo" : "risk-alto"}">${enabled ? "Activo" : "Inactivo"}</span></td><td>${escapeHtml(module.description || "")}</td><td>${action}</td></tr>`;
+    return `<tr><td><strong>${escapeHtml(module.name)}</strong><small>${escapeHtml(module.code)}</small></td><td>${escapeHtml(module.category)}</td><td><span class="badge ${enabled ? "risk-bajo" : "risk-alto"}">${enabled ? "Activo" : "Inactivo"}</span></td><td><strong>${escapeHtml(String(module.users_with_access || 0))}</strong><small>${escapeHtml(module.deactivation_impact || module.description || "")}</small></td><td>${escapeHtml((module.primary_roles || []).join(", ") || "-")}</td><td>${action}</td></tr>`;
   }).join("");
   ["#moduleTable", "#tenantModuleTable"].forEach((selector) => {
     const target = document.querySelector(selector);
-    if (target) target.innerHTML = table(["Modulo", "Categoria", "Estado", "Descripcion", ""], moduleRows, "No hay modulos disponibles.");
+    if (target) target.innerHTML = table(["Modulo", "Categoria", "Estado", "Usuarios", "Roles", ""], moduleRows, "No hay modulos disponibles.");
   });
   renderModuleCatalog("#moduleCatalog", governance.modules, { admin: true });
   renderModuleCatalog("#tenantModuleCatalog", governance.modules);
@@ -1718,16 +1913,26 @@ function renderGovernanceTables() {
     }
   }
 
-  const roleRows = governance.roles.map((role) => `<tr><td><strong>${escapeHtml(role.name)}</strong><small>${escapeHtml(role.code)}</small></td><td>${role.is_system_role ? "Sistema" : "Empresa"}</td><td>${role.permission_codes.length}</td><td>${role.user_count}</td><td>${role.is_active ? "Activo" : "Inactivo"}</td></tr>`).join("");
+  const roleRows = governance.roles.map((role) => {
+    const modules = permissionModuleSet(role.permission_codes || []);
+    const criticalCount = (role.permission_codes || []).filter(permissionIsCritical).length;
+    const exportCount = (role.permission_codes || []).filter((code) => code.endsWith(".export")).length;
+    return `<tr><td><strong>${escapeHtml(role.name)}</strong><small>${escapeHtml(role.code)}</small></td><td>${role.is_system_role ? "Sistema" : "Empresa"}</td><td>${modules.map(escapeHtml).join(", ") || "-"}</td><td>${role.permission_codes.length}</td><td><span class="badge ${criticalCount ? "risk-alto" : "risk-bajo"}">${criticalCount} criticos</span></td><td>${exportCount}</td><td>${role.user_count}</td><td>${role.is_active ? "Activo" : "Inactivo"}</td></tr>`;
+  }).join("");
   document.querySelector("#rolePermissionGuide") && (document.querySelector("#rolePermissionGuide").innerHTML = `
     <article><strong>Permisos por accion</strong><p>Los permisos definen que puede ver, crear, editar, exportar, asignar o configurar cada rol dentro de los modulos contratados.</p></article>
-    <article><strong>Roles protegidos</strong><p>Los roles de sistema conservan reglas base. Los roles de empresa permiten adaptar la operacion sin tocar codigo.</p></article>
+    <article><strong>Rol legacy</strong><p>Rol tecnico heredado para compatibilidad con modulos antiguos.</p></article>
+    <article><strong>Rol especializado</strong><p>Perfil funcional que define permisos reales dentro de la empresa.</p></article>
+    <article><strong>Permiso critico</strong><p>Permiso sensible que puede afectar datos, exportes, usuarios o configuracion.</p></article>
   `);
-  document.querySelector("#roleTable") && (document.querySelector("#roleTable").innerHTML = table(["Rol", "Tipo", "Permisos", "Usuarios", "Estado"], roleRows, "No hay roles."));
+  document.querySelector("#roleTable") && (document.querySelector("#roleTable").innerHTML = table(["Rol", "Tipo", "Modulos", "Permisos", "Criticos", "Exportes", "Usuarios", "Estado"], roleRows, "No hay roles."));
 
   const roleOptions = optionList(governance.roles.filter((role) => role.is_active), "id", "name");
-  const userRows = governance.users.map((user) => `<tr><td><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></td><td>${escapeHtml(user.role_name || user.role)}</td><td>${escapeHtml(user.status)}</td><td><select data-user-role="${user.id}">${roleOptions}</select></td></tr>`).join("");
-  document.querySelector("#companyUserTable") && (document.querySelector("#companyUserTable").innerHTML = table(["Usuario", "Rol actual", "Estado", "Asignar rol"], userRows, "No hay usuarios visibles."));
+  const userRows = governance.users.map((user) => {
+    const risk = user.risk_flags?.[0] || { severity: "low", label: "Sin alertas" };
+    return `<tr><td><strong>${escapeHtml(user.name)}</strong><small>${escapeHtml(user.email)}</small></td><td><strong>${escapeHtml(user.legacy_role_label || user.role)}</strong><small>${escapeHtml(user.legacy_role || user.role)}</small></td><td><strong>${escapeHtml(user.business_profile || user.role_name || "-")}</strong><small>${escapeHtml(user.specialized_role_code || "fallback")}</small></td><td>${escapeHtml((user.visible_modules || []).join(", ") || "-")}</td><td>${escapeHtml(String(user.permission_count || 0))}</td><td><span class="badge ${severityClass(risk.severity)}">${escapeHtml(risk.label)}</span></td><td>${escapeHtml(user.leader_name || "-")}</td><td><select data-user-role="${user.id}">${roleOptions}</select><button class="table-button" data-user-access="${user.id}" type="button">Detalle</button></td></tr>`;
+  }).join("");
+  document.querySelector("#companyUserTable") && (document.querySelector("#companyUserTable").innerHTML = table(["Usuario", "Legacy", "Perfil efectivo", "Modulos", "Permisos", "Riesgo", "Lider", "Acceso"], userRows, "No hay usuarios visibles."));
   document.querySelectorAll("[data-user-role]").forEach((select) => {
     const user = governance.users.find((item) => String(item.id) === String(select.dataset.userRole));
     if (user?.role_id) select.value = String(user.role_id);
@@ -1963,6 +2168,11 @@ function setupEvents() {
     if (sectionJump) {
       document.querySelector(`[data-section="${sectionJump.dataset.sectionJump}"]`)?.click();
     }
+    const userAccess = event.target.closest("[data-user-access]");
+    if (userAccess) {
+      state.governance.effectiveAccess = await api(`/api/governance/users/${userAccess.dataset.userAccess}/effective-access`);
+      renderGovernanceTables();
+    }
     const complete = event.target.closest("[data-complete-promise]");
     if (complete) {
       await api(`/api/crm/promises/${complete.dataset.completePromise}/complete`, { method: "PATCH" });
@@ -1990,6 +2200,10 @@ function setupEvents() {
     }
   });
   document.addEventListener("change", async (event) => {
+    if (event.target.closest("#roleModuleFilter") || event.target.closest("#roleRiskFilter")) {
+      renderRoleMatrix();
+      return;
+    }
     const roleSelect = event.target.closest("[data-user-role]");
     if (roleSelect && roleSelect.value) {
       await api(`/api/governance/users/${roleSelect.dataset.userRole}/role`, {

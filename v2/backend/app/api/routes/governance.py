@@ -29,11 +29,38 @@ from app.schemas.governance import (
     TenantSettingsPatch,
     UserRoleAssign,
 )
-from app.services.access_control import is_company_admin, is_platform_admin, require_permission, require_tenant, user_has_permission
+from app.services.access_control import get_profile_role, get_user_permissions, is_company_admin, is_platform_admin, require_permission, require_tenant, user_has_permission
 from app.services.audit_service import record_audit
+from app.services.menu_service import build_menu
 
 
 router = APIRouter()
+
+RESERVED_PERMISSION_CODES = {"modules.configure", "health.view"}
+CRITICAL_PERMISSION_CODES = {
+    "users.create",
+    "users.update",
+    "users.assign",
+    "roles.manage",
+    "roles.configure",
+    "modules.configure",
+    "audit.logs.view",
+    "crm.clients.export",
+    "collections.payments.export",
+    "tenant.settings.configure",
+}
+ADMIN_PERMISSION_PREFIXES = ("platform.",)
+MODULE_PERMISSION_LABELS = {
+    "core": "Core SaaS",
+    "administration": "Administracion",
+    "crm": "CRM",
+    "collections": "Cobranzas",
+    "legal": "Juridico",
+    "documents": "Documentos",
+    "sales": "Ventas",
+    "bi": "BI",
+    "integrations": "Integraciones",
+}
 
 
 def target_tenant(db: Session, user: User, tenant_id: int | None = None) -> Tenant:
@@ -79,6 +106,50 @@ def role_to_out(db: Session, role: Role) -> RoleOut:
     )
 
 
+def module_permission_codes(db: Session, module_code: str) -> set[str]:
+    return set(db.scalars(select(Permission.code).where(Permission.module_code == module_code)))
+
+
+def module_primary_roles(db: Session, tenant_id: int, module_code: str) -> list[str]:
+    rows = (
+        select(Role.name)
+        .join(RolePermission, Role.id == RolePermission.role_id)
+        .join(Permission, Permission.id == RolePermission.permission_id)
+        .where(Permission.module_code == module_code)
+        .where((Role.tenant_id.is_(None)) | (Role.tenant_id == tenant_id))
+        .distinct()
+        .order_by(Role.name)
+        .limit(6)
+    )
+    return list(db.scalars(rows))
+
+
+def users_with_module_access(db: Session, tenant_id: int, module_code: str) -> int:
+    permission_codes = module_permission_codes(db, module_code)
+    count = 0
+    for tenant_user in db.scalars(select(User).where(User.tenant_id == tenant_id, User.status == "active")):
+        user_permissions = get_user_permissions(db, tenant_user)
+        if "*" in user_permissions or permission_codes.intersection(user_permissions):
+            count += 1
+    return count
+
+
+def module_deactivation_impact(module: Module, users_with_access: int, related_permissions: int) -> str:
+    if users_with_access:
+        return f"Desactivar {module.name} ocultaria capacidades a {users_with_access} usuarios con permisos relacionados."
+    if related_permissions:
+        return f"Desactivar {module.name} no afectaria usuarios actuales, pero bloquearia {related_permissions} permisos configurados."
+    return f"Desactivar {module.name} no tiene usuarios con acceso detectado."
+
+
+def module_commercial_recommendation(module: Module, enabled: bool) -> str:
+    if enabled:
+        return "Modulo activo. Revisar roles con acceso y adopcion operativa."
+    if module.code in {"legal", "documents", "bi", "integrations"}:
+        return "Modulo candidato a activacion comercial segun madurez de la operacion."
+    return "Solicitar activacion a Icodeup Advisors si la empresa requiere esta capacidad."
+
+
 def tenant_config_value(db: Session, tenant_id: int, key: str) -> str | None:
     item = db.scalar(select(TenantConfiguration).where(TenantConfiguration.tenant_id == tenant_id, TenantConfiguration.key == key, TenantConfiguration.is_active.is_(True)))
     if not item or item.value_json is None:
@@ -96,6 +167,267 @@ def set_tenant_config(db: Session, tenant_id: int, key: str, value: str | None) 
         db.add(item)
     item.value_json = json.dumps(value or "")
     item.is_active = True
+
+
+def is_reserved_permission(code: str) -> bool:
+    return code.startswith(ADMIN_PERMISSION_PREFIXES) or code in RESERVED_PERMISSION_CODES
+
+
+def is_critical_permission(code: str) -> bool:
+    return code in CRITICAL_PERMISSION_CODES or code.endswith(".export") or code.startswith("platform.")
+
+
+def visible_permission_codes(db: Session, viewer: User, target: User) -> set[str]:
+    codes = get_user_permissions(db, target)
+    if "*" in codes:
+        codes = set(db.scalars(select(Permission.code)))
+    if not is_platform_admin(db, viewer):
+        codes = {code for code in codes if not is_reserved_permission(code)}
+    return codes
+
+
+def permission_rows(db: Session, viewer: User, target: User) -> list[dict]:
+    codes = visible_permission_codes(db, viewer, target)
+    if not codes:
+        return []
+    permissions = list(db.scalars(select(Permission).where(Permission.code.in_(codes)).order_by(Permission.module_code, Permission.code)))
+    known = {permission.code for permission in permissions}
+    rows = [
+        {
+            "code": permission.code,
+            "name": permission.name,
+            "module_code": permission.module_code or "core",
+            "critical": is_critical_permission(permission.code),
+        }
+        for permission in permissions
+    ]
+    for code in sorted(codes - known):
+        rows.append({"code": code, "name": code, "module_code": "legacy", "critical": is_critical_permission(code)})
+    return rows
+
+
+def grouped_permissions(rows: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row["module_code"] or "core", []).append(row)
+    return grouped
+
+
+def user_effective_role(db: Session, target: User) -> Role | None:
+    return get_profile_role(db, target)
+
+
+def profile_label(role: Role | None, target: User) -> str:
+    return role.name if role else ROLE_LABELS.get(target.role, target.role)
+
+
+def module_access_rows(db: Session, viewer: User, target: User, permission_codes: set[str], menu_payload: dict | None = None) -> list[dict]:
+    tenant_modules = {item.module_code: item for item in db.scalars(select(TenantModule).where(TenantModule.tenant_id == target.tenant_id))}
+    menu_payload = menu_payload or build_menu(db, target)
+    visible_module_codes = {item.get("module_code") or "core" for item in menu_payload.get("items", [])}
+    permission_modules = {
+        permission.module_code or "core"
+        for permission in db.scalars(select(Permission).where(Permission.code.in_(permission_codes))) if permission.module_code
+    }
+    rows = []
+    for module in db.scalars(select(Module).order_by(Module.order, Module.name)):
+        tenant_module = tenant_modules.get(module.code)
+        active = bool(module.is_active and tenant_module and tenant_module.enabled and tenant_module.is_enabled)
+        visible = module.code in visible_module_codes
+        has_permissions = module.code in permission_modules or "*" in permission_codes
+        if not is_platform_admin(db, viewer) and module.code in {"hr", "finance", "industrial"} and not active:
+            continue
+        rows.append(
+            {
+                "code": module.code,
+                "name": module.name,
+                "description": module.description,
+                "category": module.category,
+                "active": active,
+                "contracted": bool(tenant_module),
+                "visible": visible,
+                "has_permissions": has_permissions,
+                "status": "visible" if visible else "blocked" if active else "inactive",
+                "reason": module_visibility_reason(module, active, visible, has_permissions),
+            }
+        )
+    return rows
+
+
+def module_visibility_reason(module: Module, active: bool, visible: bool, has_permissions: bool) -> str:
+    if visible:
+        return f"Visible porque {module.name} esta activo y el perfil tiene permisos del modulo."
+    if not active:
+        return f"Oculto porque {module.name} no esta activo para este tenant."
+    if not has_permissions:
+        return f"Oculto porque el rol efectivo no tiene permisos de {module.name}."
+    return "Oculto por audiencia de menu o restriccion del perfil."
+
+
+def restrictions_for_user(db: Session, target: User, permission_codes: set[str], effective_role: Role | None) -> list[str]:
+    restrictions = ["No puede ver informacion de otros tenants."]
+    role_code = effective_role.code if effective_role else target.role
+    if not any(code.endswith(".export") for code in permission_codes) and "*" not in permission_codes:
+        restrictions.append("No tiene permisos de exportacion.")
+    if role_code in {"collections_agent", "agent"}:
+        restrictions.append("Operacion limitada a clientes/casos asignados segun endpoint.")
+    if role_code == "lawyer":
+        restrictions.append("Vista concentrada en juridico y documentos de casos asignados.")
+    if role_code == "sales_advisor":
+        restrictions.append("Vista concentrada en ventas asignadas y clientes en lectura.")
+    if role_code == "tenant_auditor":
+        restrictions.append("Perfil de lectura y auditoria sin gestion operativa.")
+    if user_has_permission(db, target, "roles.configure") or user_has_permission(db, target, "users.assign"):
+        restrictions.append("Puede modificar configuracion sensible de usuarios o roles.")
+    return restrictions
+
+
+def risk_flags_for_user(db: Session, target: User, permission_codes: set[str], effective_role: Role | None) -> list[dict]:
+    flags = []
+    critical = sorted(code for code in permission_codes if is_critical_permission(code))
+    if "*" in permission_codes:
+        flags.append({"severity": "critical", "label": "Acceso platform", "detail": "Tiene acceso total por perfil platform."})
+    if critical:
+        flags.append({"severity": "high", "label": "Permisos criticos", "detail": f"{len(critical)} permisos sensibles activos."})
+    if target.role in {"coordinator", "tenant_admin"} and effective_role and effective_role.tenant_id is None:
+        flags.append({"severity": "medium", "label": "Rol legacy amplio", "detail": "Usa rol legacy amplio sin perfil tenant especializado."})
+    if target.status != "active" and critical:
+        flags.append({"severity": "high", "label": "Usuario inactivo sensible", "detail": "Usuario inactivo conserva permisos criticos."})
+    if not flags:
+        flags.append({"severity": "low", "label": "Sin alertas criticas", "detail": "No se detectaron permisos sensibles en el perfil efectivo."})
+    return flags
+
+
+def recommendation_for_user(target: User, effective_role: Role | None, risk_flags: list[dict]) -> str:
+    role_code = effective_role.code if effective_role else target.role
+    severities = {flag["severity"] for flag in risk_flags}
+    if role_code == "lawyer":
+        return "Este perfil esta correctamente limitado para gestion juridica."
+    if role_code == "sales_advisor":
+        return "Este perfil esta correctamente limitado para gestion comercial."
+    if "critical" in severities or "high" in severities:
+        return "Revisar permisos criticos antes de operar en produccion."
+    if effective_role and effective_role.tenant_id is not None:
+        return "Perfil funcional configurado por tenant con permisos granulares."
+    return "Este usuario conserva permisos por rol legacy; revisar si debe migrarse a rol especializado."
+
+
+def effective_access_payload(db: Session, viewer: User, target: User) -> dict:
+    tenant = db.get(Tenant, target.tenant_id)
+    effective_role = user_effective_role(db, target)
+    permission_items = permission_rows(db, viewer, target)
+    permission_codes = {item["code"] for item in permission_items}
+    menu_payload = build_menu(db, target)
+    modules = module_access_rows(db, viewer, target, permission_codes, menu_payload)
+    restrictions = restrictions_for_user(db, target, permission_codes, effective_role)
+    risk_flags = risk_flags_for_user(db, target, permission_codes, effective_role)
+    leader = db.get(User, target.leader_id) if target.leader_id else None
+    return {
+        "user": {
+            "id": target.id,
+            "name": target.name,
+            "email": target.email,
+            "status": target.status,
+            "title": target.title,
+            "phone": target.phone,
+            "leader_id": target.leader_id,
+            "leader_name": leader.name if leader else None,
+        },
+        "tenant": {
+            "id": tenant.id if tenant else target.tenant_id,
+            "name": tenant.name if tenant else "Tenant no encontrado",
+            "slug": tenant.slug if tenant else None,
+        },
+        "legacy_role": {
+            "code": target.role,
+            "label": ROLE_LABELS.get(target.role, target.role),
+            "description": "Rol tecnico heredado para compatibilidad con modulos antiguos.",
+        },
+        "specialized_role": {
+            "id": effective_role.id if effective_role else None,
+            "code": effective_role.code if effective_role else None,
+            "name": effective_role.name if effective_role else None,
+            "description": effective_role.description if effective_role else None,
+            "is_system_role": effective_role.is_system_role if effective_role else False,
+            "scope": "tenant" if effective_role and effective_role.tenant_id else "system" if effective_role else "legacy_fallback",
+        },
+        "business_profile": profile_label(effective_role, target),
+        "permissions": permission_items,
+        "permission_groups": grouped_permissions(permission_items),
+        "permission_count": len(permission_items),
+        "critical_permissions": [item for item in permission_items if item["critical"]],
+        "modules": modules,
+        "visible_sections": menu_payload.get("items", []),
+        "hidden_sections": hidden_section_reasons(modules),
+        "restrictions": restrictions,
+        "risk_flags": risk_flags,
+        "recommendation": recommendation_for_user(target, effective_role, risk_flags),
+    }
+
+
+def hidden_section_reasons(modules: list[dict]) -> list[dict]:
+    return [
+        {"module_code": item["code"], "module": item["name"], "reason": item["reason"]}
+        for item in modules
+        if not item["visible"]
+    ]
+
+
+def user_for_governance_access(db: Session, viewer: User, user_id: int) -> User:
+    if not (is_platform_admin(db, viewer) or is_company_admin(db, viewer)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores pueden consultar perfiles efectivos.")
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+    target_tenant(db, viewer, target.tenant_id)
+    return target
+
+
+def insight(severity: str, title: str, description: str, action: str, entity_type: str, entity_id: int | None = None) -> dict:
+    return {
+        "severity": severity,
+        "title": title,
+        "description": description,
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+    }
+
+
+def tenant_scope_for_insights(db: Session, user: User) -> list[Tenant]:
+    if not (is_platform_admin(db, user) or is_company_admin(db, user)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores pueden consultar alertas de seguridad.")
+    if is_platform_admin(db, user):
+        return list(db.scalars(select(Tenant).where(Tenant.slug != settings.platform_tenant_slug).order_by(Tenant.name)))
+    return [target_tenant(db, user)]
+
+
+def security_insights_for_tenant(db: Session, tenant: Tenant) -> list[dict]:
+    rows: list[dict] = []
+    tenant_users = list(db.scalars(select(User).where(User.tenant_id == tenant.id).order_by(User.name)))
+    for item in tenant_users:
+        role = user_effective_role(db, item)
+        permissions = get_user_permissions(db, item)
+        if item.role in {"coordinator", "tenant_admin"} and role and role.tenant_id is None:
+            rows.append(insight("medium", "Usuario con rol legacy amplio", f"{item.name} opera con {item.role} sin rol tenant especializado.", "Revisar migracion a rol especializado.", "user", item.id))
+        export_permissions = sorted(code for code in permissions if code.endswith(".export") or code == "*")
+        if export_permissions:
+            rows.append(insight("high", "Usuario con permisos de exportacion", f"{item.name} tiene {len(export_permissions)} permisos de exportacion o acceso total.", "Validar necesidad operacional y auditoria.", "user", item.id))
+        if item.status != "active" and any(is_critical_permission(code) for code in permissions):
+            rows.append(insight("high", "Usuario inactivo con permisos criticos", f"{item.name} esta inactivo y conserva permisos sensibles.", "Retirar permisos o desactivar perfil.", "user", item.id))
+    for role in db.scalars(select(Role).where((Role.tenant_id.is_(None)) | (Role.tenant_id == tenant.id)).order_by(Role.name)):
+        codes = role_permission_codes(db, role.id)
+        if any(code in {"users.create", "users.update", "roles.configure", "modules.configure"} or code.startswith("platform.") for code in codes):
+            rows.append(insight("medium", "Rol con administracion sensible", f"{role.name} contiene permisos administrativos.", "Revisar asignaciones antes de produccion.", "role", role.id))
+    for module_status in db.scalars(select(TenantModule).where(TenantModule.tenant_id == tenant.id, TenantModule.enabled.is_(True), TenantModule.is_enabled.is_(True))):
+        if users_with_module_access(db, tenant.id, module_status.module_code) == 0:
+            rows.append(insight("low", "Modulo activo sin usuarios", f"{module_status.module_code} esta activo pero no tiene usuarios con permisos relacionados.", "Asignar roles o evaluar desactivacion.", "module", module_status.id))
+    subscription = db.scalar(select(TenantSubscription).where(TenantSubscription.tenant_id == tenant.id, TenantSubscription.status.in_(["trial", "active"])))
+    if subscription is None:
+        rows.append(insight("medium", "Tenant sin plan activo", f"{tenant.name} no tiene suscripcion trial/activa detectada.", "Regularizar plan comercial o documentar excepcion.", "tenant", tenant.id))
+    if settings.enable_demo_data or settings.enable_demo_seeds or tenant.slug.endswith("-demo") or "demo" in tenant.slug:
+        rows.append(insight("low", "Data demo activa", f"{tenant.name} parece operar con datos o tenant demo.", "Validar que no se use como ambiente productivo.", "tenant", tenant.id))
+    return rows
 
 
 @router.get("/permissions", response_model=list[PermissionOut])
@@ -223,6 +555,11 @@ def list_module_status(tenant_id: int | None = None, db: Session = Depends(get_d
     rows = []
     for module in db.scalars(select(Module).order_by(Module.order, Module.name)):
         tenant_module = configured.get(module.code)
+        enabled = bool(tenant_module.enabled) if tenant_module else False
+        is_enabled = bool(tenant_module.is_enabled) if tenant_module else False
+        related_permission_count = db.scalar(select(func.count(Permission.id)).where(Permission.module_code == module.code)) or 0
+        critical_permission_count = db.scalar(select(func.count(Permission.id)).where(Permission.module_code == module.code, Permission.code.in_(CRITICAL_PERMISSION_CODES))) or 0
+        users_count = users_with_module_access(db, tenant.id, module.code)
         rows.append(
             ModuleStatusOut(
                 id=module.id,
@@ -234,9 +571,15 @@ def list_module_status(tenant_id: int | None = None, db: Session = Depends(get_d
                 order=module.order,
                 is_active=module.is_active,
                 tenant_module_id=tenant_module.id if tenant_module else None,
-                enabled=bool(tenant_module.enabled) if tenant_module else False,
-                is_enabled=bool(tenant_module.is_enabled) if tenant_module else False,
+                enabled=enabled,
+                is_enabled=is_enabled,
                 configuration_json=tenant_module.configuration_json if tenant_module else None,
+                related_permission_count=related_permission_count,
+                critical_permission_count=critical_permission_count,
+                users_with_access=users_count,
+                primary_roles=module_primary_roles(db, tenant.id, module.code),
+                deactivation_impact=module_deactivation_impact(module, users_count, related_permission_count),
+                commercial_recommendation=module_commercial_recommendation(module, enabled and is_enabled),
             )
         )
     return rows
@@ -400,6 +743,35 @@ def list_subscription_overview(db: Session = Depends(get_db), user: User = Depen
     return rows
 
 
+@router.get("/security-insights")
+def list_security_insights(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    rows: list[dict] = []
+    for tenant in tenant_scope_for_insights(db, user):
+        rows.extend(security_insights_for_tenant(db, tenant))
+    severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    return sorted(rows, key=lambda item: (severity_order.get(item["severity"], 9), item["title"]))[:80]
+
+
+@router.get("/users/{user_id}/effective-access")
+def get_user_effective_access(user_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    target = user_for_governance_access(db, user, user_id)
+    return effective_access_payload(db, user, target)
+
+
+@router.get("/users/{user_id}/access-explanation")
+def get_user_access_explanation(user_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    target = user_for_governance_access(db, user, user_id)
+    payload = effective_access_payload(db, user, target)
+    return {
+        "user": payload["user"],
+        "visible_sections": payload["visible_sections"],
+        "hidden_sections": payload["hidden_sections"],
+        "modules": payload["modules"],
+        "restrictions": payload["restrictions"],
+        "recommendation": payload["recommendation"],
+    }
+
+
 @router.get("/users")
 def list_tenant_users(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
     require_permission(db, user, "users.view")
@@ -409,6 +781,12 @@ def list_tenant_users(tenant_id: int | None = None, db: Session = Depends(get_db
     for item in db.scalars(query):
         profile = db.scalar(select(UserProfile).where(UserProfile.user_id == item.id))
         role = db.get(Role, profile.role_id) if profile and profile.role_id else None
+        permissions = visible_permission_codes(db, user, item)
+        menu_payload = build_menu(db, item)
+        visible_modules = sorted({menu_item.get("module_code") or "core" for menu_item in menu_payload.get("items", [])})
+        risk_flags = risk_flags_for_user(db, item, permissions, role)
+        latest_activity = db.scalar(select(AuditLog.created_at).where(AuditLog.user_id == item.id).order_by(AuditLog.created_at.desc()).limit(1))
+        leader = db.get(User, item.leader_id) if item.leader_id else None
         rows.append(
             {
                 "id": item.id,
@@ -416,12 +794,25 @@ def list_tenant_users(tenant_id: int | None = None, db: Session = Depends(get_db
                 "name": item.name,
                 "email": item.email,
                 "role": item.role,
+                "legacy_role": item.role,
+                "legacy_role_label": ROLE_LABELS.get(item.role, item.role),
                 "role_id": role.id if role else None,
                 "role_name": role.name if role else ROLE_LABELS.get(item.role, item.role),
+                "specialized_role_code": role.code if role else None,
+                "specialized_role_name": role.name if role else None,
+                "specialized_role_scope": "tenant" if role and role.tenant_id else "system" if role else "legacy_fallback",
+                "business_profile": profile_label(role, item),
                 "status": item.status,
                 "leader_id": item.leader_id,
+                "leader_name": leader.name if leader else None,
                 "phone": item.phone,
                 "title": item.title,
+                "visible_modules": visible_modules,
+                "visible_module_count": len(visible_modules),
+                "permission_count": len(permissions),
+                "critical_permission_count": len([code for code in permissions if is_critical_permission(code)]),
+                "risk_flags": risk_flags,
+                "last_activity_at": latest_activity,
             }
         )
     return rows

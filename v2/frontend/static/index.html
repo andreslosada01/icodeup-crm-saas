@@ -235,8 +235,11 @@
         <section id="company-users" class="section">
           <article class="panel">
             <div class="panel-head">
-              <div><h2>Usuarios de mi empresa</h2><p>Usuarios visibles dentro del tenant autenticado.</p></div>
+              <div><h2>Usuarios de mi empresa</h2><p>Usuarios visibles dentro del tenant autenticado, rol tecnico, perfil funcional y permisos efectivos.</p></div>
             </div>
+            <div id="securityInsights" class="security-insight-grid"></div>
+            <div id="companyUserCards" class="effective-user-grid"></div>
+            <div id="effectiveAccessPanel" class="effective-access-panel"></div>
             <div id="companyUserTable" class="table-wrap"></div>
           </article>
         </section>
@@ -258,6 +261,11 @@
                 <div><h2>Roles y permisos</h2><p>Roles de sistema y roles propios de la empresa.</p></div>
               </div>
               <div id="rolePermissionGuide" class="permission-guide"></div>
+              <div class="inline-filters">
+                <label>Modulo<select id="roleModuleFilter"><option value="">Todos</option></select></label>
+                <label>Tipo<select id="roleRiskFilter"><option value="">Todos</option><option value="critical">Criticos</option><option value="export">Con exportes</option><option value="admin">Administrativos</option></select></label>
+              </div>
+              <div id="roleMatrixCards" class="role-matrix-grid"></div>
               <div id="roleTable" class="table-wrap"></div>
             </article>
           </div>
@@ -268,6 +276,7 @@
             <div class="panel-head">
               <div><h2>Modulos contratados</h2><p>Consulta de capacidades habilitadas para la empresa.</p></div>
             </div>
+            <div id="tenantModuleInsights" class="module-insight-grid"></div>
             <div id="tenantModuleCatalog" class="module-catalog"></div>
             <div id="tenantModuleTable" class="table-wrap"></div>
           </article>
