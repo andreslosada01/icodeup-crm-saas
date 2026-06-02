@@ -33,3 +33,16 @@ Fase 6 reduce la dependencia de `User.role = coordinator` para perfiles especial
 - Exponer en UI de usuarios el rol especializado como primer dato y dejar `User.role` como compatibilidad tecnica.
 - Migrar tenants productivos a roles configurables con permisos revisados.
 - Reducir mas validaciones legacy una vez existan migraciones y pruebas completas por cliente.
+
+## Avance Fase 7
+
+Fase 7 agrega la experiencia de perfil efectivo para que Admin Empresa y SuperAdmin puedan ver:
+
+- rol legacy,
+- rol especializado,
+- permisos efectivos,
+- modulos visibles,
+- restricciones,
+- alertas de seguridad.
+
+Con esto, el administrador ya no necesita interpretar manualmente la relacion entre `User.role` y `UserProfile.role_id`.

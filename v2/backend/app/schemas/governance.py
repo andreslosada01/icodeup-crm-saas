@@ -68,6 +68,12 @@ class ModuleStatusOut(BaseModel):
     enabled: bool = False
     is_enabled: bool = False
     configuration_json: str | None = None
+    related_permission_count: int = 0
+    critical_permission_count: int = 0
+    users_with_access: int = 0
+    primary_roles: list[str] = Field(default_factory=list)
+    deactivation_impact: str | None = None
+    commercial_recommendation: str | None = None
 
 
 class TenantModuleToggle(BaseModel):

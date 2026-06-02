@@ -792,6 +792,168 @@ nav {
   margin-bottom: 12px;
 }
 
+.security-insight-grid,
+.effective-user-grid,
+.role-matrix-grid,
+.module-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.security-insight,
+.effective-user-card,
+.role-matrix-card,
+.module-insight,
+.effective-access-panel > article,
+.effective-access-grid article,
+.mini-module-list article {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.security-insight {
+  border-top: 3px solid var(--blue);
+}
+
+.security-insight.high,
+.security-insight.critical {
+  border-top-color: var(--danger);
+}
+
+.security-insight.medium {
+  border-top-color: var(--warning);
+}
+
+.security-insight.low {
+  border-top-color: var(--primary);
+}
+
+.security-insight span,
+.role-matrix-card span,
+.module-insight span,
+.effective-access-grid span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.security-insight p,
+.security-insight small,
+.effective-user-card p,
+.effective-user-card small,
+.role-matrix-card p,
+.role-matrix-card small,
+.module-insight p,
+.module-insight small,
+.mini-module-list p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.effective-user-card footer,
+.role-matrix-card footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mini-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mini-chip-row span {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f6faf8;
+  color: #20363c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.mini-chip-row .danger-chip {
+  border-color: rgba(210, 61, 43, 0.28);
+  background: #fff2ef;
+  color: var(--danger);
+}
+
+.effective-access-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.effective-access-head {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.effective-access-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.access-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.access-columns section {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.access-columns h3 {
+  margin: 0 0 12px;
+}
+
+.access-columns details {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+}
+
+.access-columns summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.mini-module-list {
+  display: grid;
+  gap: 8px;
+}
+
+.inline-filters {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.inline-filters label {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .analysis-card {
   display: grid;
   gap: 7px;
@@ -1517,6 +1679,12 @@ tbody tr:hover {
   .plan-usage-grid,
   .workspace-profile,
   .permission-guide,
+  .security-insight-grid,
+  .effective-user-grid,
+  .role-matrix-grid,
+  .module-insight-grid,
+  .effective-access-grid,
+  .access-columns,
   .semaphore-grid,
   .insight-grid {
     grid-template-columns: 1fr;
@@ -1573,5 +1741,13 @@ tbody tr:hover {
   .case-stats,
   .channel-actions {
     grid-template-columns: 1fr;
+  }
+
+  .effective-access-head,
+  .effective-user-card footer,
+  .role-matrix-card footer,
+  .inline-filters {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
