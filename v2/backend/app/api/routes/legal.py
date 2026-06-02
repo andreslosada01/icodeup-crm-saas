@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.api.routes.crm.access import customer_for_access, customer_query, project_for_access
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
 from app.db.session import get_db
-from app.models import Customer, LegalAction, LegalCase, LegalDeadline, LegalHearing, User
+from app.models import Customer, Document, LegalAction, LegalCase, LegalDeadline, LegalHearing, User, WorkflowDefinition, WorkflowStage
 from app.schemas.legal import LegalActionCreate, LegalActionOut, LegalCaseCreate, LegalCaseOut, LegalCasePatch, LegalDeadlineOut, LegalHearingCreate, LegalHearingOut
 from app.services.audit_service import record_audit
 from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, require_active_module, require_permission, user_has_permission
@@ -17,6 +19,63 @@ from app.services.access_control import get_profile_role_code, is_company_admin,
 router = APIRouter(dependencies=[Depends(require_active_module("legal"))])
 LEGAL_MANAGE_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}
 LEGAL_READ_ROLES = {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR, QUALITY_SUPERVISOR, AGENT}
+DEFAULT_LEGAL_STAGES = [
+    {"code": "RECIBIDO", "name": "Recibido", "color": "#64748b", "order": 10},
+    {"code": "ESTUDIO", "name": "En estudio", "color": "#2563eb", "order": 20},
+    {"code": "RADICADO", "name": "Radicado", "color": "#7c3aed", "order": 30},
+    {"code": "TRAMITE", "name": "En tramite", "color": "#f59e0b", "order": 40},
+    {"code": "AUDIENCIA", "name": "Audiencia", "color": "#dc2626", "order": 50},
+    {"code": "FALLO", "name": "Fallo", "color": "#16a34a", "order": 60},
+    {"code": "CERRADO", "name": "Cerrado", "color": "#0f766e", "order": 70},
+]
+
+
+def _norm(value: str | None) -> str:
+    return (value or "").strip().lower().replace("_", " ").replace("-", " ")
+
+
+def legal_stages(db: Session, tenant_id: int | None) -> list[dict]:
+    workflow = None
+    if tenant_id:
+        workflow = db.scalar(select(WorkflowDefinition).where(WorkflowDefinition.module == "legal", WorkflowDefinition.tenant_id == tenant_id, WorkflowDefinition.is_active.is_(True)).order_by(WorkflowDefinition.id.desc()))
+    workflow = workflow or db.scalar(select(WorkflowDefinition).where(WorkflowDefinition.module == "legal", WorkflowDefinition.tenant_id.is_(None), WorkflowDefinition.is_active.is_(True)).order_by(WorkflowDefinition.id.desc()))
+    if not workflow:
+        return DEFAULT_LEGAL_STAGES
+    stages = list(db.scalars(select(WorkflowStage).where(WorkflowStage.workflow_id == workflow.id, WorkflowStage.is_active.is_(True)).order_by(WorkflowStage.order, WorkflowStage.name)))
+    return [{"code": stage.code, "name": stage.name, "color": stage.color, "order": stage.order, "is_final": stage.is_final} for stage in stages] or DEFAULT_LEGAL_STAGES
+
+
+def case_progress_payload(db: Session, legal_case: LegalCase) -> dict:
+    stages = legal_stages(db, legal_case.tenant_id)
+    stage_text = _norm(legal_case.stage or legal_case.status)
+    current_index = 0
+    for index, stage in enumerate(stages):
+        if _norm(stage["code"]) == stage_text or _norm(stage["name"]) == stage_text:
+            current_index = index
+            break
+    last_action = db.scalar(select(func.max(LegalAction.action_date)).where(LegalAction.legal_case_id == legal_case.id))
+    nearest_deadline = db.scalar(
+        select(LegalDeadline)
+        .where(LegalDeadline.legal_case_id == legal_case.id, LegalDeadline.status.in_(["open", "pending"]))
+        .order_by(LegalDeadline.due_at.asc())
+    )
+    reference_date = last_action or legal_case.created_at
+    days_in_stage = max(0, int((datetime.now(timezone.utc) - reference_date).days)) if reference_date else 0
+    denominator = max(len(stages) - 1, 1)
+    return {
+        "case_id": legal_case.id,
+        "stage": legal_case.stage or legal_case.status,
+        "stage_code": stages[current_index]["code"] if stages else None,
+        "stage_name": stages[current_index]["name"] if stages else legal_case.stage,
+        "progress_percent": round((current_index / denominator) * 100),
+        "next_action": legal_case.next_action,
+        "last_movement_at": last_action,
+        "responsible_user_id": legal_case.assigned_lawyer_id,
+        "risk": legal_case.risk,
+        "days_in_stage": days_in_stage,
+        "nearest_deadline": {"id": nearest_deadline.id, "title": nearest_deadline.title, "due_at": nearest_deadline.due_at, "priority": nearest_deadline.priority} if nearest_deadline else None,
+        "stages": stages,
+    }
 
 
 def ensure_legal_read(db: Session, user: User) -> None:
@@ -74,6 +133,89 @@ def customer_for_legal_create(db: Session, customer_id: int, user: User) -> Cust
     return customer_for_access(db, customer_id, user, write=False)
 
 
+@router.get("/dashboard")
+def legal_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    require_permission(db, user, "legal.cases.view")
+    ensure_legal_read(db, user)
+    cases = list_cases(db, user)
+    case_ids = [item.id for item in cases]
+    deadlines = list(db.scalars(select(LegalDeadline).where(LegalDeadline.legal_case_id.in_(case_ids)).order_by(LegalDeadline.due_at.asc()).limit(100))) if case_ids else []
+    hearings = list(db.scalars(select(LegalHearing).where(LegalHearing.legal_case_id.in_(case_ids)).order_by(LegalHearing.scheduled_at.asc()).limit(100))) if case_ids else []
+    now = datetime.now(timezone.utc)
+    by_stage: dict[str, int] = {}
+    by_risk: dict[str, int] = {}
+    by_lawyer: dict[str, int] = {}
+    for item in cases:
+        by_stage[item.stage or item.status] = by_stage.get(item.stage or item.status, 0) + 1
+        by_risk[item.risk] = by_risk.get(item.risk, 0) + 1
+        lawyer_key = str(item.assigned_lawyer_id or "Sin asignar")
+        by_lawyer[lawyer_key] = by_lawyer.get(lawyer_key, 0) + 1
+    return {
+        "kpis": {
+            "active_cases": sum(1 for item in cases if item.status != "closed"),
+            "closed_cases": sum(1 for item in cases if item.status == "closed"),
+            "upcoming_deadlines": sum(1 for item in deadlines if item.due_at >= now),
+            "overdue_deadlines": sum(1 for item in deadlines if item.due_at < now),
+            "upcoming_hearings": sum(1 for item in hearings if item.scheduled_at >= now),
+            "high_risk_cases": sum(1 for item in cases if (item.risk or "").lower() in {"alto", "high", "critical"}),
+        },
+        "by_stage": [{"stage": key, "count": value} for key, value in sorted(by_stage.items())],
+        "by_risk": [{"risk": key, "count": value} for key, value in sorted(by_risk.items())],
+        "by_lawyer": [{"lawyer_id": key, "count": value} for key, value in sorted(by_lawyer.items())],
+        "upcoming_deadlines": [
+            {"id": item.id, "case_id": item.legal_case_id, "title": item.title, "due_at": item.due_at, "priority": item.priority, "status": item.status}
+            for item in deadlines[:8]
+        ],
+        "upcoming_hearings": [
+            {"id": item.id, "case_id": item.legal_case_id, "hearing_type": item.hearing_type, "scheduled_at": item.scheduled_at, "status": item.status, "location": item.location}
+            for item in hearings[:8]
+        ],
+    }
+
+
+@router.get("/kanban")
+def legal_kanban(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    require_permission(db, user, "legal.cases.view")
+    ensure_legal_read(db, user)
+    cases = list_cases(db, user)
+    stages = legal_stages(db, user.tenant_id if not is_platform_admin(db, user) else None)
+    columns = []
+    for stage in stages:
+        stage_key = _norm(stage["name"])
+        stage_code = _norm(stage["code"])
+        items = [
+            {
+                "id": item.id,
+                "case_number": item.case_number,
+                "customer_id": item.customer_id,
+                "amount": item.amount,
+                "risk": item.risk,
+                "next_deadline_at": item.next_deadline_at,
+                "assigned_lawyer_id": item.assigned_lawyer_id,
+            }
+            for item in cases
+            if _norm(item.stage or item.status) in {stage_key, stage_code}
+        ]
+        columns.append({"stage": stage, "count": len(items), "amount": sum(item["amount"] for item in items), "items": items[:20]})
+    uncategorized = [
+        item for item in cases
+        if not any(_norm(item.stage or item.status) in {_norm(stage["name"]), _norm(stage["code"])} for stage in stages)
+    ]
+    if uncategorized:
+        columns.append(
+            {
+                "stage": {"code": "OTROS", "name": "Otros", "color": "#94a3b8", "order": 999},
+                "count": len(uncategorized),
+                "amount": sum(item.amount for item in uncategorized),
+                "items": [
+                    {"id": item.id, "case_number": item.case_number, "customer_id": item.customer_id, "amount": item.amount, "risk": item.risk, "next_deadline_at": item.next_deadline_at}
+                    for item in uncategorized[:20]
+                ],
+            }
+        )
+    return {"columns": columns}
+
+
 @router.get("/cases", response_model=list[LegalCaseOut])
 def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalCase]:
     require_permission(db, user, "legal.cases.view")
@@ -117,6 +259,34 @@ def get_case(case_id: int, db: Session = Depends(get_db), user: User = Depends(c
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
     return legal_case_for_access(db, case_id, user)
+
+
+@router.get("/cases/{case_id}/progress")
+def get_case_progress(case_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    require_permission(db, user, "legal.cases.view")
+    ensure_legal_read(db, user)
+    legal_case = legal_case_for_access(db, case_id, user)
+    return case_progress_payload(db, legal_case)
+
+
+@router.get("/cases/{case_id}/timeline")
+def get_case_timeline(case_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    require_permission(db, user, "legal.cases.view")
+    ensure_legal_read(db, user)
+    legal_case = legal_case_for_access(db, case_id, user)
+    events = [
+        {"type": "case", "title": "Caso creado", "description": legal_case.notes, "date": legal_case.created_at, "severity": legal_case.risk}
+    ]
+    for action in db.scalars(select(LegalAction).where(LegalAction.legal_case_id == legal_case.id).order_by(LegalAction.action_date.asc())):
+        events.append({"type": "action", "title": action.action_type, "description": action.description, "date": action.action_date, "severity": "medium"})
+    for hearing in db.scalars(select(LegalHearing).where(LegalHearing.legal_case_id == legal_case.id).order_by(LegalHearing.scheduled_at.asc())):
+        events.append({"type": "hearing", "title": hearing.hearing_type, "description": hearing.location or hearing.notes, "date": hearing.scheduled_at, "severity": "high"})
+    for deadline in db.scalars(select(LegalDeadline).where(LegalDeadline.legal_case_id == legal_case.id).order_by(LegalDeadline.due_at.asc())):
+        events.append({"type": "deadline", "title": deadline.title, "description": deadline.status, "date": deadline.due_at, "severity": deadline.priority})
+    for document in db.scalars(select(Document).where(Document.legal_case_id == legal_case.id).order_by(Document.created_at.asc())):
+        events.append({"type": "document", "title": document.document_type, "description": document.original_name, "date": document.created_at, "severity": "low"})
+    events.sort(key=lambda item: item["date"] or datetime.now(timezone.utc))
+    return {"case": {"id": legal_case.id, "case_number": legal_case.case_number, "stage": legal_case.stage, "risk": legal_case.risk}, "events": events}
 
 
 @router.patch("/cases/{case_id}", response_model=LegalCaseOut)

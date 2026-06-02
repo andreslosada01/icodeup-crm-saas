@@ -191,3 +191,15 @@ No. La arquitectura actual usa base compartida con filtro por tenant en registro
 - Recursos humanos.
 - Finanzas.
 - Operaciones industriales.
+## Actualizacion Fase 8 - Demo de configuracion y alertas
+
+Para reforzar la narrativa comercial, mostrar despues del dashboard:
+
+1. **Centro de Configuracion**: explicar que Icodeup 360 permite parametrizar catalogos, reglas, alertas y workflows desde la aplicacion, sin tocar codigo ni base de datos.
+2. **Centro de Alertas**: mostrar alertas transversales por cobranzas, juridico, ventas y administracion. Enfatizar que respetan tenant, rol y asignacion.
+3. **Juridico operativo**: abrir el modulo Juridico y mostrar KPIs, kanban procesal, agenda juridica y expedientes.
+4. **Ventas / CRM 360**: abrir Ventas y mostrar pipeline, valor ponderado, oportunidades y leads.
+
+Mensaje recomendado:
+
+> Icodeup 360 no es solo una pantalla de CRM; es una plataforma configurable donde la empresa puede ajustar catalogos, reglas, alertas y flujos operativos sin depender de desarrollo para cada cambio menor.

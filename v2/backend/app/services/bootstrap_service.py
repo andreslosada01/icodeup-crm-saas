@@ -12,6 +12,9 @@ from app.models import (
     CommunicationChannel,
     Customer,
     Document,
+    AlertRule,
+    BusinessRule,
+    FunctionalCatalog,
     Lead,
     LegalAction,
     LegalCase,
@@ -39,6 +42,8 @@ from app.models import (
     User,
     UserProjectAssignment,
     UserProfile,
+    WorkflowDefinition,
+    WorkflowStage,
 )
 from app.services.access_control import sync_user_profile
 
@@ -89,6 +94,14 @@ PERMISSION_DEFS = [
     ("modules.configure", "Activar modulos por empresa", "administration"),
     ("audit.logs.view", "Ver auditoria", "administration"),
     ("audit.logs.export", "Exportar auditoria", "administration"),
+    ("configuration.view", "Ver Centro de Configuracion", "administration"),
+    ("configuration.manage", "Administrar configuracion funcional", "administration"),
+    ("configuration.catalogs.manage", "Administrar catalogos funcionales", "administration"),
+    ("configuration.rules.manage", "Administrar reglas de negocio", "administration"),
+    ("configuration.alerts.manage", "Administrar reglas de alertas", "administration"),
+    ("configuration.workflows.manage", "Administrar workflows", "administration"),
+    ("alerts.view", "Ver alertas operativas", "bi"),
+    ("alerts.manage", "Gestionar alertas", "bi"),
     ("crm.read", "Leer CRM", "crm"),
     ("crm.manage", "Gestionar CRM", "crm"),
     ("crm.manage_own", "Gestionar CRM asignado", "crm"),
@@ -167,6 +180,8 @@ ROLE_PERMISSION_MAP = {
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
         "reports.view", "reports.export", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
         "audit.logs.view", "audit.logs.export", "menu.view",
+        "configuration.view", "configuration.manage", "configuration.catalogs.manage", "configuration.rules.manage",
+        "configuration.alerts.manage", "configuration.workflows.manage", "alerts.view", "alerts.manage",
     ],
     COORDINATOR: [
         "crm.read", "crm.manage", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
@@ -178,20 +193,20 @@ ROLE_PERMISSION_MAP = {
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
-        "reports.view", "reports.export", "menu.view",
+        "reports.view", "reports.export", "menu.view", "alerts.view",
     ],
     QUALITY_SUPERVISOR: [
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
         "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
         "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
-        "reports.view", "menu.view",
+        "reports.view", "menu.view", "alerts.view",
     ],
     AGENT: [
         "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update",
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "menu.view",
+        "collections.agreements.view", "documents.read", "documents.view", "menu.view", "alerts.view",
     ],
 }
 
@@ -203,7 +218,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
             "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
             "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
-            "reports.view", "audit.logs.view",
+            "reports.view", "audit.logs.view", "alerts.view",
         ],
     },
     "lawyer": {
@@ -212,7 +227,7 @@ SPECIALIZED_ROLE_DEFS = {
         "permissions": [
             "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
             "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
-            "documents.read", "documents.view", "documents.create",
+            "documents.read", "documents.view", "documents.create", "alerts.view",
         ],
     },
     "sales_leader": {
@@ -222,7 +237,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.clients.view", "sales.manage",
             "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export",
             "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
-            "reports.view",
+            "reports.view", "alerts.view",
         ],
     },
     "sales_advisor": {
@@ -231,7 +246,7 @@ SPECIALIZED_ROLE_DEFS = {
         "permissions": [
             "menu.view", "crm.read", "crm.clients.view", "sales.read_own", "sales.manage",
             "sales.leads.view", "sales.leads.create", "sales.leads.update",
-            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
+            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "alerts.view",
         ],
     },
     "collections_leader": {
@@ -251,7 +266,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
             "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
             "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
-            "reports.view", "audit.logs.view",
+            "reports.view", "audit.logs.view", "alerts.view",
         ],
     },
 }
@@ -266,6 +281,8 @@ MENU_DEFS = [
     ("Proyectos", "projects", "administration", "tenant.manage", "platform_admin", 35),
     ("Tipificaciones", "typifications", "collections", "collections.manage", "platform_admin", 40),
     ("Auditoria", "audit", "administration", "audit.logs.view", "platform_admin", 45),
+    ("Centro de Configuracion", "configuration", "administration", "configuration.view", "platform_admin", 47),
+    ("Alertas", "alerts", "bi", "alerts.view", "platform_admin", 48),
     ("Salud sistema", "system-health", "core", "health.view", "platform_admin", 50),
     ("Inicio empresa", "dashboard", "core", "menu.view", "company_admin", 1),
     ("Mi empresa", "tenant-settings", "administration", "tenant.settings.view", "company_admin", 5),
@@ -284,6 +301,8 @@ MENU_DEFS = [
     ("Ventas", "sales", "sales", "sales.leads.view", "company_admin", 100),
     ("Reportes BI", "reports", "bi", "reports.view", "company_admin", 110),
     ("Canales", "channels", "integrations", "integrations.channels.view", "company_admin", 120),
+    ("Centro de Configuracion", "configuration", "administration", "configuration.view", "company_admin", 125),
+    ("Alertas", "alerts", "bi", "alerts.view", "company_admin", 128),
     ("Auditoria", "audit", "administration", "audit.logs.view", "company_admin", 130),
     ("Inicio", "dashboard", "core", "menu.view", "operational_leader", 1),
     ("Cola de gestion", "queue", "collections", "collections.queue.view", "operational_leader", 10),
@@ -296,6 +315,7 @@ MENU_DEFS = [
     ("Documentos", "documents", "documents", "documents.view", "operational_leader", 70),
     ("Ventas", "sales", "sales", "sales.leads.view", "operational_leader", 80),
     ("Reportes BI", "reports", "bi", "reports.view", "operational_leader", 90),
+    ("Alertas", "alerts", "bi", "alerts.view", "operational_leader", 95),
     ("Inicio", "dashboard", "core", "menu.view", "operational_user", 1),
     ("Mi operacion", "queue", "collections", "collections.queue.view", "operational_user", 10),
     ("Clientes / terceros", "customers", "crm", "crm.clients.view", "operational_user", 20),
@@ -304,7 +324,86 @@ MENU_DEFS = [
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
     ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
+    ("Alertas", "alerts", "bi", "alerts.view", "operational_user", 70),
 ]
+
+CATALOG_DEFAULTS = [
+    ("collections", "customer_status", "SIN_CONTACTO", "Sin contacto", "#94a3b8", 10),
+    ("collections", "customer_status", "CONTACTADO", "Contactado", "#2563eb", 20),
+    ("collections", "customer_status", "PROMESA", "Promesa", "#f59e0b", 30),
+    ("collections", "customer_status", "ESCALADO", "Escalado", "#dc2626", 40),
+    ("collections", "risk", "BAJO", "Bajo", "#16a34a", 10),
+    ("collections", "risk", "MEDIO", "Medio", "#f59e0b", 20),
+    ("collections", "risk", "ALTO", "Alto", "#dc2626", 30),
+    ("legal", "process_type", "EJECUTIVO", "Ejecutivo singular", "#2563eb", 10),
+    ("legal", "process_stage", "RECIBIDO", "Recibido", "#64748b", 10),
+    ("legal", "process_stage", "ESTUDIO", "En estudio", "#2563eb", 20),
+    ("legal", "process_stage", "RADICADO", "Radicado", "#7c3aed", 30),
+    ("legal", "process_stage", "TRAMITE", "En tramite", "#f59e0b", 40),
+    ("legal", "process_stage", "AUDIENCIA", "Audiencia", "#dc2626", 50),
+    ("legal", "process_stage", "FALLO", "Fallo", "#16a34a", 60),
+    ("legal", "action_type", "REVISION", "Revision documental", "#2563eb", 10),
+    ("legal", "hearing_type", "AUDIENCIA", "Audiencia", "#dc2626", 10),
+    ("documents", "document_type", "PAGARE", "Pagare", "#2563eb", 10),
+    ("documents", "document_type", "ACUERDO", "Acuerdo de pago", "#16a34a", 20),
+    ("documents", "document_type", "DEMANDA", "Demanda", "#dc2626", 30),
+    ("sales", "lead_source", "DEMO", "Demo comercial", "#2563eb", 10),
+    ("sales", "opportunity_stage", "NEW", "Nuevo", "#64748b", 10),
+    ("sales", "opportunity_stage", "CONTACTED", "Contactado", "#2563eb", 20),
+    ("sales", "opportunity_stage", "PROPOSAL", "Propuesta", "#7c3aed", 30),
+    ("sales", "opportunity_stage", "NEGOTIATION", "Negociacion", "#f59e0b", 40),
+    ("sales", "opportunity_stage", "WON", "Ganado", "#16a34a", 50),
+    ("sales", "opportunity_stage", "LOST", "Perdido", "#dc2626", 60),
+]
+
+BUSINESS_RULE_DEFAULTS = [
+    ("collections", "sla", "CUSTOMER_WITHOUT_ACTIVITY", "Cliente sin gestion", '{"days": 7}', '{"alert": true}', "high"),
+    ("collections", "sla", "PROMISE_DUE_SOON", "Promesa proxima a vencer", '{"days": 2}', '{"alert": true}', "medium"),
+    ("legal", "sla", "LEGAL_DEADLINE_DUE_SOON", "Vencimiento juridico proximo", '{"days": 7}', '{"alert": true}', "high"),
+    ("legal", "sla", "LEGAL_CASE_WITHOUT_ACTION", "Caso sin actuacion", '{"days": 10}', '{"alert": true}', "high"),
+    ("sales", "sla", "LEAD_WITHOUT_FOLLOWUP", "Lead sin seguimiento", '{"days": 5}', '{"alert": true}', "medium"),
+    ("sales", "sla", "OPPORTUNITY_CLOSE_DUE_SOON", "Oportunidad proxima a cierre", '{"days": 7}', '{"alert": true}', "high"),
+]
+
+ALERT_RULE_DEFAULTS = [
+    ("collections", "CUSTOMER_WITHOUT_ACTIVITY", "Cliente sin gestion", "customer_without_activity", 7, "high", "collections_leader", "Cliente sin gestion reciente."),
+    ("collections", "PROMISE_DUE_SOON", "Promesa proxima/vencida", "promise_due_soon", 2, "medium", "collections_agent", "Confirmar promesa antes del vencimiento."),
+    ("legal", "LEGAL_DEADLINE_DUE_SOON", "Vencimiento juridico", "legal_deadline_due_soon", 7, "high", "lawyer", "Revisar termino procesal."),
+    ("legal", "LEGAL_HEARING_DUE_SOON", "Audiencia proxima", "legal_hearing_due_soon", 5, "high", "lawyer", "Preparar audiencia y soportes."),
+    ("legal", "LEGAL_CASE_WITHOUT_ACTION", "Caso sin actuacion", "legal_case_without_action", 10, "high", "legal_director", "Actualizar expediente juridico."),
+    ("sales", "LEAD_WITHOUT_FOLLOWUP", "Lead sin seguimiento", "lead_without_followup", 5, "medium", "sales_advisor", "Registrar contacto comercial."),
+    ("sales", "OPPORTUNITY_CLOSE_DUE_SOON", "Oportunidad proxima a cierre", "opportunity_close_due_soon", 7, "high", "sales_leader", "Actualizar plan de cierre."),
+]
+
+WORKFLOW_DEFAULTS = {
+    "legal": {
+        "code": "LEGAL_STANDARD",
+        "name": "Flujo juridico estandar",
+        "description": "Etapas base para expedientes de Collection & Legal CRM.",
+        "stages": [
+            ("RECIBIDO", "Recibido", "#64748b", 10, False),
+            ("ESTUDIO", "En estudio", "#2563eb", 20, False),
+            ("RADICADO", "Radicado", "#7c3aed", 30, False),
+            ("TRAMITE", "En tramite", "#f59e0b", 40, False),
+            ("AUDIENCIA", "Audiencia", "#dc2626", 50, False),
+            ("FALLO", "Fallo", "#16a34a", 60, False),
+            ("CERRADO", "Cerrado", "#0f766e", 70, True),
+        ],
+    },
+    "sales": {
+        "code": "SALES_PIPELINE",
+        "name": "Pipeline comercial estandar",
+        "description": "Etapas base para leads y oportunidades comerciales.",
+        "stages": [
+            ("NEW", "Nuevo", "#64748b", 10, False),
+            ("CONTACTED", "Contactado", "#2563eb", 20, False),
+            ("PROPOSAL", "Propuesta", "#7c3aed", 30, False),
+            ("NEGOTIATION", "Negociacion", "#f59e0b", 40, False),
+            ("WON", "Ganado", "#16a34a", 50, True),
+            ("LOST", "Perdido", "#dc2626", 60, True),
+        ],
+    },
+}
 
 DEMO_TENANTS = [
     {
@@ -560,6 +659,82 @@ def _seed_tenant_configuration(db: Session, tenant: Tenant) -> None:
         config = db.scalar(select(TenantConfiguration).where(TenantConfiguration.tenant_id == tenant.id, TenantConfiguration.key == key))
         if config is None:
             db.add(TenantConfiguration(tenant_id=tenant.id, key=key, value_json=f'"{value}"', is_active=True))
+
+
+def _seed_functional_configuration(db: Session, tenant: Tenant | None = None) -> None:
+    tenant_id = tenant.id if tenant else None
+    for module, catalog_type, code, label, color, order in CATALOG_DEFAULTS:
+        item = db.scalar(
+            select(FunctionalCatalog).where(
+                FunctionalCatalog.tenant_id == tenant_id,
+                FunctionalCatalog.module == module,
+                FunctionalCatalog.catalog_type == catalog_type,
+                FunctionalCatalog.code == code,
+            )
+        )
+        if item is None:
+            item = FunctionalCatalog(tenant_id=tenant_id, module=module, catalog_type=catalog_type, code=code, label=label)
+            db.add(item)
+        item.label = label
+        item.color = color
+        item.order = order
+        item.is_system = tenant_id is None
+        item.is_active = True
+    for module, rule_type, code, name, condition_json, action_json, severity in BUSINESS_RULE_DEFAULTS:
+        item = db.scalar(
+            select(BusinessRule).where(
+                BusinessRule.tenant_id == tenant_id,
+                BusinessRule.module == module,
+                BusinessRule.rule_type == rule_type,
+                BusinessRule.code == code,
+            )
+        )
+        if item is None:
+            item = BusinessRule(tenant_id=tenant_id, module=module, rule_type=rule_type, code=code, name=name)
+            db.add(item)
+        item.name = name
+        item.condition_json = condition_json
+        item.action_json = action_json
+        item.severity = severity
+        item.is_active = True
+    for module, code, name, condition_type, threshold_days, severity, target_role, message_template in ALERT_RULE_DEFAULTS:
+        item = db.scalar(select(AlertRule).where(AlertRule.tenant_id == tenant_id, AlertRule.module == module, AlertRule.code == code))
+        if item is None:
+            item = AlertRule(tenant_id=tenant_id, module=module, code=code, name=name, condition_type=condition_type)
+            db.add(item)
+        item.name = name
+        item.condition_type = condition_type
+        item.threshold_days = threshold_days
+        item.severity = severity
+        item.target_role = target_role
+        item.message_template = message_template
+        item.is_active = True
+    for module, definition in WORKFLOW_DEFAULTS.items():
+        workflow = db.scalar(
+            select(WorkflowDefinition).where(
+                WorkflowDefinition.tenant_id == tenant_id,
+                WorkflowDefinition.module == module,
+                WorkflowDefinition.code == definition["code"],
+            )
+        )
+        if workflow is None:
+            workflow = WorkflowDefinition(tenant_id=tenant_id, module=module, code=definition["code"], name=definition["name"])
+            db.add(workflow)
+            db.flush()
+        workflow.name = definition["name"]
+        workflow.description = definition["description"]
+        workflow.is_active = True
+        for code, name, color, order, is_final in definition["stages"]:
+            stage = db.scalar(select(WorkflowStage).where(WorkflowStage.workflow_id == workflow.id, WorkflowStage.code == code))
+            if stage is None:
+                stage = WorkflowStage(workflow_id=workflow.id, code=code, name=name)
+                db.add(stage)
+            stage.name = name
+            stage.color = color
+            stage.order = order
+            stage.is_final = is_final
+            stage.is_active = True
+    db.flush()
 
 
 def _get_or_create_demo_tenant(db: Session, tenant_def: dict) -> Tenant:
@@ -1014,6 +1189,7 @@ def _seed_secondary_demo_tenants(db: Session, tenants: dict[str, Tenant], module
             project = _get_or_create_project(db, tenant, code, name, description)
             _ensure_assignment(db, admin, project)
         _seed_tenant_configuration(db, tenant)
+        _seed_functional_configuration(db, tenant)
 
 
 def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_tenant: Tenant) -> None:
@@ -1022,6 +1198,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
     _ensure_subscription(db, andina, "business")
     _set_demo_modules(db, andina, modules, DEMO_TENANTS[0]["modules"])
     _seed_tenant_configuration(db, andina)
+    _seed_functional_configuration(db, andina)
 
     platform_demo = _get_or_create_demo_user(db, platform_tenant, DEMO_USER_DEFS[0][0], DEMO_USER_DEFS[0][1], DEMO_USER_DEFS[0][2], DEMO_USER_DEFS[0][3])
     platform_demo.leader_id = None
@@ -1119,6 +1296,7 @@ def bootstrap_platform(db: Session) -> None:
     _seed_plans(db)
     roles = _seed_roles_and_permissions(db, modules)
     _seed_menu(db, modules)
+    _seed_functional_configuration(db)
 
     tenant = db.scalar(select(Tenant).where(Tenant.slug == settings.platform_tenant_slug))
     if tenant is None:
@@ -1158,6 +1336,7 @@ def bootstrap_platform(db: Session) -> None:
         existing_tenant.secondary_color = existing_tenant.secondary_color or "#2563eb"
         existing_tenant.timezone = existing_tenant.timezone or "America/Bogota"
         _seed_tenant_configuration(db, existing_tenant)
+        _seed_functional_configuration(db, existing_tenant)
 
     _seed_tenant_modules(db, modules)
     if settings.enable_demo_seeds or settings.enable_demo_data:

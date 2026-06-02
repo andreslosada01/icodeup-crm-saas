@@ -146,3 +146,18 @@
 - Exportes de clientes y pagos requieren permiso.
 - Auditoria registra login, exportes y cambios criticos.
 - No versionar `.env`, bases locales, logs, media real ni secretos.
+## Checklist adicional Fase 8
+
+- Validar que `GET /api/configuration/catalogs` responda solo a perfiles con `configuration.view`.
+- Validar que Admin Empresa no cree ni modifique configuraciones de otro tenant.
+- Validar que Admin Empresa no pueda modificar plantillas globales `tenant_id = null`.
+- Validar que `GET /api/alerts` no exponga alertas de otro tenant.
+- Validar que agente vea solo alertas asignadas o de su operacion.
+- Validar que abogado vea alertas/casos juridicos asignados o permitidos.
+- Validar que comercial vea pipeline propio o tenant segun permisos.
+- Validar que `GET /api/legal/cases/{id}/timeline` bloquee casos de otro tenant.
+- Validar que `GET /api/legal/kanban` use solo casos visibles.
+- Validar que `GET /api/sales/pipeline` y `GET /api/sales/kanban` respeten asignacion y tenant.
+- Validar que Centro de Configuracion no aparezca en menu de usuarios operativos sin permiso.
+- Validar que Alertas aparezca solo con `alerts.view`.
+- Validar que el badge de alertas no bloquee navegacion ni rompa responsive.

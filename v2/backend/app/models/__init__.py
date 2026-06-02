@@ -1,5 +1,5 @@
 from app.models.audit import AuditLog
-from app.models.configuration import TenantConfiguration
+from app.models.configuration import AlertRule, BusinessRule, FunctionalCatalog, GeneratedAlert, TenantConfiguration, WorkflowDefinition, WorkflowStage, WorkflowTransition
 from app.models.crm import CommunicationChannel, Customer, ImportBatch, ManagementActivity, Payment, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, TypificationNode
 from app.models.documents import Document
 from app.models.identity import User, UserProjectAssignment
@@ -13,9 +13,13 @@ from app.models.tenant import Project, Tenant
 
 __all__ = [
     "AuditLog",
+    "AlertRule",
+    "BusinessRule",
     "CommunicationChannel",
     "Customer",
     "Document",
+    "FunctionalCatalog",
+    "GeneratedAlert",
     "ImportBatch",
     "Lead",
     "LegalAction",
@@ -44,4 +48,7 @@ __all__ = [
     "User",
     "UserProjectAssignment",
     "UserProfile",
+    "WorkflowDefinition",
+    "WorkflowStage",
+    "WorkflowTransition",
 ]

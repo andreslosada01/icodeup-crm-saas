@@ -31,6 +31,8 @@ ROLE_PERMISSION_FALLBACKS = {
         "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
         "reports.view", "reports.export", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
         "audit.logs.view", "audit.logs.export", "menu.view",
+        "configuration.view", "configuration.manage", "configuration.catalogs.manage", "configuration.rules.manage",
+        "configuration.alerts.manage", "configuration.workflows.manage", "alerts.view", "alerts.manage",
     },
     COORDINATOR: {
         "crm.manage", "crm.read", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
@@ -42,13 +44,14 @@ ROLE_PERMISSION_FALLBACKS = {
         "legal.manage", "legal.read", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
         "documents.manage", "documents.read", "documents.view", "documents.create", "documents.update",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
-        "reports.view", "reports.export", "menu.view",
+        "reports.view", "reports.export", "menu.view", "alerts.view",
     },
     QUALITY_SUPERVISOR: {
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
         "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
         "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
         "reports.view", "menu.view",
+        "alerts.view",
     },
     AGENT: {
         "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update",
@@ -56,6 +59,7 @@ ROLE_PERMISSION_FALLBACKS = {
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create", "collections.agreements.view", "documents.read", "documents.view",
         "menu.view",
+        "alerts.view",
     },
 }
 

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import administration, auth, crm, dashboard, documents, governance, health, legal, menu, sales, subscriptions, tenants, typifications
+from app.api.routes import administration, alerts, auth, configuration, crm, dashboard, documents, governance, health, legal, menu, sales, subscriptions, tenants, typifications
 from app.core.config import settings
 from app.db.session import SessionLocal, init_database
 from app.services.bootstrap_service import bootstrap_platform
@@ -21,6 +21,8 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(menu.router, prefix="/api/menu", tags=["menu"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(governance.router, prefix="/api/governance", tags=["governance"])
+app.include_router(configuration.router, prefix="/api/configuration", tags=["configuration"])
+app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
 app.include_router(administration.router, prefix="/api/admin", tags=["administration"])
 app.include_router(crm.router, prefix="/api/crm", tags=["crm"])
 app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["subscriptions"])

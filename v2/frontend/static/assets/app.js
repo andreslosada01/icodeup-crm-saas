@@ -6,6 +6,10 @@ const state = {
   admin: { overview: null, tenants: [], projects: [], users: [], roles: [], typifications: [] },
   governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null, securityInsights: [], effectiveAccess: null },
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], channels: [], typifications: [] },
+  configuration: { catalogs: [], rules: [], alertRules: [], workflows: [] },
+  alerts: { items: [], summary: null },
+  legal: { dashboard: null, kanban: null, cases: [] },
+  sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
   selectedCustomer: null,
   selectedActivities: [],
   queuePage: 1,
@@ -32,6 +36,8 @@ const titles = {
   plans: "Planes",
   subscriptions: "Suscripciones",
   modules: "Modulos",
+  configuration: "Centro de configuracion",
+  alerts: "Alertas",
   "tenant-settings": "Mi empresa",
   "company-users": "Usuarios de empresa",
   "roles-permissions": "Roles y permisos",
@@ -78,6 +84,7 @@ const sectionCategories = {
   "tenant-modules": "Administracion",
   branding: "Administracion",
   audit: "Administracion",
+  configuration: "Administracion",
   users: "Administracion",
   projects: "Administracion",
   typifications: "Administracion",
@@ -93,7 +100,8 @@ const sectionCategories = {
   sales: "Operacion",
   channels: "Operacion",
   parties: "Operacion",
-  reports: "Analitica"
+  reports: "Analitica",
+  alerts: "Analitica"
 };
 
 const sectionModules = {
@@ -103,6 +111,7 @@ const sectionModules = {
   plans: "administration",
   subscriptions: "administration",
   modules: "administration",
+  configuration: "administration",
   "tenant-settings": "administration",
   "company-users": "administration",
   "roles-permissions": "administration",
@@ -124,7 +133,8 @@ const sectionModules = {
   sales: "sales",
   channels: "integrations",
   parties: "crm",
-  reports: "bi"
+  reports: "bi",
+  alerts: "bi"
 };
 
 const moduleCopy = {
@@ -678,6 +688,30 @@ async function loadBi() {
   state.crm.bi = await api(`/api/crm/bi?${params}`);
 }
 
+async function loadPhase8Data() {
+  const allowed = (...sections) => menuHasSection(...sections);
+  const [catalogs, rules, alertRules, workflows, alertItems, alertSummary, legalDashboard, legalKanban, legalCases, salesDashboard, salesPipeline, salesKanban, leads, opportunities] = await Promise.all([
+    allowed("configuration") ? apiMaybe("/api/configuration/catalogs", []) : [],
+    allowed("configuration") ? apiMaybe("/api/configuration/rules", []) : [],
+    allowed("configuration") ? apiMaybe("/api/configuration/alert-rules", []) : [],
+    allowed("configuration") ? apiMaybe("/api/configuration/workflows", []) : [],
+    allowed("alerts", "dashboard", "reports") ? apiMaybe("/api/alerts?limit=50", []) : [],
+    allowed("alerts", "dashboard", "reports") ? apiMaybe("/api/alerts/summary", null) : null,
+    allowed("legal") ? apiMaybe("/api/legal/dashboard", null) : null,
+    allowed("legal") ? apiMaybe("/api/legal/kanban", null) : null,
+    allowed("legal") ? apiMaybe("/api/legal/cases", []) : [],
+    allowed("sales") ? apiMaybe("/api/sales/dashboard", null) : null,
+    allowed("sales") ? apiMaybe("/api/sales/pipeline", null) : null,
+    allowed("sales") ? apiMaybe("/api/sales/kanban", null) : null,
+    allowed("sales") ? apiMaybe("/api/sales/leads", []) : [],
+    allowed("sales") ? apiMaybe("/api/sales/opportunities", []) : []
+  ]);
+  state.configuration = { catalogs, rules, alertRules, workflows };
+  state.alerts = { items: alertItems, summary: alertSummary };
+  state.legal = { dashboard: legalDashboard, kanban: legalKanban, cases: legalCases };
+  state.sales = { dashboard: salesDashboard, pipeline: salesPipeline, kanban: salesKanban, leads, opportunities };
+}
+
 async function refreshAll() {
   await loadCoreData();
   renderDynamicMenu();
@@ -689,6 +723,9 @@ async function refreshAll() {
   }
   if (menuHasSection("reports")) {
     await optionalLoad("BI", loadBi);
+  }
+  if (menuHasSection("configuration", "alerts", "legal", "sales", "dashboard", "reports")) {
+    await optionalLoad("Fase 8", loadPhase8Data);
   }
   renderAll();
 }
@@ -1958,6 +1995,109 @@ function renderGovernanceTables() {
   document.querySelector("#taskTable") && (document.querySelector("#taskTable").innerHTML = table(["Cliente", "Saldo", "Riesgo", "Siguiente accion", ""], tasks, "No hay tareas asignadas."));
 }
 
+function renderConfigurationCenter() {
+  const catalogs = state.configuration.catalogs || [];
+  const rules = state.configuration.rules || [];
+  const alertRules = state.configuration.alertRules || [];
+  const workflows = state.configuration.workflows || [];
+  renderCardSet("#configurationKpis", [
+    { label: "Catalogos", value: catalogs.length, detail: "Valores funcionales por modulo y tenant.", tone: catalogs.length ? "green" : "yellow", action: "Estados, riesgos, documentos, etapas y fuentes." },
+    { label: "Reglas", value: rules.length, detail: "Reglas de negocio parametrizables.", tone: rules.length ? "blue" : "yellow", action: "SLAs, umbrales y escalamiento." },
+    { label: "Alertas", value: alertRules.length, detail: "Condiciones activas para motor transversal.", tone: alertRules.length ? "green" : "yellow", action: "Severidad, rol destino y mensaje." },
+    { label: "Workflows", value: workflows.length, detail: "Flujos de etapas por modulo.", tone: workflows.length ? "blue" : "yellow", action: "Juridico y ventas ya usan esta base." },
+  ]);
+  const catalogRows = catalogs.slice(0, 40).map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.catalog_type)}</td><td><span class="workflow-dot" style="background:${escapeHtml(item.color || "#94a3b8")}"></span>${item.is_active ? "Activo" : "Inactivo"}</td><td>${item.tenant_id ? "Tenant" : "Global"}</td></tr>`).join("");
+  document.querySelector("#configurationCatalogs") && (document.querySelector("#configurationCatalogs").innerHTML = table(["Catalogo", "Modulo", "Tipo", "Estado", "Alcance"], catalogRows, "Sin catalogos configurados."));
+  const ruleRows = rules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.rule_type)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join("");
+  document.querySelector("#configurationRules") && (document.querySelector("#configurationRules").innerHTML = table(["Regla", "Modulo", "Tipo", "Severidad", "Estado"], ruleRows, "Sin reglas configuradas."));
+  const alertRows = alertRules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.condition_type)}</td><td>${item.threshold_days} dias</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.target_role || "-")}</td></tr>`).join("");
+  document.querySelector("#configurationAlertRules") && (document.querySelector("#configurationAlertRules").innerHTML = table(["Alerta", "Modulo", "Condicion", "Umbral", "Severidad", "Rol"], alertRows, "Sin alertas configurables."));
+  document.querySelector("#configurationWorkflows") && (document.querySelector("#configurationWorkflows").innerHTML = workflows.length
+    ? workflows.map((item) => `<article class="configuration-card"><span>${escapeHtml(item.module)}</span><strong>${escapeHtml(item.name)}</strong><p>${escapeHtml(item.description || "Workflow funcional parametrizable.")}</p><small>${item.tenant_id ? "Tenant" : "Plantilla global"} - ${item.is_active ? "Activo" : "Inactivo"}</small></article>`).join("")
+    : `<article class="empty-state"><strong>Sin workflows</strong><p>Los flujos configurables apareceran aqui.</p></article>`);
+}
+
+function renderAlertsCenter() {
+  const alerts = state.alerts.items || [];
+  const summary = state.alerts.summary || { total: alerts.length, critical: 0, high: 0, medium: 0, low: 0, by_module: {} };
+  const topbarBadge = document.querySelector("#alertTopBadge");
+  if (topbarBadge) {
+    topbarBadge.textContent = `${summary.critical || 0} criticas`;
+    topbarBadge.className = (summary.critical || 0) ? "status-pill status-pill-warn" : "status-pill status-pill-ok";
+  }
+  renderCardSet("#alertSummaryCards", [
+    { label: "Alertas abiertas", value: summary.total || alerts.length, detail: "Motor transversal por tenant, modulo y asignacion.", tone: summary.total ? "yellow" : "green", action: "Priorizar por severidad y fecha limite." },
+    { label: "Criticas", value: summary.critical || 0, detail: "Requieren intervencion inmediata.", tone: summary.critical ? "red" : "green", action: "Escalar a responsable del modulo." },
+    { label: "Altas", value: summary.high || 0, detail: "Riesgos operativos de corto plazo.", tone: summary.high ? "yellow" : "green", action: "Plan diario de control." },
+    { label: "Modulos", value: Object.keys(summary.by_module || {}).length, detail: "Cobertura transversal del motor.", tone: "blue", action: "Cobranzas, juridico, ventas y administracion." },
+  ]);
+  const rows = alerts.map((item) => `<tr><td><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.message)}</small></td><td>${escapeHtml(item.module)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${dateOnly(item.due_at)}</td><td>${escapeHtml(item.entity_type)} #${escapeHtml(item.entity_id || "-")}</td><td>${escapeHtml(item.action || "-")}</td></tr>`).join("");
+  document.querySelector("#alertCenterTable") && (document.querySelector("#alertCenterTable").innerHTML = table(["Alerta", "Modulo", "Severidad", "Fecha", "Entidad", "Accion sugerida"], rows, "Sin alertas abiertas para tu alcance."));
+}
+
+function renderKanban(selector, columns, cardRenderer) {
+  const container = document.querySelector(selector);
+  if (!container) return;
+  container.innerHTML = (columns || []).length
+    ? columns.map((column) => `
+      <article class="kanban-column">
+        <header><span class="workflow-dot" style="background:${escapeHtml(column.stage?.color || "#94a3b8")}"></span><strong>${escapeHtml(column.stage?.name || column.stage?.code || "Etapa")}</strong><small>${column.count || 0}</small></header>
+        <div>${(column.items || []).slice(0, 8).map(cardRenderer).join("") || `<p class="empty">Sin registros.</p>`}</div>
+        <footer>${money(column.amount || 0)}</footer>
+      </article>
+    `).join("")
+    : `<article class="empty-state"><strong>Sin columnas</strong><p>Cuando existan workflows o datos, el kanban se activara aqui.</p></article>`;
+}
+
+function renderLegalAdvanced() {
+  const dashboard = state.legal.dashboard;
+  const kanban = state.legal.kanban;
+  if (!dashboard && !kanban) return;
+  const kpis = dashboard?.kpis || {};
+  renderCardSet("#legalKpis", [
+    { label: "Casos activos", value: kpis.active_cases || 0, detail: "Expedientes abiertos en el alcance autorizado.", tone: "blue", action: "Gestionar por etapa y riesgo." },
+    { label: "Vencidos", value: kpis.overdue_deadlines || 0, detail: "Terminos juridicos fuera de fecha.", tone: kpis.overdue_deadlines ? "red" : "green", action: "Priorizar revision procesal." },
+    { label: "Audiencias", value: kpis.upcoming_hearings || 0, detail: "Audiencias futuras registradas.", tone: kpis.upcoming_hearings ? "yellow" : "green", action: "Preparar agenda y documentos." },
+    { label: "Riesgo alto", value: kpis.high_risk_cases || 0, detail: "Casos con criticidad juridica.", tone: kpis.high_risk_cases ? "red" : "green", action: "Validar estrategia y responsable." },
+  ]);
+  renderKanban("#legalKanbanBoard", kanban?.columns || [], (item) => `
+    <article class="kanban-card">
+      <strong>${escapeHtml(item.case_number || `Caso ${item.id}`)}</strong>
+      <p>${money(item.amount || 0)} - Riesgo ${escapeHtml(item.risk || "-")}</p>
+      <small>Vence: ${dateOnly(item.next_deadline_at)}</small>
+    </article>
+  `);
+  const deadlineRows = (dashboard?.upcoming_deadlines || []).map((item) => `<tr><td><strong>${escapeHtml(item.title)}</strong><small>Caso #${item.case_id}</small></td><td>${dateOnly(item.due_at)}</td><td><span class="badge ${severityClass(item.priority)}">${escapeHtml(item.priority)}</span></td><td>${escapeHtml(item.status)}</td></tr>`).join("");
+  document.querySelector("#legalDeadlineTable") && (document.querySelector("#legalDeadlineTable").innerHTML = table(["Vencimiento", "Fecha", "Prioridad", "Estado"], deadlineRows, "Sin vencimientos juridicos visibles."));
+  const caseRows = (state.legal.cases || []).slice(0, 12).map((item) => `<tr><td><strong>${escapeHtml(item.case_number || `Caso ${item.id}`)}</strong><small>${escapeHtml(item.process_type)}</small></td><td>${escapeHtml(item.stage || item.status)}</td><td>${money(item.amount)}</td><td><span class="badge ${severityClass(item.risk)}">${escapeHtml(item.risk)}</span></td><td>${dateOnly(item.next_deadline_at)}</td></tr>`).join("");
+  document.querySelector("#legalCaseTable") && (document.querySelector("#legalCaseTable").innerHTML = table(["Caso", "Etapa", "Monto", "Riesgo", "Proximo vencimiento"], caseRows, "Sin casos juridicos."));
+}
+
+function renderSalesAdvanced() {
+  const dashboard = state.sales.dashboard;
+  const pipeline = state.sales.pipeline;
+  const kanban = state.sales.kanban;
+  if (!dashboard && !pipeline && !kanban) return;
+  const kpis = dashboard?.kpis || {};
+  renderCardSet("#salesKpis", [
+    { label: "Leads activos", value: kpis.active_leads || 0, detail: "Prospectos visibles para tu rol.", tone: "blue", action: "Convertir los mas maduros a oportunidad." },
+    { label: "Oportunidades", value: kpis.open_opportunities || 0, detail: "Pipeline comercial abierto.", tone: "green", action: "Gestionar por etapa y probabilidad." },
+    { label: "Valor pipeline", value: money(kpis.pipeline_value || 0), detail: "Valor bruto de oportunidades abiertas.", tone: "yellow", action: "Priorizar valor y fecha esperada." },
+    { label: "Ponderado", value: money(kpis.weighted_pipeline || 0), detail: `Tasa estimada ${kpis.estimated_rate || 0}%.`, tone: "green", action: "Usar para forecast comercial." },
+  ]);
+  renderKanban("#salesKanbanBoard", kanban?.columns || [], (item) => `
+    <article class="kanban-card">
+      <strong>${escapeHtml(item.name)}</strong>
+      <p>${money(item.amount || 0)} - ${item.probability || 0}%</p>
+      <small>Cierre: ${dateOnly(item.expected_close_date)}</small>
+    </article>
+  `);
+  const pipelineRows = (pipeline?.stages || []).map((item) => `<tr><td><strong>${escapeHtml(item.stage?.name || item.stage?.code)}</strong></td><td>${item.count}</td><td>${money(item.amount)}</td><td>${money(item.weighted_amount)}</td><td>${item.probability_avg}%</td></tr>`).join("");
+  document.querySelector("#salesPipelineTable") && (document.querySelector("#salesPipelineTable").innerHTML = table(["Etapa", "Oportunidades", "Valor", "Ponderado", "Prob. prom."], pipelineRows, "Sin pipeline comercial."));
+  const leadRows = (state.sales.leads || []).slice(0, 12).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.company || "-")}</small></td><td>${escapeHtml(item.source || "-")}</td><td>${escapeHtml(item.interest || "-")}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.priority)}</td></tr>`).join("");
+  document.querySelector("#salesLeadTable") && (document.querySelector("#salesLeadTable").innerHTML = table(["Lead", "Fuente", "Interes", "Estado", "Prioridad"], leadRows, "Sin leads visibles."));
+}
+
 function renderAll() {
   fillSelects();
   renderRoleDashboard();
@@ -1971,6 +2111,10 @@ function renderAll() {
   renderAdminTables();
   renderGovernanceTables();
   renderModuleInsights();
+  renderConfigurationCenter();
+  renderAlertsCenter();
+  renderLegalAdvanced();
+  renderSalesAdvanced();
 }
 
 function formPayload(form) {

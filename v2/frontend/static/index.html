@@ -92,6 +92,7 @@
           <div class="topbar-meta">
             <span id="topbarTenant" class="status-pill">Workspace activo</span>
             <span id="systemStatusPill" class="status-pill status-pill-ok">Sistema operativo</span>
+            <span id="alertTopBadge" class="status-pill status-pill-ok">0 criticas</span>
             <span id="demoModeBadge" class="status-pill demo-mode-badge hidden">Data ficticia de demostracion</span>
             <div class="user-pill">
               <span id="sessionUser">Sesion activa</span>
@@ -279,6 +280,56 @@
             <div id="tenantModuleInsights" class="module-insight-grid"></div>
             <div id="tenantModuleCatalog" class="module-catalog"></div>
             <div id="tenantModuleTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="configuration" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <h2>Centro de Configuracion</h2>
+                <p>Parametriza catalogos, reglas, alertas y workflows sin tocar codigo ni base de datos.</p>
+              </div>
+            </div>
+            <div id="configurationKpis" class="intelligence-grid"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Catalogos funcionales</h2><p>Estados, riesgos, documentos, etapas y fuentes por modulo.</p></div></div>
+              <div id="configurationCatalogs" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Reglas de negocio</h2><p>SLAs, umbrales y acciones parametrizables.</p></div></div>
+              <div id="configurationRules" class="table-wrap"></div>
+            </article>
+          </div>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Reglas de alertas</h2><p>Condiciones, severidad, rol destino y mensaje.</p></div></div>
+              <div id="configurationAlertRules" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Workflows</h2><p>Flujos configurables por modulo y tenant.</p></div></div>
+              <div id="configurationWorkflows" class="configuration-grid"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="alerts" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <h2>Centro de alertas</h2>
+                <p>Priorizacion transversal de cobranzas, juridico, ventas y administracion.</p>
+              </div>
+            </div>
+            <div id="alertSummaryCards" class="intelligence-grid"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Alertas abiertas</h2><p>Motor dinamico basado en reglas configurables y datos actuales.</p></div>
+            </div>
+            <div id="alertCenterTable" class="table-wrap"></div>
           </article>
         </section>
 
@@ -488,17 +539,32 @@
         </section>
 
         <section id="legal" class="section">
-          <article class="module-placeholder">
-            <div>
-              <p class="eyebrow">Collection & Legal CRM</p>
-              <h2>Gestion juridica</h2>
-              <p>Centraliza expedientes, actuaciones, audiencias, vencimientos, etapas procesales y riesgo legal por cliente sin duplicar la vision 360 del tercero.</p>
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Collection & Legal CRM</p>
+                <h2>Gestion juridica operativa</h2>
+                <p>Expedientes, etapas, vencimientos, audiencias y riesgo legal con lectura tipo workspace.</p>
+              </div>
             </div>
-            <div class="module-roadmap">
-              <span>Endpoint base: /api/legal</span>
-              <span>Activacion comercial sugerida: bandeja juridica, agenda de vencimientos y matriz de riesgo.</span>
-            </div>
+            <div id="legalKpis" class="intelligence-grid"></div>
           </article>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Kanban procesal</h2><p>Etapas configurables desde el Centro de Configuracion.</p></div>
+            </div>
+            <div id="legalKanbanBoard" class="kanban-board"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Agenda juridica</h2><p>Vencimientos proximos y vencidos.</p></div></div>
+              <div id="legalDeadlineTable" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Expedientes</h2><p>Casos visibles segun rol, tenant y asignacion.</p></div></div>
+              <div id="legalCaseTable" class="table-wrap"></div>
+            </article>
+          </div>
         </section>
 
         <section id="documents" class="section">
@@ -516,17 +582,32 @@
         </section>
 
         <section id="sales" class="section">
-          <article class="module-placeholder">
-            <div>
-              <p class="eyebrow">Expansion CRM 360</p>
-              <h2>Ventas y CRM 360</h2>
-              <p>Base inicial para leads, oportunidades y pipeline comercial, preparada para evolucionar la plataforma hacia relacionamiento 360.</p>
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Expansion CRM 360</p>
+                <h2>Pipeline comercial</h2>
+                <p>Leads, oportunidades, valor ponderado, probabilidad y forecast comercial.</p>
+              </div>
             </div>
-            <div class="module-roadmap">
-              <span>Endpoint base: /api/sales</span>
-              <span>Activacion comercial sugerida: tablero comercial, pipeline y conversion a cliente.</span>
-            </div>
+            <div id="salesKpis" class="intelligence-grid"></div>
           </article>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Kanban comercial</h2><p>Etapas configurables para convertir leads en oportunidades y clientes.</p></div>
+            </div>
+            <div id="salesKanbanBoard" class="kanban-board"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Pipeline por etapa</h2><p>Valor bruto y ponderado por probabilidad.</p></div></div>
+              <div id="salesPipelineTable" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Leads activos</h2><p>Prospectos visibles para el perfil comercial.</p></div></div>
+              <div id="salesLeadTable" class="table-wrap"></div>
+            </article>
+          </div>
         </section>
 
         <section id="reports" class="section">
