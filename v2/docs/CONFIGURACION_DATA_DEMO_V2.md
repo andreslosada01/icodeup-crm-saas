@@ -41,6 +41,18 @@ No es necesario editar `.env` para una ejecucion puntual.
 - Documentos como metadatos ficticios.
 - Leads y oportunidades.
 
+## Perfiles especializados Fase 6
+
+El bootstrap demo tambien configura roles especializados por tenant para que la demo muestre permisos mas realistas:
+
+- `abogado.andina@demo.icodeup.local`: rol especializado `lawyer`.
+- `comercial.andina@demo.icodeup.local`: rol especializado `sales_advisor`.
+- `coord.cobranzas.andina@demo.icodeup.local`: rol especializado `collections_leader`.
+- `gestor1.andina@demo.icodeup.local` y `gestor2.andina@demo.icodeup.local`: rol especializado `collections_agent`.
+- `calidad.andina@demo.icodeup.local`: rol especializado `tenant_auditor`.
+
+`User.role` se mantiene como fallback tecnico, pero el acceso real de estos usuarios se controla con `UserProfile.role_id` y `RolePermission`.
+
 ## Idempotencia
 
 El bootstrap evita duplicados usando:

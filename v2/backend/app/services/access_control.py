@@ -54,14 +54,29 @@ ROLE_PERMISSION_FALLBACKS = {
         "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update",
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
-        "collections.payments.view", "collections.payments.create", "documents.read", "documents.view",
-        "sales.read_own", "sales.leads.view", "sales.opportunities.view", "menu.view",
+        "collections.payments.view", "collections.payments.create", "collections.agreements.view", "documents.read", "documents.view",
+        "menu.view",
     },
 }
 
 
 def get_user_profile(db: Session, user: User) -> UserProfile | None:
     return db.scalar(select(UserProfile).where(UserProfile.user_id == user.id))
+
+
+def get_profile_role(db: Session, user: User) -> Role | None:
+    profile = get_user_profile(db, user)
+    if not profile or not profile.role_id:
+        return None
+    role = db.get(Role, profile.role_id)
+    if role is None or not role.is_active:
+        return None
+    return role
+
+
+def get_profile_role_code(db: Session, user: User) -> str | None:
+    role = get_profile_role(db, user)
+    return role.code if role else None
 
 
 def is_platform_admin(db: Session, user: User) -> bool:
@@ -75,13 +90,18 @@ def is_company_admin(db: Session, user: User) -> bool:
 
 
 def sync_user_profile(db: Session, user: User) -> UserProfile:
-    role = db.scalar(select(Role).where(Role.tenant_id.is_(None), Role.code == user.role))
+    legacy_role = db.scalar(select(Role).where(Role.tenant_id.is_(None), Role.code == user.role))
     profile = get_user_profile(db, user)
     if profile is None:
         profile = UserProfile(user_id=user.id)
         db.add(profile)
+    current_role = db.get(Role, profile.role_id) if profile.role_id else None
     profile.tenant_id = user.tenant_id
-    profile.role_id = role.id if role else profile.role_id
+    if legacy_role and (
+        profile.role_id is None
+        or (current_role is not None and current_role.tenant_id is None and current_role.code in ROLE_PERMISSION_FALLBACKS)
+    ):
+        profile.role_id = legacy_role.id
     profile.is_platform_admin = user.role == PLATFORM_ADMIN
     profile.is_company_admin = user.role == TENANT_ADMIN
     profile.status = user.status
@@ -122,22 +142,26 @@ def user_has_module(db: Session, user: User, module_code: str, tenant_id: int | 
     return bool(module and module.is_enabled and module.enabled)
 
 
-def user_has_permission(db: Session, user: User, permission_code: str) -> bool:
+def get_user_permissions(db: Session, user: User) -> set[str]:
     if is_platform_admin(db, user):
-        return True
-    fallbacks = ROLE_PERMISSION_FALLBACKS.get(user.role, set())
-    if "*" in fallbacks or permission_code in fallbacks:
-        return True
+        return {"*"}
     profile = get_user_profile(db, user)
-    if not profile or not profile.role_id:
-        return False
-    return bool(
-        db.scalar(
-            select(RolePermission.id)
-            .join(Permission, Permission.id == RolePermission.permission_id)
-            .where(RolePermission.role_id == profile.role_id, Permission.code == permission_code)
-        )
-    )
+    if profile and profile.role_id:
+        role = db.get(Role, profile.role_id)
+        if role is not None and role.is_active:
+            return set(
+                db.scalars(
+                    select(Permission.code)
+                    .join(RolePermission, Permission.id == RolePermission.permission_id)
+                    .where(RolePermission.role_id == role.id)
+                )
+            )
+    return set(ROLE_PERMISSION_FALLBACKS.get(user.role, set()))
+
+
+def user_has_permission(db: Session, user: User, permission_code: str) -> bool:
+    permissions = get_user_permissions(db, user)
+    return "*" in permissions or permission_code in permissions
 
 
 def require_module(db: Session, user: User, module_code: str, tenant_id: int | None = None) -> None:
