@@ -425,17 +425,18 @@ nav {
 }
 
 .nav-item {
-  min-height: 40px;
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  min-height: 38px;
+  max-height: 44px;
+  display: flex;
   align-items: center;
   gap: 10px;
   border-radius: 8px;
-  padding: 0 12px;
+  padding: 9px 12px;
   color: #d9eeea;
   background: transparent;
   text-align: left;
   font-weight: 800;
+  overflow: hidden;
 }
 
 .nav-item:hover,
@@ -444,8 +445,8 @@ nav {
   background: rgba(21, 149, 111, 0.28);
 }
 
-.nav-item span {
-  display: block;
+.nav-label {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -454,7 +455,17 @@ nav {
 .nav-icon {
   width: 18px;
   height: 18px;
+  flex: 0 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: currentColor;
+}
+
+.nav-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .sidebar-status {

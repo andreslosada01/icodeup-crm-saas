@@ -462,7 +462,7 @@ function iconForSection(section) {
     audit: '<path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/>'
   };
   const path = paths[section] || paths.dashboard;
-  return `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
+  return `<span class="nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg></span>`;
 }
 
 function limitText(value) {
@@ -599,7 +599,7 @@ function renderDynamicMenu() {
         <div class="nav-group">
           <p>${escapeHtml(category)}</p>
           ${groupItems
-            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span>${escapeHtml(item.label)}</span></button>`)
+            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span class="nav-label">${escapeHtml(item.label)}</span></button>`)
             .join("")}
         </div>
       `
@@ -1569,10 +1569,18 @@ async function submitActivity(event) {
     promise_amount: form.elements.promise_amount.value ? Number(form.elements.promise_amount.value) : null,
     promise_due_date: toDateTime(form.elements.promise_due_date.value)
   };
+  if (!body.result) {
+    showToast("warning", "Selecciona un resultado de gestion.");
+    return;
+  }
+  if (!String(body.note || "").trim()) {
+    showToast("warning", "Registra una nota para guardar la gestion.");
+    form.elements.note?.focus();
+    return;
+  }
   if (message) message.textContent = "";
   await runAction(button, async () => {
     await api(`/api/crm/customers/${customerId}/activities`, { method: "POST", body: JSON.stringify(body) });
-    showToast("success", "Gestion guardada correctamente.");
     form.reset();
     await loadCrmData();
     await loadBi();
@@ -1581,6 +1589,7 @@ async function submitActivity(event) {
     renderAll();
     if (!document.querySelector("#managementDrawer")?.classList.contains("hidden")) renderManagementDrawer();
     if (message) message.textContent = "Gestion guardada correctamente.";
+    showToast("success", "Gestion guardada correctamente.");
   }, "Guardando...");
 }
 

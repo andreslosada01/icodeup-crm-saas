@@ -10,7 +10,8 @@ from app.api.deps import current_user
 from app.db.session import get_db
 from app.models import ManagementActivity, PaymentPromise, TypificationNode, User
 from app.schemas.crm import ActivityCreate, ActivityOut
-from app.services.access_control import require_permission, user_has_permission
+from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, TENANT_ADMIN
+from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, require_permission, user_has_permission
 from app.services.audit_service import record_audit
 
 from .access import activity_to_out, customer_for_access, ensure_read_access
@@ -18,6 +19,17 @@ from .utils import next_action_for, priority_score
 
 
 router = APIRouter()
+
+
+def _can_create_activity(db: Session, user: User) -> bool:
+    if is_platform_admin(db, user) or is_company_admin(db, user):
+        return True
+    if user.role in {PLATFORM_ADMIN, TENANT_ADMIN, COORDINATOR}:
+        return True
+    if user_has_permission(db, user, "crm.activities.create"):
+        return True
+    profile_role = get_profile_role_code(db, user)
+    return user.role == AGENT and profile_role in {"collections_agent", "collections_leader"}
 
 
 @router.get("/customers/{customer_id}/activities", response_model=list[ActivityOut])
@@ -32,8 +44,8 @@ def list_activities(customer_id: int, db: Session = Depends(get_db), user: User 
 
 @router.post("/customers/{customer_id}/activities", response_model=ActivityOut, status_code=status.HTTP_201_CREATED)
 def create_activity(customer_id: int, payload: ActivityCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ActivityOut:
-    if not user_has_permission(db, user, "crm.activities.create"):
-        require_permission(db, user, "crm.clients.update")
+    if not _can_create_activity(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para gestionar este cliente.")
     ensure_read_access(user)
     customer = customer_for_access(db, customer_id, user, write=True)
     typification = db.get(TypificationNode, payload.typification_id) if payload.typification_id else None

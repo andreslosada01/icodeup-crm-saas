@@ -69,7 +69,7 @@ ROLE_PERMISSION_FALLBACKS = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create", "collections.agreements.view", "documents.read", "documents.view",
-        "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
+        "typifications.view", "demographics.view", "excel_web.view", "excel_web.query",
         "menu.view",
         "alerts.view",
     },
