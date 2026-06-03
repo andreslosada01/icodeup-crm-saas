@@ -258,7 +258,7 @@ ROLE_PERMISSION_MAP = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query", "menu.view", "alerts.view",
+        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "demographics.view", "excel_web.view", "excel_web.query", "menu.view", "alerts.view",
     ],
 }
 
@@ -384,7 +384,6 @@ MENU_DEFS = [
     ("Promesas", "promises", "collections", "collections.promises.view", "operational_user", 30),
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
-    ("Grabaciones", "recordings", "collections", "recordings.view", "operational_user", 55),
     ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
     ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_user", 65),
     ("Alertas", "alerts", "bi", "alerts.view", "operational_user", 70),
@@ -606,10 +605,12 @@ def _seed_roles_and_permissions(db: Session, modules: dict[str, Module]) -> dict
     db.flush()
     for role_code, permission_codes in ROLE_PERMISSION_MAP.items():
         role = roles[role_code]
-        existing = {
-            item.permission_id
-            for item in db.scalars(select(RolePermission).where(RolePermission.role_id == role.id))
-        }
+        current_links = list(db.scalars(select(RolePermission).where(RolePermission.role_id == role.id)))
+        target_permission_ids = {permissions[permission_code].id for permission_code in permission_codes}
+        for link in current_links:
+            if link.permission_id not in target_permission_ids:
+                db.delete(link)
+        existing = {item.permission_id for item in current_links if item.permission_id in target_permission_ids}
         for permission_code in permission_codes:
             permission = permissions[permission_code]
             if permission.id not in existing:

@@ -10,7 +10,7 @@ const state = {
   alerts: { items: [], summary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
-  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
+  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   selectedCustomer: null,
   selectedActivities: [],
   queuePage: 1,
@@ -303,6 +303,64 @@ async function apiMaybe(path, fallback, options = {}) {
   }
 }
 
+function ensureToastContainer() {
+  let container = document.querySelector("#toastContainer");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    container.className = "toast-container";
+    container.setAttribute("aria-live", "polite");
+    document.body.appendChild(container);
+  }
+  return container;
+}
+
+function showToast(type = "info", message = "Accion procesada.") {
+  const container = ensureToastContainer();
+  const toast = document.createElement("article");
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `<strong>${escapeHtml(typeLabel(type))}</strong><span>${escapeHtml(message)}</span>`;
+  container.appendChild(toast);
+  window.setTimeout(() => toast.classList.add("leaving"), 3600);
+  window.setTimeout(() => toast.remove(), 4300);
+}
+
+function typeLabel(type) {
+  return {
+    success: "Operacion exitosa",
+    error: "Accion no completada",
+    warning: "Revisa la informacion",
+    info: "Informacion"
+  }[type] || "Informacion";
+}
+
+function setButtonLoading(button, loading, text = "Procesando...") {
+  if (!button) return;
+  if (loading) {
+    button.dataset.originalText = button.textContent;
+    button.disabled = true;
+    button.textContent = text;
+  } else {
+    button.disabled = false;
+    button.textContent = button.dataset.originalText || button.textContent;
+    delete button.dataset.originalText;
+  }
+}
+
+async function runAction(button, action, loadingText = "Procesando...") {
+  setButtonLoading(button, true, loadingText);
+  try {
+    const result = await action();
+    return result;
+  } catch (error) {
+    console.warn(error);
+    showToast("error", error.message || "No fue posible completar la accion.");
+    throw error;
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 async function downloadCsv(path, fileName) {
   const response = await fetch(path, {
     headers: {
@@ -377,6 +435,34 @@ function moduleMeta(code, fallback = {}) {
 
 function moduleEnabled(module) {
   return module.enabled !== false && module.is_enabled !== false;
+}
+
+function iconForSection(section) {
+  const paths = {
+    dashboard: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10h14V10"/>',
+    queue: '<path d="M4 6h16"/><path d="M4 12h10"/><path d="M4 18h7"/><path d="m16 16 2 2 4-5"/>',
+    customers: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    promises: '<path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="m8 16 2 2 5-5"/>',
+    payments: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/>',
+    agreements: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6"/><path d="M9 14h6"/><path d="M9 18h4"/>',
+    legal: '<path d="M12 3v18"/><path d="M5 7h14"/><path d="m6 7-3 6h6z"/><path d="m18 7-3 6h6z"/>',
+    documents: '<path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h4"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+    sales: '<path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 15 4-4 3 3 5-7"/>',
+    reports: '<path d="M4 19V5"/><path d="M9 19v-7"/><path d="M14 19V9"/><path d="M19 19V3"/>',
+    channels: '<path d="M4 12h5"/><path d="M15 12h5"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/>',
+    recordings: '<rect x="3" y="7" width="18" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>',
+    uploads: '<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/>',
+    integrations: '<path d="M8 7V3"/><path d="M16 7V3"/><path d="M7 7h10v5a5 5 0 0 1-10 0z"/><path d="M12 17v4"/>',
+    configuration: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1V21a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-.4-1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1-.4H3a2 2 0 1 1 0-4h.08a1.7 1.7 0 0 0 1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.11 3.4l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1V3a2 2 0 1 1 4 0v.08a1.7 1.7 0 0 0 .4 1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.2.35.4.65.6 1 .3.2.62.35 1 .4H21a2 2 0 1 1 0 4h-.08a1.7 1.7 0 0 0-1 .4 1.7 1.7 0 0 0-.52.6z"/>',
+    alerts: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+    "excel-web": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M9 4v16"/><path d="M15 4v16"/>',
+    governance: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
+    tenants: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-7h6v7"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M16 11h6"/>',
+    audit: '<path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/>'
+  };
+  const path = paths[section] || paths.dashboard;
+  return `<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
 }
 
 function limitText(value) {
@@ -513,7 +599,7 @@ function renderDynamicMenu() {
         <div class="nav-group">
           <p>${escapeHtml(category)}</p>
           ${groupItems
-            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}"><span>${escapeHtml(item.label)}</span></button>`)
+            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span>${escapeHtml(item.label)}</span></button>`)
             .join("")}
         </div>
       `
@@ -733,7 +819,7 @@ async function loadPhase8BData() {
   const [trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult, providers, integrationChannels, templates, webhooks, events] = await Promise.all([
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/trees", []) : [],
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/combinations", []) : [],
-    allowed("recordings", "queue", "customers") ? apiMaybe("/api/recordings", []) : [],
+    allowed("recordings") ? apiMaybe("/api/recordings", []) : [],
     allowed("uploads") ? apiMaybe("/api/uploads/batches", []) : [],
     allowed("uploads", "queue", "customers") ? apiMaybe("/api/uploads/demographics?page_size=50", []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/sources", []) : [],
@@ -745,7 +831,7 @@ async function loadPhase8BData() {
     allowed("integrations") ? apiMaybe("/api/integrations/webhooks", []) : [],
     allowed("integrations") ? apiMaybe("/api/integrations/events", []) : []
   ]);
-  state.ops = { trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult, providers, integrationChannels, templates, webhooks, events };
+  state.ops = { ...state.ops, trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult: state.ops.excelResult || excelResult, providers, integrationChannels, templates, webhooks, events };
 }
 
 async function refreshAll() {
@@ -1341,7 +1427,7 @@ function renderQueueDetail() {
       <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
       <a href="${channelHref("email", customer)}">Email</a>
     </div>
-    <form id="activityForm" class="form-grid management-grid">
+    <form id="activityForm" class="form-grid management-grid" data-customer-id="${customer.id}">
       <label>Tipificacion<select name="typification_id">${typificationOptionsForCustomer(customer)}</select></label>
       <label>Canal<select name="channel"><option value="phone">Llamada</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="manual">Manual</option></select></label>
       <label>Resultado<select name="result"><option>Contactado</option><option>Sin contacto</option><option>Promesa</option><option>Escalado</option><option>Disputa</option></select></label>
@@ -1350,6 +1436,7 @@ function renderQueueDetail() {
       <label>Promesa fecha<input name="promise_due_date" type="date" /></label>
       <label class="wide">Nota<textarea name="note" placeholder="Resumen de conversacion, objecion o acuerdo."></textarea></label>
       <button type="submit">Guardar gestion</button>
+      <p class="form-message wide" data-form-message></p>
     </form>
     <div class="activity-head"><strong>Actividad reciente</strong><span>Ultimas 10 gestiones</span></div>
     <div class="activity-matrix">${activityCards || `<p class="empty">Sin gestiones registradas.</p>`}</div>
@@ -1357,9 +1444,122 @@ function renderQueueDetail() {
   panel.querySelector("#activityForm").addEventListener("submit", submitActivity);
 }
 
+function ensureManagementDrawer() {
+  let drawer = document.querySelector("#managementDrawer");
+  if (!drawer) {
+    drawer = document.createElement("aside");
+    drawer.id = "managementDrawer";
+    drawer.className = "management-drawer hidden";
+    drawer.setAttribute("aria-label", "Gestion operativa de cliente");
+    document.body.appendChild(drawer);
+  }
+  return drawer;
+}
+
+async function openCustomerDrawer(customerId) {
+  await selectCustomer(customerId);
+  renderManagementDrawer();
+  ensureManagementDrawer().classList.remove("hidden");
+  document.body.classList.add("drawer-open");
+}
+
+function closeManagementDrawer() {
+  const drawer = document.querySelector("#managementDrawer");
+  if (drawer) drawer.classList.add("hidden");
+  document.body.classList.remove("drawer-open");
+}
+
+function relatedRows(items, render, emptyText) {
+  return (items || []).length
+    ? items.slice(0, 8).map(render).join("")
+    : `<p class="empty">${escapeHtml(emptyText)}</p>`;
+}
+
+function renderManagementDrawer() {
+  const customer = state.selectedCustomer;
+  const drawer = ensureManagementDrawer();
+  if (!customer) {
+    drawer.innerHTML = `<button class="drawer-close" data-close-drawer type="button">Cerrar</button><p class="empty">Selecciona un cliente para gestionar.</p>`;
+    return;
+  }
+  const activities = state.selectedActivities || [];
+  const promises = (state.crm.promises || []).filter((item) => Number(item.customer_id) === Number(customer.id) || item.customer_name === customer.name);
+  const payments = (state.crm.payments || []).filter((item) => Number(item.customer_id) === Number(customer.id) || item.customer_name === customer.name);
+  const demographics = (state.ops.demographics || []).filter((item) => Number(item.customer_id) === Number(customer.id));
+  const recordings = menuHasSection("recordings") ? (state.ops.recordings || []).filter((item) => Number(item.customer_id) === Number(customer.id)) : [];
+  drawer.innerHTML = `
+    <div class="drawer-backdrop" data-close-drawer></div>
+    <section class="drawer-panel">
+      <header class="drawer-header">
+        <div>
+          <span class="eyebrow">Gestion operativa</span>
+          <h2>${escapeHtml(customer.name)}</h2>
+          <p>${escapeHtml(customer.document)} - ${escapeHtml(customer.project_name || "Cartera")}</p>
+        </div>
+        <button class="drawer-close" data-close-drawer type="button" aria-label="Cerrar">Cerrar</button>
+      </header>
+      <div class="drawer-summary">
+        <article><span>Saldo</span><strong>${money(customer.balance)}</strong></article>
+        <article><span>Mora</span><strong>${customer.dpd} dias</strong></article>
+        <article><span>Riesgo</span><strong>${escapeHtml(customer.risk)}</strong></article>
+        <article><span>Gestor</span><strong>${escapeHtml(customer.assigned_user_name || "-")}</strong></article>
+        <article><span>Estado</span><strong>${escapeHtml(customer.status || "-")}</strong></article>
+      </div>
+      <div class="drawer-actions">
+        <a href="${channelHref("telephony", customer)}">Click to call</a>
+        <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
+        <a href="${channelHref("email", customer)}">Email</a>
+        <button type="button" data-prefill-result="Contactado">Registrar llamada</button>
+        <button type="button" data-prefill-result="Promesa">Crear promesa</button>
+        <button type="button" data-section-jump="agreements">Crear acuerdo</button>
+        <button type="button" data-prefill-result="Escalado">Escalar juridico</button>
+      </div>
+      <div class="drawer-content-grid">
+        <article class="drawer-card">
+          <h3>Registrar gestion</h3>
+          <form id="drawerActivityForm" class="form-grid management-grid" data-customer-id="${customer.id}">
+            <label>Tipificacion<select name="typification_id">${typificationOptionsForCustomer(customer)}</select></label>
+            <label>Canal<select name="channel"><option value="phone">Llamada</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="manual">Manual</option></select></label>
+            <label>Resultado<select name="result"><option>Contactado</option><option>Sin contacto</option><option>Promesa</option><option>Escalado</option><option>Disputa</option></select></label>
+            <label>Siguiente fecha<input name="next_contact_at" type="date" /></label>
+            <label>Promesa monto<input name="promise_amount" type="number" min="0" /></label>
+            <label>Promesa fecha<input name="promise_due_date" type="date" /></label>
+            <label class="wide">Nota<textarea name="note" placeholder="Resumen de conversacion, objecion o acuerdo." required></textarea></label>
+            <button type="submit">Guardar gestion</button>
+            <button type="button" class="secondary-button" data-close-drawer>Cancelar</button>
+            <p class="form-message wide" data-form-message></p>
+          </form>
+        </article>
+        <article class="drawer-card">
+          <h3>Actividad reciente</h3>
+          <div class="activity-matrix compact">${relatedRows(activities, (item) => `<article class="activity-card"><strong>${escapeHtml(item.result)}</strong><span>${dateOnly(item.created_at)} - ${escapeHtml(item.user_name || "")}</span><p>${escapeHtml(item.note || "Gestion registrada.")}</p></article>`, "Sin gestiones registradas.")}</div>
+        </article>
+        <article class="drawer-card">
+          <h3>Promesas y pagos</h3>
+          <div class="mini-list">${relatedRows(promises, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.due_date)} - ${escapeHtml(item.status)}</span></p>`, "Sin promesas para este cliente.")}</div>
+          <div class="mini-list">${relatedRows(payments, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.paid_at)} - ${escapeHtml(item.method || "-")}</span></p>`, "Sin pagos para este cliente.")}</div>
+        </article>
+        <article class="drawer-card">
+          <h3>Datos complementarios</h3>
+          <div class="mini-list">${relatedRows(demographics, (item) => `<p><strong>${escapeHtml(item.source)}</strong><span>${escapeHtml(item.phone || item.email || item.city || "-")}</span></p>`, "Sin demograficos asociados.")}</div>
+          ${menuHasSection("recordings") ? `<h3>Grabaciones</h3><div class="mini-list">${relatedRows(recordings, (item) => `<p><strong>${escapeHtml(item.call_id)}</strong><span>${Math.round((item.duration_seconds || 0) / 60)} min - ${escapeHtml(item.status)}</span></p>`, "Sin grabaciones asociadas.")}</div>` : ""}
+        </article>
+      </div>
+    </section>
+  `;
+  drawer.querySelector("#drawerActivityForm")?.addEventListener("submit", submitActivity);
+}
+
 async function submitActivity(event) {
   event.preventDefault();
   const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const message = form.querySelector("[data-form-message]");
+  const customerId = form.dataset.customerId || state.selectedCustomer?.id;
+  if (!customerId) {
+    showToast("error", "No hay cliente seleccionado para guardar la gestion.");
+    return;
+  }
   const body = {
     typification_id: form.elements.typification_id.value ? Number(form.elements.typification_id.value) : null,
     channel: form.elements.channel.value,
@@ -1369,11 +1569,19 @@ async function submitActivity(event) {
     promise_amount: form.elements.promise_amount.value ? Number(form.elements.promise_amount.value) : null,
     promise_due_date: toDateTime(form.elements.promise_due_date.value)
   };
-  await api(`/api/crm/customers/${state.selectedCustomer.id}/activities`, { method: "POST", body: JSON.stringify(body) });
-  await loadCrmData();
-  await loadBi();
-  await selectCustomer(state.selectedCustomer.id);
-  renderAll();
+  if (message) message.textContent = "";
+  await runAction(button, async () => {
+    await api(`/api/crm/customers/${customerId}/activities`, { method: "POST", body: JSON.stringify(body) });
+    showToast("success", "Gestion guardada correctamente.");
+    form.reset();
+    await loadCrmData();
+    await loadBi();
+    await loadPhase8BData();
+    await selectCustomer(customerId);
+    renderAll();
+    if (!document.querySelector("#managementDrawer")?.classList.contains("hidden")) renderManagementDrawer();
+    if (message) message.textContent = "Gestion guardada correctamente.";
+  }, "Guardando...");
 }
 
 function renderCustomers() {
@@ -2045,15 +2253,94 @@ function renderConfigurationCenter() {
     { label: "Alertas", value: alertRules.length, detail: "Condiciones activas para motor transversal.", tone: alertRules.length ? "green" : "yellow", action: "Severidad, rol destino y mensaje." },
     { label: "Workflows", value: workflows.length, detail: "Flujos de etapas por modulo.", tone: workflows.length ? "blue" : "yellow", action: "Juridico y ventas ya usan esta base." },
   ]);
-  const catalogRows = catalogs.slice(0, 40).map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.catalog_type)}</td><td><span class="workflow-dot" style="background:${escapeHtml(item.color || "#94a3b8")}"></span>${item.is_active ? "Activo" : "Inactivo"}</td><td>${item.tenant_id ? "Tenant" : "Global"}</td></tr>`).join("");
-  document.querySelector("#configurationCatalogs") && (document.querySelector("#configurationCatalogs").innerHTML = table(["Catalogo", "Modulo", "Tipo", "Estado", "Alcance"], catalogRows, "Sin catalogos configurados."));
-  const ruleRows = rules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.rule_type)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join("");
-  document.querySelector("#configurationRules") && (document.querySelector("#configurationRules").innerHTML = table(["Regla", "Modulo", "Tipo", "Severidad", "Estado"], ruleRows, "Sin reglas configuradas."));
-  const alertRows = alertRules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.condition_type)}</td><td>${item.threshold_days} dias</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.target_role || "-")}</td></tr>`).join("");
-  document.querySelector("#configurationAlertRules") && (document.querySelector("#configurationAlertRules").innerHTML = table(["Alerta", "Modulo", "Condicion", "Umbral", "Severidad", "Rol"], alertRows, "Sin alertas configurables."));
+  const tenantField = isPlatform() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Opcional para alcance global" /></label>` : "";
+  const catalogRows = catalogs.slice(0, 40).map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.catalog_type)}</td><td><span class="workflow-dot" style="background:${escapeHtml(item.color || "#94a3b8")}"></span>${item.is_active ? "Activo" : "Inactivo"}</td><td>${item.tenant_id ? "Tenant" : "Global"}</td><td><button class="table-button" data-config-edit="catalog" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#configurationCatalogs") && (document.querySelector("#configurationCatalogs").innerHTML = `
+    <form id="catalogConfigForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Modulo<input name="module" value="collections" required /></label>
+      <label>Tipo catalogo<input name="catalog_type" placeholder="customer_status" required /></label>
+      <label>Codigo<input name="code" placeholder="CONTACTADO" required /></label>
+      <label>Etiqueta<input name="label" placeholder="Contactado" required /></label>
+      <label>Color<input name="color" type="color" value="#15956f" /></label>
+      <label>Orden<input name="order" type="number" value="0" /></label>
+      <label class="wide">Descripcion<textarea name="description"></textarea></label>
+      <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activo</label>
+      <button type="submit">Guardar catalogo</button>
+      <button class="secondary-button" data-reset-form="#catalogConfigForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Catalogo", "Modulo", "Tipo", "Estado", "Alcance", ""], catalogRows, "Sin catalogos configurados. Crea el primer catalogo para estandarizar la operacion.")}
+  `);
+  const ruleRows = rules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.rule_type)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${item.is_active ? "Activa" : "Inactiva"}</td><td><button class="table-button" data-config-edit="rule" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#configurationRules") && (document.querySelector("#configurationRules").innerHTML = `
+    <form id="businessRuleForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Modulo<input name="module" value="collections" required /></label>
+      <label>Tipo regla<input name="rule_type" placeholder="sla" required /></label>
+      <label>Codigo<input name="code" placeholder="SLA_PROMESA" required /></label>
+      <label>Nombre<input name="name" placeholder="SLA promesas vencidas" required /></label>
+      <label>Severidad<select name="severity"><option value="low">Baja</option><option value="medium" selected>Media</option><option value="high">Alta</option><option value="critical">Critica</option></select></label>
+      <label class="wide">Condicion JSON<textarea name="condition_json" placeholder='{"dpd_gt":30}'></textarea></label>
+      <label class="wide">Accion JSON<textarea name="action_json" placeholder='{"create_alert":true}'></textarea></label>
+      <label class="wide">Descripcion<textarea name="description"></textarea></label>
+      <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activa</label>
+      <button type="submit">Guardar regla</button>
+      <button class="secondary-button" data-reset-form="#businessRuleForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Regla", "Modulo", "Tipo", "Severidad", "Estado", ""], ruleRows, "Sin reglas configuradas. Define reglas para controlar SLAs, riesgos o escalamiento.")}
+  `);
+  const alertRows = alertRules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.condition_type)}</td><td>${item.threshold_days} dias</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.target_role || "-")}</td><td><button class="table-button" data-config-edit="alert" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#configurationAlertRules") && (document.querySelector("#configurationAlertRules").innerHTML = `
+    <form id="alertRuleForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Modulo<input name="module" value="collections" required /></label>
+      <label>Codigo<input name="code" placeholder="PROMESA_VENCIDA" required /></label>
+      <label>Nombre<input name="name" placeholder="Promesa vencida" required /></label>
+      <label>Condicion<input name="condition_type" placeholder="overdue_promise" required /></label>
+      <label>Dias umbral<input name="threshold_days" type="number" value="1" /></label>
+      <label>Severidad<select name="severity"><option value="low">Baja</option><option value="medium">Media</option><option value="high" selected>Alta</option><option value="critical">Critica</option></select></label>
+      <label>Rol destino<input name="target_role" placeholder="collections_leader" /></label>
+      <label class="wide">Plantilla mensaje<textarea name="message_template"></textarea></label>
+      <label class="wide">Descripcion<textarea name="description"></textarea></label>
+      <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activa</label>
+      <button type="submit">Guardar alerta</button>
+      <button class="secondary-button" data-reset-form="#alertRuleForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Alerta", "Modulo", "Condicion", "Umbral", "Severidad", "Rol", ""], alertRows, "Sin alertas configurables. Crea alertas para anticipar riesgos.")}
+  `);
   document.querySelector("#configurationWorkflows") && (document.querySelector("#configurationWorkflows").innerHTML = workflows.length
-    ? workflows.map((item) => `<article class="configuration-card"><span>${escapeHtml(item.module)}</span><strong>${escapeHtml(item.name)}</strong><p>${escapeHtml(item.description || "Workflow funcional parametrizable.")}</p><small>${item.tenant_id ? "Tenant" : "Plantilla global"} - ${item.is_active ? "Activo" : "Inactivo"}</small></article>`).join("")
-    : `<article class="empty-state"><strong>Sin workflows</strong><p>Los flujos configurables apareceran aqui.</p></article>`);
+    ? `<form id="workflowForm" class="ops-form form-grid">
+        <input name="id" type="hidden" />
+        ${tenantField}
+        <label>Modulo<input name="module" value="collections" required /></label>
+        <label>Codigo<input name="code" placeholder="COBRANZA_ADMIN" required /></label>
+        <label>Nombre<input name="name" placeholder="Cobranza administrativa" required /></label>
+        <label class="wide">Descripcion<textarea name="description"></textarea></label>
+        <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activo</label>
+        <button type="submit">Guardar workflow</button>
+        <button class="secondary-button" data-reset-form="#workflowForm" type="button">Limpiar</button>
+      </form>
+      <form id="workflowStageForm" class="ops-form form-grid compact-form">
+        <label>Workflow<select name="workflow_id">${workflows.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("")}</select></label>
+        <label>Codigo etapa<input name="code" placeholder="CONTACTO" required /></label>
+        <label>Nombre etapa<input name="name" placeholder="Contacto efectivo" required /></label>
+        <label>Orden<input name="order" type="number" value="0" /></label>
+        <label>Color<input name="color" type="color" value="#2563eb" /></label>
+        <label class="checkbox-row"><input name="is_final" type="checkbox" /> Etapa final</label>
+        <button type="submit">Agregar etapa</button>
+      </form>
+      ${workflows.map((item) => `<article class="configuration-card"><span>${escapeHtml(item.module)}</span><strong>${escapeHtml(item.name)}</strong><p>${escapeHtml(item.description || "Workflow funcional parametrizable.")}</p><small>${item.tenant_id ? "Tenant" : "Plantilla global"} - ${item.is_active ? "Activo" : "Inactivo"}</small><button class="table-button" data-config-edit="workflow" data-id="${item.id}" type="button">Editar</button></article>`).join("")}`
+    : `<form id="workflowForm" class="ops-form form-grid">
+        ${tenantField}
+        <label>Modulo<input name="module" value="collections" required /></label>
+        <label>Codigo<input name="code" placeholder="COBRANZA_ADMIN" required /></label>
+        <label>Nombre<input name="name" placeholder="Cobranza administrativa" required /></label>
+        <label class="wide">Descripcion<textarea name="description"></textarea></label>
+        <button type="submit">Guardar workflow</button>
+      </form><article class="empty-state"><strong>Sin workflows</strong><p>Crea un workflow para administrar etapas operativas por modulo.</p></article>`);
 }
 
 function renderAlertsCenter() {
@@ -2140,6 +2427,8 @@ function renderSalesAdvanced() {
 function renderTypificationTrees() {
   const trees = state.ops.trees || [];
   const combinations = state.ops.combinations || [];
+  const treeOptions = trees.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
+  const projectOptions = (state.crm.options.projects || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
   renderCardSet("#typificationTreeKpis", [
     { label: "Arboles", value: trees.length, detail: "Configurables por tenant, modulo y cartera.", tone: trees.length ? "green" : "yellow", action: "Administra la logica de gestion sin tocar codigo." },
     { label: "Combinaciones", value: combinations.length, detail: "Rutas validas con campos y efectos.", tone: combinations.length ? "blue" : "yellow", action: "Exige promesa, fecha, comentario o escalamiento." },
@@ -2147,13 +2436,50 @@ function renderTypificationTrees() {
     { label: "Activos", value: trees.filter((item) => item.status === "active").length, detail: "Disponibles para operacion.", tone: "blue", action: "Inactivar arboles obsoletos." },
   ]);
   const treeRows = trees.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.project_id || "Global tenant")}</td><td>${escapeHtml(item.status)}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
-  document.querySelector("#typificationTreeTable") && (document.querySelector("#typificationTreeTable").innerHTML = table(["Arbol", "Modulo", "Proyecto", "Estado", "Actualizado"], treeRows, "No hay arboles configurados."));
+  document.querySelector("#typificationTreeTable") && (document.querySelector("#typificationTreeTable").innerHTML = `
+    <form id="typificationTreeForm" class="ops-form form-grid">
+      <label>Modulo<input name="module" value="collections" required /></label>
+      <label>Proyecto<select name="project_id"><option value="">Global tenant</option>${projectOptions}</select></label>
+      <label>Codigo<input name="code" placeholder="COBRANZA_ANDINA" required /></label>
+      <label>Nombre<input name="name" placeholder="Arbol cobranza administrativa" required /></label>
+      <label>Estado<select name="status"><option value="active">Activo</option><option value="inactive">Inactivo</option></select></label>
+      <label class="wide">Descripcion<textarea name="description"></textarea></label>
+      <button type="submit">Crear arbol</button>
+    </form>
+    <form id="typificationNodeForm" class="ops-form form-grid compact-form">
+      <label>Arbol<select name="tree_id">${treeOptions}</select></label>
+      <label>Nivel<input name="level" type="number" min="1" value="1" /></label>
+      <label>Codigo nodo<input name="code" placeholder="CONTACTO" required /></label>
+      <label>Etiqueta<input name="label" placeholder="Contacto efectivo" required /></label>
+      <label>Orden<input name="order" type="number" value="0" /></label>
+      <label>Color<input name="color" type="color" value="#15956f" /></label>
+      <label class="checkbox-row"><input name="requires_promise" type="checkbox" /> Requiere promesa</label>
+      <label class="checkbox-row"><input name="requires_next_action" type="checkbox" /> Requiere siguiente accion</label>
+      <button type="submit" ${trees.length ? "" : "disabled"}>Agregar nodo</button>
+    </form>
+    ${table(["Arbol", "Modulo", "Proyecto", "Estado", "Actualizado"], treeRows, "No hay arboles configurados. Crea un arbol para guiar la gestion.")}
+  `);
   const comboRows = combinations.map((item) => `<tr><td><strong>Regla #${item.id}</strong><small>${escapeHtml((item.path || []).join(" > "))}</small></td><td>${Object.keys(item.required_fields || {}).filter((key) => item.required_fields[key]).join(", ") || "-"}</td><td>${Object.keys(item.effects || {}).join(", ") || "-"}</td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join("");
-  document.querySelector("#typificationCombinationTable") && (document.querySelector("#typificationCombinationTable").innerHTML = table(["Combinacion", "Campos requeridos", "Efectos", "Estado"], comboRows, "Sin combinaciones configuradas."));
+  document.querySelector("#typificationCombinationTable") && (document.querySelector("#typificationCombinationTable").innerHTML = `
+    <form id="typificationCombinationForm" class="ops-form form-grid">
+      <label>Arbol<select name="tree_id">${treeOptions}</select></label>
+      <label>Ruta<input name="path" placeholder='Contacto, Promesa' required /></label>
+      <label class="wide">Campos requeridos JSON<textarea name="required_fields" placeholder='{"promise_amount":true,"note":true}'></textarea></label>
+      <label class="wide">Efectos JSON<textarea name="effects" placeholder='{"status":"Promesa"}'></textarea></label>
+      <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activa</label>
+      <button type="submit" ${trees.length ? "" : "disabled"}>Crear combinacion</button>
+    </form>
+    ${table(["Combinacion", "Campos requeridos", "Efectos", "Estado"], comboRows, "Sin combinaciones configuradas. Crea rutas validas para orientar al gestor.")}
+  `);
 }
 
 function renderRecordings() {
-  const recordings = state.ops.recordings || [];
+  const filters = state.ops.recordingFilters || {};
+  const text = String(filters.text || "").toLowerCase();
+  const recordings = (state.ops.recordings || []).filter((item) => {
+    if (!text) return true;
+    return [item.call_id, item.phone_number, item.provider_code, item.status, item.direction].some((value) => String(value || "").toLowerCase().includes(text));
+  });
   const totalSeconds = recordings.reduce((sum, item) => sum + (item.duration_seconds || 0), 0);
   renderCardSet("#recordingKpis", [
     { label: "Grabaciones", value: recordings.length, detail: "Metadatos asociados a clientes y gestiones.", tone: recordings.length ? "green" : "yellow", action: "Consultar por cliente, gestor, fecha o telefono." },
@@ -2161,8 +2487,15 @@ function renderRecordings() {
     { label: "Disponibles", value: recordings.filter((item) => item.playback_available).length, detail: "Con placeholder o storage seguro.", tone: "green", action: "Playback auditable por permiso." },
     { label: "Proveedor", value: new Set(recordings.map((item) => item.provider_code).filter(Boolean)).size, detail: "Troncales o fuentes metadata.", tone: "blue", action: "Integrar PBX/API en fase posterior." },
   ]);
-  const rows = recordings.slice(0, 50).map((item) => `<tr><td><strong>${escapeHtml(item.call_id)}</strong><small>${escapeHtml(item.phone_number || "-")}</small></td><td>${escapeHtml(item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${escapeHtml(item.provider_code || "-")}</td><td>${escapeHtml(item.status)}</td><td>${item.playback_available ? "Playback seguro" : "Sin URL"}</td></tr>`).join("");
-  document.querySelector("#recordingTable") && (document.querySelector("#recordingTable").innerHTML = table(["Llamada", "Direccion", "Duracion", "Proveedor", "Estado", "Acceso"], rows, "Sin grabaciones registradas."));
+  const rows = recordings.slice(0, 50).map((item) => `<tr><td><strong>${escapeHtml(item.call_id)}</strong><small>${escapeHtml(item.phone_number || "-")}</small></td><td>${escapeHtml(item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${escapeHtml(item.provider_code || "-")}</td><td>${escapeHtml(item.status)}</td><td><button class="table-button" data-recording-detail="${item.id}" type="button">Detalle</button><button class="table-button" data-recording-playback="${item.id}" type="button">Playback</button><button class="table-button" data-recording-download="${item.id}" type="button">Descargar</button></td></tr>`).join("");
+  document.querySelector("#recordingTable") && (document.querySelector("#recordingTable").innerHTML = `
+    <div class="inline-filters">
+      <label>Buscar<input id="recordingSearch" value="${escapeHtml(filters.text || "")}" placeholder="cliente, telefono, proveedor, estado" /></label>
+      <button class="secondary-button" data-refresh-recordings type="button">Actualizar</button>
+    </div>
+    ${state.ops.recordingDetail ? `<article class="preview-panel"><header><strong>${escapeHtml(state.ops.recordingDetail.call_id)}</strong><span>${escapeHtml(state.ops.recordingDetail.status)}</span></header><p>${escapeHtml(state.ops.recordingDetail.phone_number || "-")} - ${Math.round((state.ops.recordingDetail.duration_seconds || 0) / 60)} min - ${escapeHtml(state.ops.recordingDetail.provider_code || "-")}</p></article>` : ""}
+    ${table(["Llamada", "Direccion", "Duracion", "Proveedor", "Estado", ""], rows, "Sin grabaciones registradas para los filtros actuales.")}
+  `);
 }
 
 function renderUploads() {
@@ -2174,8 +2507,32 @@ function renderUploads() {
     { label: "Errores", value: batches.reduce((sum, item) => sum + (item.error_rows || 0), 0), detail: "Filas que requieren correccion.", tone: "yellow", action: "Descargar errores con permiso." },
     { label: "Demograficos", value: demographics.length, detail: "Datos complementarios para contactabilidad.", tone: demographics.length ? "green" : "yellow", action: "Cruzar telefonos, emails y fuentes." },
   ]);
-  const batchRows = batches.map((item) => `<tr><td><strong>${escapeHtml(item.original_filename || `Lote ${item.id}`)}</strong><small>${escapeHtml(item.upload_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${item.total_rows}</td><td>${item.valid_rows}</td><td>${item.error_rows}</td><td>${dateOnly(item.created_at)}</td></tr>`).join("");
-  document.querySelector("#uploadBatchTable") && (document.querySelector("#uploadBatchTable").innerHTML = table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha"], batchRows, "Sin lotes de carga."));
+  const projectOptions = (state.crm.options.projects || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
+  const preview = state.ops.uploadPreview;
+  const previewPanel = preview ? `
+    <article class="preview-panel">
+      <header><strong>Preview de carga</strong><span>${preview.valid_rows}/${preview.total_rows} validas</span></header>
+      <p>${preview.error_rows ? `${preview.error_rows} filas requieren revision antes de confirmar.` : "Archivo validado sin errores criticos."}</p>
+      <div class="inline-controls">
+        <button data-confirm-upload type="button">Confirmar carga</button>
+        <button class="secondary-button" data-clear-upload-preview type="button">Descartar preview</button>
+      </div>
+      ${table(preview.columns || [], (preview.sample || []).map((row) => `<tr>${(preview.columns || []).map((column) => `<td>${escapeHtml(row[column] || "-")}</td>`).join("")}</tr>`).join(""), "Sin filas de muestra.")}
+    </article>
+  ` : `<article class="empty-state compact"><strong>Sin preview activo</strong><p>Selecciona un CSV y previsualiza antes de confirmar. El sistema no guarda archivos reales en el repositorio.</p></article>`;
+  const batchRows = batches.map((item) => `<tr><td><strong>${escapeHtml(item.original_filename || `Lote ${item.id}`)}</strong><small>${escapeHtml(item.upload_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${item.total_rows}</td><td>${item.valid_rows}</td><td>${item.error_rows}</td><td>${dateOnly(item.created_at)}</td><td><button class="table-button" data-upload-result="${item.id}" type="button">Resultado</button><button class="table-button" data-upload-errors="${item.id}" type="button">Errores</button></td></tr>`).join("");
+  document.querySelector("#uploadBatchTable") && (document.querySelector("#uploadBatchTable").innerHTML = `
+    <form id="uploadPreviewForm" class="ops-form form-grid">
+      <label>Tipo de carga<select name="upload_type"><option value="reparto_cartera">Reparto / cartera</option><option value="demograficos">Demograficos</option><option value="pagos">Pagos</option><option value="documentos">Documentos</option><option value="grabaciones_metadata">Grabaciones metadata</option><option value="generico">Generico</option></select></label>
+      <label>Proyecto<select name="project_id"><option value="">Sin proyecto</option>${projectOptions}</select></label>
+      <label class="wide">Archivo CSV<input name="csv_file" type="file" accept=".csv,text/csv" required /></label>
+      <label class="wide">Mapeo JSON opcional<textarea name="mapping" placeholder='{"document":"documento","name":"cliente","balance":"saldo"}'></textarea></label>
+      <label class="checkbox-row"><input name="create_records" type="checkbox" /> Crear/actualizar registros si aplica</label>
+      <button type="submit">Previsualizar</button>
+    </form>
+    ${previewPanel}
+    ${table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha", ""], batchRows, "Sin lotes de carga. Previsualiza y confirma el primer reparto.")}
+  `);
   const demographicRows = demographics.slice(0, 30).map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.employer || "-")}</td><td>${item.score}</td></tr>`).join("");
   document.querySelector("#demographicTable") && (document.querySelector("#demographicTable").innerHTML = table(["Cliente", "Telefono", "Email", "Ciudad", "Empleador", "Score"], demographicRows, "Sin demograficos cargados."));
 }
@@ -2184,18 +2541,41 @@ function renderExcelWeb() {
   const sources = state.ops.excelSources || [];
   const views = state.ops.excelViews || [];
   const result = state.ops.excelResult;
+  const selectedSource = state.ops.excelDraft?.source || result?.source || sources[0]?.code || "customers";
+  const source = sources.find((item) => item.code === selectedSource) || sources[0] || { code: selectedSource, columns: [] };
+  const selectedColumns = state.ops.excelDraft?.columns?.length ? state.ops.excelDraft.columns : (result?.columns || source.columns || []).slice(0, 8);
   renderCardSet("#excelWebKpis", [
     { label: "Fuentes", value: sources.length, detail: "Tablas operativas seguras sin SQL libre.", tone: sources.length ? "green" : "yellow", action: "Clientes, gestiones, pagos, juridico y ventas." },
     { label: "Vistas", value: views.length, detail: "Consultas guardadas por usuario o tenant.", tone: views.length ? "blue" : "yellow", action: "Estandarizar reportes funcionales." },
     { label: "Resultado", value: result?.total || 0, detail: `Fuente actual: ${result?.source || "clientes"}.`, tone: result?.total ? "green" : "yellow", action: "Exportar solo con permiso." },
     { label: "Columnas", value: result?.columns?.length || 0, detail: "Configurables por vista.", tone: "blue", action: "Ocultar campos no requeridos." },
   ]);
-  const sourceRows = sources.map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${(item.columns || []).length}</td><td>${escapeHtml((item.columns || []).slice(0, 6).join(", "))}</td></tr>`).join("");
-  document.querySelector("#excelSourceTable") && (document.querySelector("#excelSourceTable").innerHTML = table(["Fuente", "Columnas", "Ejemplo"], sourceRows, "Sin fuentes configuradas."));
-  const viewRows = views.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)}</small></td><td>${item.is_public ? "Publica" : "Privada"}</td><td>${item.is_favorite ? "Favorita" : "-"}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
-  document.querySelector("#excelViewTable") && (document.querySelector("#excelViewTable").innerHTML = table(["Vista", "Alcance", "Favorita", "Actualizada"], viewRows, "Sin vistas guardadas."));
+  const sourceRows = sources.map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${(item.columns || []).length}</td><td>${escapeHtml((item.columns || []).slice(0, 6).join(", "))}</td><td><button class="table-button" data-excel-source="${escapeHtml(item.code)}" type="button">Usar</button></td></tr>`).join("");
+  document.querySelector("#excelSourceTable") && (document.querySelector("#excelSourceTable").innerHTML = table(["Fuente", "Columnas", "Ejemplo", ""], sourceRows, "Sin fuentes configuradas."));
+  const viewRows = views.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)}</small></td><td>${item.is_public ? "Publica" : "Privada"}</td><td>${item.is_favorite ? "Favorita" : "-"}</td><td>${dateOnly(item.updated_at)}</td><td><button class="table-button" data-excel-view="${item.id}" type="button">Cargar</button></td></tr>`).join("");
+  document.querySelector("#excelViewTable") && (document.querySelector("#excelViewTable").innerHTML = `
+    <form id="excelViewForm" class="ops-form form-grid">
+      <label>Nombre vista<input name="name" placeholder="Mi vista de cartera" required /></label>
+      <label class="checkbox-row"><input name="is_public" type="checkbox" /> Publica para tenant</label>
+      <label class="checkbox-row"><input name="is_favorite" type="checkbox" checked /> Favorita</label>
+      <button type="submit">Guardar vista</button>
+    </form>
+    ${table(["Vista", "Alcance", "Favorita", "Actualizada", ""], viewRows, "Sin vistas guardadas. Ejecuta una consulta y guardala para reutilizarla.")}
+  `);
   const resultRows = (result?.rows || []).map((row) => `<tr>${(result.columns || []).map((column) => `<td>${escapeHtml(row[column] ?? "-")}</td>`).join("")}</tr>`).join("");
-  document.querySelector("#excelResultTable") && (document.querySelector("#excelResultTable").innerHTML = table(result?.columns || [], resultRows, "Ejecuta una consulta para ver resultados."));
+  document.querySelector("#excelResultTable") && (document.querySelector("#excelResultTable").innerHTML = `
+    <form id="excelQueryForm" class="ops-form form-grid">
+      <label>Fuente<select name="source">${sources.map((item) => `<option value="${escapeHtml(item.code)}" ${item.code === selectedSource ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
+      <label>Busqueda texto<input name="q" placeholder="cliente, documento, estado..." value="${escapeHtml(state.ops.excelDraft?.filters?.q || "")}" /></label>
+      <label>Pagina<input name="page" type="number" min="1" value="${result?.page || 1}" /></label>
+      <label>Filas por pagina<input name="page_size" type="number" min="1" max="100" value="${result?.page_size || 25}" /></label>
+      <label class="wide">Columnas visibles<input name="columns" value="${escapeHtml(selectedColumns.join(", "))}" placeholder="id, name, document" /></label>
+      <button type="submit">Ejecutar consulta</button>
+      <button class="secondary-button" data-excel-export type="button">Exportar</button>
+    </form>
+    <p class="form-note">${result ? `${result.total} registros - pagina ${result.page} de ${result.total_pages}` : "Configura la fuente y ejecuta una consulta segura."}</p>
+    ${table(result?.columns || selectedColumns, resultRows, "Ejecuta una consulta para ver resultados.")}
+  `);
 }
 
 function renderIntegrations() {
@@ -2210,14 +2590,72 @@ function renderIntegrations() {
     { label: "Plantillas", value: templates.length, detail: "Mensajes por canal.", tone: templates.length ? "green" : "yellow", action: "Estandarizar comunicacion." },
     { label: "Eventos", value: events.length, detail: "Logs de pruebas y webhooks.", tone: "blue", action: "Auditoria de integraciones." },
   ]);
-  const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.provider_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "Sin secreto visible")}</td></tr>`).join("");
-  document.querySelector("#providerTable") && (document.querySelector("#providerTable").innerHTML = table(["Proveedor", "Tipo", "Estado", "Secreto"], providerRows, "Sin proveedores configurados."));
-  const channelRows = channels.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.from_value || "-")}</small></td><td>${escapeHtml(item.channel_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.provider_id || "-")}</td></tr>`).join("");
-  document.querySelector("#integrationChannelTable") && (document.querySelector("#integrationChannelTable").innerHTML = table(["Canal", "Tipo", "Estado", "Proveedor"], channelRows, "Sin canales configurados."));
-  const templateRows = templates.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.channel_type)}</td><td>${escapeHtml(item.subject || "-")}</td><td>${escapeHtml(item.status)}</td></tr>`).join("");
-  document.querySelector("#templateTable") && (document.querySelector("#templateTable").innerHTML = table(["Plantilla", "Canal", "Asunto", "Estado"], templateRows, "Sin plantillas."));
-  const webhookRows = webhooks.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.event_type)}</small></td><td>${escapeHtml(item.target_url)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "-")}</td></tr>`).join("");
-  document.querySelector("#webhookTable") && (document.querySelector("#webhookTable").innerHTML = table(["Webhook", "URL", "Estado", "Secreto"], webhookRows, "Sin webhooks."));
+  const tenantField = isPlatform() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Tenant destino" /></label>` : "";
+  const providerOptions = providers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.provider_type)})</option>`).join("");
+  const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.provider_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "Sin secreto visible")}</td><td><button class="table-button" data-integration-edit="provider" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#providerTable") && (document.querySelector("#providerTable").innerHTML = `
+    <form id="providerForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Tipo<select name="provider_type"><option value="telephony">Telefonia</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="sms">SMS</option><option value="webhook">Webhook</option></select></label>
+      <label>Codigo<input name="code" placeholder="twilio_main" required /></label>
+      <label>Nombre<input name="name" placeholder="Proveedor principal" required /></label>
+      <label>Base URL<input name="base_url" placeholder="https://api.proveedor.com" /></label>
+      <label>Estado<select name="status"><option value="configured">Configurado</option><option value="active">Activo</option><option value="inactive">Inactivo</option></select></label>
+      <label>Secreto<input name="secret" type="password" placeholder="Se guarda enmascarado" /></label>
+      <label class="wide">Configuracion JSON<textarea name="config" placeholder='{"account":"demo"}'></textarea></label>
+      <button type="submit">Guardar proveedor</button>
+      <button class="secondary-button" data-reset-form="#providerForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Proveedor", "Tipo", "Estado", "Secreto", ""], providerRows, "Sin proveedores configurados. Crea un proveedor para habilitar canales.")}
+  `);
+  const channelRows = channels.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.from_value || "-")}</small></td><td>${escapeHtml(item.channel_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.provider_id || "-")}</td><td><button class="table-button" data-test-channel="${item.id}" type="button">Probar</button><button class="table-button" data-integration-edit="channel" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#integrationChannelTable") && (document.querySelector("#integrationChannelTable").innerHTML = `
+    <form id="channelConfigForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Proveedor<select name="provider_id"><option value="">Sin proveedor</option>${providerOptions}</select></label>
+      <label>Tipo canal<select name="channel_type"><option value="telephony">Telefonia</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="sms">SMS</option><option value="webhook">Webhook</option></select></label>
+      <label>Nombre<input name="name" placeholder="Linea principal cobranzas" required /></label>
+      <label>Valor/remitente<input name="from_value" placeholder="+570000000000" /></label>
+      <label>Estado<select name="status"><option value="active">Activo</option><option value="configured">Configurado</option><option value="inactive">Inactivo</option></select></label>
+      <label class="wide">Configuracion JSON<textarea name="config" placeholder='{"click_to_call":true}'></textarea></label>
+      <button type="submit">Guardar canal</button>
+      <button class="secondary-button" data-reset-form="#channelConfigForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Canal", "Tipo", "Estado", "Proveedor", ""], channelRows, "Sin canales configurados. Crea un canal y ejecuta una prueba simulada.")}
+  `);
+  const templateRows = templates.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.channel_type)}</td><td>${escapeHtml(item.subject || "-")}</td><td>${escapeHtml(item.status)}</td><td><button class="table-button" data-integration-edit="template" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#templateTable") && (document.querySelector("#templateTable").innerHTML = `
+    <form id="templateForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Canal<select name="channel_type"><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="sms">SMS</option><option value="telephony">Telefonia</option></select></label>
+      <label>Codigo<input name="code" placeholder="promesa_recordatorio" required /></label>
+      <label>Nombre<input name="name" placeholder="Recordatorio promesa" required /></label>
+      <label>Asunto<input name="subject" placeholder="Solo para email" /></label>
+      <label>Estado<select name="status"><option value="active">Activa</option><option value="draft">Borrador</option><option value="inactive">Inactiva</option></select></label>
+      <label class="wide">Cuerpo<textarea name="body" required></textarea></label>
+      <button type="submit">Guardar plantilla</button>
+      <button class="secondary-button" data-reset-form="#templateForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Plantilla", "Canal", "Asunto", "Estado", ""], templateRows, "Sin plantillas. Crea mensajes reutilizables por canal.")}
+  `);
+  const webhookRows = webhooks.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.event_type)}</small></td><td>${escapeHtml(item.target_url)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "-")}</td><td><button class="table-button" data-test-webhook="${item.id}" type="button">Probar</button><button class="table-button" data-integration-edit="webhook" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  document.querySelector("#webhookTable") && (document.querySelector("#webhookTable").innerHTML = `
+    <form id="webhookForm" class="ops-form form-grid">
+      <input name="id" type="hidden" />
+      ${tenantField}
+      <label>Nombre<input name="name" placeholder="Webhook pagos" required /></label>
+      <label>Evento<input name="event_type" placeholder="payment.created" required /></label>
+      <label>URL destino<input name="target_url" placeholder="https://cliente.com/webhook" required /></label>
+      <label>Estado<select name="status"><option value="active">Activo</option><option value="configured">Configurado</option><option value="inactive">Inactivo</option></select></label>
+      <label>Secreto<input name="secret" type="password" placeholder="Se guarda enmascarado" /></label>
+      <button type="submit">Guardar webhook</button>
+      <button class="secondary-button" data-reset-form="#webhookForm" type="button">Limpiar</button>
+    </form>
+    ${table(["Webhook", "URL", "Estado", "Secreto", ""], webhookRows, "Sin webhooks. Crea un endpoint y registra prueba simulada.")}
+  `);
   const eventRows = events.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.event_type)}</strong><small>${escapeHtml(item.channel_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.entity_type || "-")}</td><td>${dateOnly(item.created_at)}</td></tr>`).join("");
   document.querySelector("#integrationEventTable") && (document.querySelector("#integrationEventTable").innerHTML = table(["Evento", "Estado", "Entidad", "Fecha"], eventRows, "Sin eventos de canal."));
 }
@@ -2250,21 +2688,32 @@ function formPayload(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function parseJsonField(value, fallback = {}) {
+  const text = String(value || "").trim();
+  if (!text) return fallback;
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error("El campo JSON no tiene un formato valido.");
+  }
+}
+
+function optionalNumber(value) {
+  return value === undefined || value === null || value === "" ? null : Number(value);
+}
+
+function platformTenantValue(form) {
+  return isPlatform() && form.elements.tenant_id?.value ? Number(form.elements.tenant_id.value) : null;
+}
+
 async function submitJson(form, endpoint, buildPayload) {
   const button = form.querySelector("button[type='submit']");
-  const text = button.textContent;
-  button.disabled = true;
-  button.textContent = "Guardando...";
-  try {
+  await runAction(button, async () => {
     await api(endpoint, { method: "POST", body: JSON.stringify(buildPayload(form)) });
+    showToast("success", "Registro guardado correctamente.");
     form.reset();
     await refreshAll();
-  } catch (error) {
-    alert(error.message);
-  } finally {
-    button.disabled = false;
-    button.textContent = text;
-  }
+  }, "Guardando...");
 }
 
 function setupNavigation() {
@@ -2431,11 +2880,176 @@ function setupForms() {
 }
 
 function setupEvents() {
+  document.addEventListener("submit", async (event) => {
+    const form = event.target;
+    if (["catalogConfigForm", "businessRuleForm", "alertRuleForm", "workflowForm", "workflowStageForm"].includes(form.id)) {
+      event.preventDefault();
+      await handleConfigurationSubmit(form);
+    }
+    if (["providerForm", "channelConfigForm", "templateForm", "webhookForm"].includes(form.id)) {
+      event.preventDefault();
+      await handleIntegrationSubmit(form);
+    }
+    if (form.id === "uploadPreviewForm") {
+      event.preventDefault();
+      await handleUploadPreview(form);
+    }
+    if (form.id === "excelQueryForm") {
+      event.preventDefault();
+      await handleExcelQuery(form);
+    }
+    if (form.id === "excelViewForm") {
+      event.preventDefault();
+      await saveExcelView(form);
+    }
+    if (["typificationTreeForm", "typificationNodeForm", "typificationCombinationForm"].includes(form.id)) {
+      event.preventDefault();
+      await handleTypificationOpsSubmit(form);
+    }
+  });
   document.addEventListener("click", async (event) => {
     const open = event.target.closest("[data-open-customer]");
     if (open) {
-      document.querySelector('[data-section="queue"]').click();
-      await selectCustomer(open.dataset.openCustomer);
+      await openCustomerDrawer(open.dataset.openCustomer);
+      return;
+    }
+    if (event.target.closest("[data-close-drawer]")) {
+      closeManagementDrawer();
+      return;
+    }
+    const prefill = event.target.closest("[data-prefill-result]");
+    if (prefill) {
+      const form = document.querySelector("#drawerActivityForm") || document.querySelector("#activityForm");
+      if (form?.elements.result) {
+        form.elements.result.value = prefill.dataset.prefillResult;
+        form.elements.note?.focus();
+      }
+    }
+    const resetForm = event.target.closest("[data-reset-form]");
+    if (resetForm) {
+      const form = document.querySelector(resetForm.dataset.resetForm);
+      form?.reset();
+      if (form?.elements.id) form.elements.id.value = "";
+      return;
+    }
+    const configEdit = event.target.closest("[data-config-edit]");
+    if (configEdit) {
+      fillConfigurationForm(configEdit.dataset.configEdit, configEdit.dataset.id);
+      return;
+    }
+    const integrationEdit = event.target.closest("[data-integration-edit]");
+    if (integrationEdit) {
+      fillIntegrationForm(integrationEdit.dataset.integrationEdit, integrationEdit.dataset.id);
+      return;
+    }
+    const testChannel = event.target.closest("[data-test-channel]");
+    if (testChannel) {
+      await runAction(testChannel, async () => {
+        const result = await api(`/api/integrations/channels/${testChannel.dataset.testChannel}/test`, { method: "POST" });
+        showToast("success", result.message || "Prueba de canal registrada.");
+        await loadPhase8BData();
+        renderIntegrations();
+      }, "Probando...");
+      return;
+    }
+    const testWebhook = event.target.closest("[data-test-webhook]");
+    if (testWebhook) {
+      await runAction(testWebhook, async () => {
+        const result = await api(`/api/integrations/webhooks/${testWebhook.dataset.testWebhook}/test`, { method: "POST" });
+        showToast("success", result.message || "Prueba de webhook registrada.");
+        await loadPhase8BData();
+        renderIntegrations();
+      }, "Probando...");
+      return;
+    }
+    const confirmUploadButton = event.target.closest("[data-confirm-upload]");
+    if (confirmUploadButton) {
+      await confirmUpload(confirmUploadButton);
+      return;
+    }
+    if (event.target.closest("[data-clear-upload-preview]")) {
+      state.ops.uploadPreview = null;
+      state.ops.uploadDraft = null;
+      renderUploads();
+      return;
+    }
+    const uploadResult = event.target.closest("[data-upload-result]");
+    if (uploadResult) {
+      await runAction(uploadResult, async () => {
+        const result = await api(`/api/uploads/batches/${uploadResult.dataset.uploadResult}/result`);
+        showToast("info", result.result_file_path || "Resultado disponible en metadata del lote.");
+      }, "Consultando...");
+      return;
+    }
+    const uploadErrors = event.target.closest("[data-upload-errors]");
+    if (uploadErrors) {
+      await runAction(uploadErrors, async () => {
+        const result = await api(`/api/uploads/batches/${uploadErrors.dataset.uploadErrors}/errors`);
+        showToast(result.error_file_path ? "warning" : "info", result.error_file_path || "El lote no tiene archivo de errores.");
+      }, "Consultando...");
+      return;
+    }
+    const excelSource = event.target.closest("[data-excel-source]");
+    if (excelSource) {
+      const source = state.ops.excelSources.find((item) => item.code === excelSource.dataset.excelSource);
+      state.ops.excelDraft = { source: excelSource.dataset.excelSource, filters: {}, columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 25 };
+      renderExcelWeb();
+      return;
+    }
+    const excelView = event.target.closest("[data-excel-view]");
+    if (excelView) {
+      const view = state.ops.excelViews.find((item) => String(item.id) === String(excelView.dataset.excelView));
+      if (view) {
+        state.ops.excelDraft = { source: view.source, filters: view.filters || {}, columns: view.columns || [], page: 1, page_size: 25 };
+        state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
+        showToast("success", "Vista cargada correctamente.");
+        renderExcelWeb();
+      }
+      return;
+    }
+    const excelExport = event.target.closest("[data-excel-export]");
+    if (excelExport) {
+      await runAction(excelExport, async () => {
+        const form = document.querySelector("#excelQueryForm");
+        const payload = state.ops.excelDraft || (form ? excelPayloadFromForm(form) : null);
+        if (!payload) throw new Error("Ejecuta una consulta antes de exportar.");
+        const result = await api("/api/excel-web/export", { method: "POST", body: JSON.stringify(payload) });
+        showToast("success", result.message || "Exportacion solicitada correctamente.");
+      }, "Exportando...");
+      return;
+    }
+    const refreshRecordings = event.target.closest("[data-refresh-recordings]");
+    if (refreshRecordings) {
+      await runAction(refreshRecordings, async () => {
+        await loadPhase8BData();
+        renderRecordings();
+        showToast("success", "Grabaciones actualizadas.");
+      }, "Actualizando...");
+      return;
+    }
+    const recordingDetail = event.target.closest("[data-recording-detail]");
+    if (recordingDetail) {
+      await runAction(recordingDetail, async () => {
+        state.ops.recordingDetail = await api(`/api/recordings/${recordingDetail.dataset.recordingDetail}`);
+        renderRecordings();
+      }, "Consultando...");
+      return;
+    }
+    const recordingPlayback = event.target.closest("[data-recording-playback]");
+    if (recordingPlayback) {
+      await runAction(recordingPlayback, async () => {
+        const result = await api(`/api/recordings/${recordingPlayback.dataset.recordingPlayback}/playback`);
+        showToast("info", result.message || result.playback_url || "Playback auditado.");
+      }, "Solicitando...");
+      return;
+    }
+    const recordingDownload = event.target.closest("[data-recording-download]");
+    if (recordingDownload) {
+      await runAction(recordingDownload, async () => {
+        const result = await api(`/api/recordings/${recordingDownload.dataset.recordingDownload}/download`);
+        showToast("info", result.message || result.download_url || "Descarga auditada.");
+      }, "Validando permiso...");
+      return;
     }
     const sectionJump = event.target.closest("[data-section-jump]");
     if (sectionJump) {
@@ -2448,8 +3062,11 @@ function setupEvents() {
     }
     const complete = event.target.closest("[data-complete-promise]");
     if (complete) {
-      await api(`/api/crm/promises/${complete.dataset.completePromise}/complete`, { method: "PATCH" });
-      await refreshAll();
+      await runAction(complete, async () => {
+        await api(`/api/crm/promises/${complete.dataset.completePromise}/complete`, { method: "PATCH" });
+        showToast("success", "Promesa marcada como cumplida.");
+        await refreshAll();
+      }, "Actualizando...");
     }
     const editTypification = event.target.closest("[data-edit-typification]");
     if (editTypification) fillTypificationForm(editTypification.dataset.editTypification);
@@ -2462,15 +3079,21 @@ function setupEvents() {
     const toggleModule = event.target.closest("[data-toggle-module]");
     if (toggleModule) {
       const tenantId = document.querySelector("#moduleTenantFilter")?.value;
-      if (!tenantId) return alert("Selecciona una empresa para modificar modulos.");
+      if (!tenantId) return showToast("warning", "Selecciona una empresa para modificar modulos.");
       const enabled = toggleModule.dataset.enabled === "true";
-      await api(`/api/governance/modules/${tenantId}`, {
-        method: "PUT",
-        body: JSON.stringify([{ module_code: toggleModule.dataset.toggleModule, enabled: !enabled }])
-      });
-      await loadGovernanceData();
-      renderAll();
+      await runAction(toggleModule, async () => {
+        await api(`/api/governance/modules/${tenantId}`, {
+          method: "PUT",
+          body: JSON.stringify([{ module_code: toggleModule.dataset.toggleModule, enabled: !enabled }])
+        });
+        showToast("success", "Modulo actualizado.");
+        await loadGovernanceData();
+        renderAll();
+      }, "Actualizando...");
     }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeManagementDrawer();
   });
   document.addEventListener("change", async (event) => {
     if (event.target.closest("#roleModuleFilter") || event.target.closest("#roleRiskFilter")) {
@@ -2523,15 +3146,23 @@ function setupEvents() {
   document.querySelector("#exportCustomers").addEventListener("click", async () => {
     try {
       await downloadCsv("/api/crm/customers/export", "clientes_icodeup360.csv");
+      showToast("success", "Exportacion de clientes iniciada.");
     } catch (error) {
-      alert(error.message);
+      showToast("error", error.message);
+    }
+  });
+  document.addEventListener("input", (event) => {
+    if (event.target.closest("#recordingSearch")) {
+      state.ops.recordingFilters = { text: event.target.value };
+      renderRecordings();
     }
   });
   document.querySelector("#exportPayments").addEventListener("click", async () => {
     try {
       await downloadCsv("/api/crm/payments/export", "pagos_icodeup360.csv");
+      showToast("success", "Exportacion de pagos iniciada.");
     } catch (error) {
-      alert(error.message);
+      showToast("error", error.message);
     }
   });
   document.querySelector("#queuePrev").addEventListener("click", async () => {
@@ -2595,6 +3226,362 @@ function fillTypificationForm(nodeId) {
   form.elements.sort_order.value = node.sort_order || 0;
   fillSelects();
   form.elements.parent_id.value = node.parent_id || "";
+}
+
+function setFormValues(form, values = {}) {
+  Object.entries(values).forEach(([key, value]) => {
+    const field = form.elements[key];
+    if (!field) return;
+    if (field.type === "checkbox") {
+      field.checked = Boolean(value);
+    } else {
+      field.value = value ?? "";
+    }
+  });
+}
+
+function fillConfigurationForm(type, id) {
+  const maps = {
+    catalog: { form: "#catalogConfigForm", items: state.configuration.catalogs },
+    rule: { form: "#businessRuleForm", items: state.configuration.rules },
+    alert: { form: "#alertRuleForm", items: state.configuration.alertRules },
+    workflow: { form: "#workflowForm", items: state.configuration.workflows }
+  };
+  const meta = maps[type];
+  const form = meta ? document.querySelector(meta.form) : null;
+  const item = meta?.items?.find((row) => String(row.id) === String(id));
+  if (!form || !item) return;
+  setFormValues(form, item);
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function handleConfigurationSubmit(form) {
+  const id = form.elements.id?.value;
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    if (form.id === "catalogConfigForm") {
+      const createPayload = {
+        tenant_id: platformTenantValue(form),
+        module: form.elements.module.value,
+        catalog_type: form.elements.catalog_type.value,
+        code: form.elements.code.value,
+        label: form.elements.label.value,
+        description: form.elements.description.value || null,
+        color: form.elements.color.value || null,
+        order: Number(form.elements.order.value || 0),
+        is_active: form.elements.is_active.checked,
+      };
+      const patchPayload = {
+        label: createPayload.label,
+        description: createPayload.description,
+        color: createPayload.color,
+        order: createPayload.order,
+        is_active: createPayload.is_active,
+      };
+      await api(id ? `/api/configuration/catalogs/${id}` : "/api/configuration/catalogs", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? patchPayload : createPayload) });
+    }
+    if (form.id === "businessRuleForm") {
+      const createPayload = {
+        tenant_id: platformTenantValue(form),
+        module: form.elements.module.value,
+        rule_type: form.elements.rule_type.value,
+        code: form.elements.code.value,
+        name: form.elements.name.value,
+        description: form.elements.description.value || null,
+        condition_json: form.elements.condition_json.value || null,
+        action_json: form.elements.action_json.value || null,
+        severity: form.elements.severity.value,
+        is_active: form.elements.is_active.checked,
+      };
+      const patchPayload = {
+        name: createPayload.name,
+        description: createPayload.description,
+        condition_json: createPayload.condition_json,
+        action_json: createPayload.action_json,
+        severity: createPayload.severity,
+        is_active: createPayload.is_active,
+      };
+      await api(id ? `/api/configuration/rules/${id}` : "/api/configuration/rules", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? patchPayload : createPayload) });
+    }
+    if (form.id === "alertRuleForm") {
+      const createPayload = {
+        tenant_id: platformTenantValue(form),
+        module: form.elements.module.value,
+        code: form.elements.code.value,
+        name: form.elements.name.value,
+        description: form.elements.description.value || null,
+        condition_type: form.elements.condition_type.value,
+        threshold_days: Number(form.elements.threshold_days.value || 0),
+        severity: form.elements.severity.value,
+        target_role: form.elements.target_role.value || null,
+        message_template: form.elements.message_template.value || null,
+        is_active: form.elements.is_active.checked,
+      };
+      const patchPayload = {
+        name: createPayload.name,
+        description: createPayload.description,
+        condition_type: createPayload.condition_type,
+        threshold_days: createPayload.threshold_days,
+        severity: createPayload.severity,
+        target_role: createPayload.target_role,
+        message_template: createPayload.message_template,
+        is_active: createPayload.is_active,
+      };
+      await api(id ? `/api/configuration/alert-rules/${id}` : "/api/configuration/alert-rules", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? patchPayload : createPayload) });
+    }
+    if (form.id === "workflowForm") {
+      const createPayload = {
+        tenant_id: platformTenantValue(form),
+        module: form.elements.module.value,
+        code: form.elements.code.value,
+        name: form.elements.name.value,
+        description: form.elements.description.value || null,
+        is_active: form.elements.is_active?.checked ?? true,
+      };
+      const patchPayload = { name: createPayload.name, description: createPayload.description, is_active: createPayload.is_active };
+      await api(id ? `/api/configuration/workflows/${id}` : "/api/configuration/workflows", { method: id ? "PATCH" : "POST", body: JSON.stringify(id ? patchPayload : createPayload) });
+    }
+    if (form.id === "workflowStageForm") {
+      await api(`/api/configuration/workflows/${form.elements.workflow_id.value}/stages`, {
+        method: "POST",
+        body: JSON.stringify({
+          code: form.elements.code.value,
+          name: form.elements.name.value,
+          order: Number(form.elements.order.value || 0),
+          color: form.elements.color.value || null,
+          is_final: form.elements.is_final.checked,
+          is_active: true,
+        })
+      });
+    }
+    showToast("success", "Configuracion guardada correctamente.");
+    form.reset();
+    await loadPhase8Data();
+    renderConfigurationCenter();
+  }, "Guardando...");
+}
+
+function fillIntegrationForm(type, id) {
+  const maps = {
+    provider: { form: "#providerForm", items: state.ops.providers },
+    channel: { form: "#channelConfigForm", items: state.ops.integrationChannels },
+    template: { form: "#templateForm", items: state.ops.templates },
+    webhook: { form: "#webhookForm", items: state.ops.webhooks }
+  };
+  const meta = maps[type];
+  const form = meta ? document.querySelector(meta.form) : null;
+  const item = meta?.items?.find((row) => String(row.id) === String(id));
+  if (!form || !item) return;
+  setFormValues(form, { ...item, config: item.config ? JSON.stringify(item.config, null, 2) : "" });
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+async function handleIntegrationSubmit(form) {
+  const id = form.elements.id?.value;
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    if (form.id === "providerForm") {
+      await api(id ? `/api/integrations/providers/${id}` : "/api/integrations/providers", {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify({
+          tenant_id: platformTenantValue(form),
+          provider_type: form.elements.provider_type.value,
+          code: form.elements.code.value,
+          name: form.elements.name.value,
+          base_url: form.elements.base_url.value || null,
+          status: form.elements.status.value,
+          secret: form.elements.secret.value || null,
+          config: parseJsonField(form.elements.config.value, {}),
+        })
+      });
+    }
+    if (form.id === "channelConfigForm") {
+      await api(id ? `/api/integrations/channels/${id}` : "/api/integrations/channels", {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify({
+          tenant_id: platformTenantValue(form),
+          provider_id: optionalNumber(form.elements.provider_id.value),
+          channel_type: form.elements.channel_type.value,
+          name: form.elements.name.value,
+          status: form.elements.status.value,
+          from_value: form.elements.from_value.value || null,
+          config: parseJsonField(form.elements.config.value, {}),
+        })
+      });
+    }
+    if (form.id === "templateForm") {
+      await api(id ? `/api/integrations/templates/${id}` : "/api/integrations/templates", {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify({
+          tenant_id: platformTenantValue(form),
+          channel_type: form.elements.channel_type.value,
+          code: form.elements.code.value,
+          name: form.elements.name.value,
+          subject: form.elements.subject.value || null,
+          body: form.elements.body.value,
+          status: form.elements.status.value,
+        })
+      });
+    }
+    if (form.id === "webhookForm") {
+      await api(id ? `/api/integrations/webhooks/${id}` : "/api/integrations/webhooks", {
+        method: id ? "PATCH" : "POST",
+        body: JSON.stringify({
+          tenant_id: platformTenantValue(form),
+          name: form.elements.name.value,
+          event_type: form.elements.event_type.value,
+          target_url: form.elements.target_url.value,
+          status: form.elements.status.value,
+          secret: form.elements.secret.value || null,
+        })
+      });
+    }
+    showToast("success", "Integracion guardada correctamente.");
+    form.reset();
+    await loadPhase8BData();
+    renderIntegrations();
+  }, "Guardando...");
+}
+
+async function handleUploadPreview(form) {
+  const file = form.elements.csv_file.files[0];
+  if (!file) throw new Error("Selecciona un archivo CSV para previsualizar.");
+  const csvText = await file.text();
+  const payload = {
+    project_id: optionalNumber(form.elements.project_id.value),
+    upload_type: form.elements.upload_type.value,
+    file_name: file.name,
+    csv_text: csvText,
+    mapping: parseJsonField(form.elements.mapping.value, {}),
+    create_records: form.elements.create_records.checked,
+  };
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    const preview = await api("/api/uploads/preview", { method: "POST", body: JSON.stringify(payload) });
+    state.ops.uploadPreview = preview;
+    state.ops.uploadDraft = payload;
+    showToast("success", "Archivo previsualizado correctamente.");
+    renderUploads();
+  }, "Previsualizando...");
+}
+
+async function confirmUpload(button) {
+  if (!state.ops.uploadDraft) {
+    showToast("warning", "Primero genera un preview de carga.");
+    return;
+  }
+  await runAction(button, async () => {
+    const batch = await api("/api/uploads/confirm", {
+      method: "POST",
+      body: JSON.stringify({ ...state.ops.uploadDraft, create_records: Boolean(state.ops.uploadDraft.create_records) })
+    });
+    state.ops.uploadPreview = null;
+    state.ops.uploadDraft = null;
+    showToast("success", `Carga confirmada. Lote #${batch.id}.`);
+    await loadPhase8BData();
+    renderUploads();
+  }, "Confirmando...");
+}
+
+function excelPayloadFromForm(form) {
+  const columns = String(form.elements.columns.value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return {
+    source: form.elements.source.value,
+    filters: { text: form.elements.q.value || "" },
+    columns,
+    page: Number(form.elements.page.value || 1),
+    page_size: Number(form.elements.page_size.value || 25),
+  };
+}
+
+async function handleExcelQuery(form) {
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    const payload = excelPayloadFromForm(form);
+    state.ops.excelDraft = payload;
+    state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(payload) });
+    showToast("success", "Consulta ejecutada correctamente.");
+    renderExcelWeb();
+  }, "Consultando...");
+}
+
+async function saveExcelView(form) {
+  const queryForm = document.querySelector("#excelQueryForm");
+  const payload = state.ops.excelDraft || (queryForm ? excelPayloadFromForm(queryForm) : null);
+  if (!payload) {
+    showToast("warning", "Ejecuta una consulta antes de guardar la vista.");
+    return;
+  }
+  await runAction(form.querySelector("button[type='submit']"), async () => {
+    await api("/api/excel-web/views", {
+      method: "POST",
+      body: JSON.stringify({
+        name: form.elements.name.value,
+        source: payload.source,
+        columns: payload.columns,
+        filters: payload.filters,
+        sort: {},
+        is_public: form.elements.is_public.checked,
+        is_favorite: form.elements.is_favorite.checked,
+      })
+    });
+    showToast("success", "Vista guardada correctamente.");
+    form.reset();
+    await loadPhase8BData();
+    renderExcelWeb();
+  }, "Guardando...");
+}
+
+async function handleTypificationOpsSubmit(form) {
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    if (form.id === "typificationTreeForm") {
+      await api("/api/typifications/trees", {
+        method: "POST",
+        body: JSON.stringify({
+          project_id: optionalNumber(form.elements.project_id.value),
+          module: form.elements.module.value,
+          name: form.elements.name.value,
+          code: form.elements.code.value,
+          description: form.elements.description.value || null,
+          status: form.elements.status.value,
+        })
+      });
+    }
+    if (form.id === "typificationNodeForm") {
+      await api(`/api/typifications/trees/${form.elements.tree_id.value}/nodes`, {
+        method: "POST",
+        body: JSON.stringify({
+          level: Number(form.elements.level.value || 1),
+          code: form.elements.code.value,
+          label: form.elements.label.value,
+          order: Number(form.elements.order.value || 0),
+          color: form.elements.color.value || null,
+          requires_promise: form.elements.requires_promise.checked,
+          requires_next_action: form.elements.requires_next_action.checked,
+        })
+      });
+    }
+    if (form.id === "typificationCombinationForm") {
+      await api("/api/typifications/combinations", {
+        method: "POST",
+        body: JSON.stringify({
+          tree_id: Number(form.elements.tree_id.value),
+          path: form.elements.path.value.split(",").map((item) => item.trim()).filter(Boolean),
+          required_fields: parseJsonField(form.elements.required_fields.value, {}),
+          effects: parseJsonField(form.elements.effects.value, {}),
+          is_active: form.elements.is_active.checked,
+        })
+      });
+    }
+    showToast("success", "Tipificacion actualizada correctamente.");
+    form.reset();
+    await loadPhase8BData();
+    renderTypificationTrees();
+  }, "Guardando...");
 }
 
 document.querySelector("#loginForm").addEventListener("submit", async (event) => {
