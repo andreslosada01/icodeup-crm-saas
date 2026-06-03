@@ -82,3 +82,22 @@
 | sales | `GET /api/sales/dashboard` | `sales.leads.view` | sales | platform_admin, tenant_admin, coordinator, agent con permiso | Asesor comercial solo asignado | KPIs comerciales. |
 | sales | `GET /api/sales/pipeline` | `sales.opportunities.view` | sales | platform_admin, tenant_admin, coordinator, agent con permiso | Asesor comercial solo asignado | Valor por etapa. |
 | sales | `GET /api/sales/kanban` | `sales.opportunities.view` | sales | platform_admin, tenant_admin, coordinator, agent con permiso | Asesor comercial solo asignado | Kanban comercial. |
+
+## Actualizacion Fase 8B - Collection CRM operativo
+
+| Modulo | Endpoint | Permiso requerido | Modulo requerido | Roles compatibles | Restricciones |
+|---|---|---|---|---|---|
+| crm | `POST /api/crm/customers/{id}/activities` | `crm.activities.create` fallback `crm.clients.update` | crm/collections | agent, coordinator, tenant_admin | cliente asignado para gestor |
+| typifications | `GET /api/typifications/trees` | `typifications.view` | collections | tenant_admin, coordinator | filtra tenant |
+| typifications | `POST /api/typifications/trees` | `typifications.trees.manage` | collections | tenant_admin | tenant/proyecto validado |
+| typifications | `POST /api/typifications/combinations` | `typifications.combinations.manage` | collections | tenant_admin | path y arbol del mismo tenant |
+| recordings | `GET /api/recordings` | `recordings.view` | collections | tenant_admin, coordinator, agent, auditor | filtra tenant y usuario si aplica |
+| recordings | `GET /api/recordings/{id}/playback` | `recordings.playback` | collections | tenant_admin, coordinator, agent, auditor | audita acceso |
+| recordings | `GET /api/recordings/{id}/download` | `recordings.download` | collections | tenant_admin | audita descarga |
+| uploads | `POST /api/uploads/preview` | `uploads.view` | collections | tenant_admin, coordinator | no persiste archivo real |
+| uploads | `POST /api/uploads/confirm` | `uploads.manage` / especifico | collections | tenant_admin, coordinator | registra lote y auditoria |
+| uploads | `GET /api/uploads/demographics` | `demographics.view` | collections | tenant_admin, coordinator, agent | filtra tenant |
+| excel_web | `POST /api/excel-web/query` | `excel_web.query` | bi | tenant_admin, coordinator, agent | fuentes seguras, sin SQL libre |
+| excel_web | `POST /api/excel-web/export` | `excel_web.export` | bi | tenant_admin | registra export log |
+| integrations | `GET /api/integrations/providers` | `integrations.providers.view` | integrations | tenant_admin | secretos enmascarados |
+| integrations | `POST /api/integrations/channels/{id}/test` | `integrations.channels.update` | integrations | tenant_admin | prueba simulada |

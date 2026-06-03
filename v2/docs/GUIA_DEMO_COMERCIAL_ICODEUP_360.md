@@ -203,3 +203,16 @@ Para reforzar la narrativa comercial, mostrar despues del dashboard:
 Mensaje recomendado:
 
 > Icodeup 360 no es solo una pantalla de CRM; es una plataforma configurable donde la empresa puede ajustar catalogos, reglas, alertas y flujos operativos sin depender de desarrollo para cada cambio menor.
+
+## Actualizacion Fase 8B - Demo Collection CRM
+
+1. Abrir Cola de gestion y registrar una gestion con un gestor asignado.
+2. Mostrar Arboles de gestion para explicar combinaciones administrables por empresa.
+3. Abrir Grabaciones y explicar auditoria de playback/descarga.
+4. Abrir Cargas y repartos para mostrar lotes, validaciones y demograficos.
+5. Abrir Mi Excel Web y explicar consultas seguras sin SQL libre.
+6. Abrir Integraciones y canales para mostrar telefonia, WhatsApp, email, plantillas, webhooks y logs simulados.
+
+Mensaje recomendado:
+
+> Icodeup 360 Collection CRM permite operar cartera, canales, datos y control gerencial desde una sola plataforma SaaS.

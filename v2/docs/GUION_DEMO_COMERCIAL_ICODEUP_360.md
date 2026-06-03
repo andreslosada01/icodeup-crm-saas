@@ -108,3 +108,7 @@ La propuesta es iniciar con el modulo Collection & Legal CRM, activar los usuari
 **Cierre del bloque:**
 
 "La diferencia es que el producto ya combina operacion diaria, gobierno SaaS, configuracion funcional y alertas accionables en una sola experiencia."
+
+## Bloque nuevo Fase 8B - Collection CRM operativo
+
+"En Collection CRM el gestor puede registrar una gestion y el sistema actualiza historial, estado y auditoria. Los administradores parametrizan los arboles de tipificacion, cargan repartos, enriquecen demograficos, consultan grabaciones, cruzan informacion en Mi Excel Web y controlan canales como telefonia, WhatsApp, email y webhooks. Todo queda aislado por empresa, con permisos y trazabilidad."

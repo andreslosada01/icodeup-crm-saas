@@ -10,6 +10,7 @@ const state = {
   alerts: { items: [], summary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
+  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   selectedCustomer: null,
   selectedActivities: [],
   queuePage: 1,
@@ -38,6 +39,11 @@ const titles = {
   modules: "Modulos",
   configuration: "Centro de configuracion",
   alerts: "Alertas",
+  "typification-trees": "Arboles de gestion",
+  recordings: "Grabaciones",
+  uploads: "Cargas y repartos",
+  "excel-web": "Mi Excel Web",
+  integrations: "Integraciones",
   "tenant-settings": "Mi empresa",
   "company-users": "Usuarios de empresa",
   "roles-permissions": "Roles y permisos",
@@ -88,6 +94,7 @@ const sectionCategories = {
   users: "Administracion",
   projects: "Administracion",
   typifications: "Administracion",
+  "typification-trees": "Administracion",
   dashboard: "Operacion",
   tasks: "Operacion",
   queue: "Operacion",
@@ -99,8 +106,12 @@ const sectionCategories = {
   documents: "Operacion",
   sales: "Operacion",
   channels: "Operacion",
+  recordings: "Operacion",
+  uploads: "Operacion",
+  integrations: "Operacion",
   parties: "Operacion",
   reports: "Analitica",
+  "excel-web": "Analitica",
   alerts: "Analitica"
 };
 
@@ -122,6 +133,7 @@ const sectionModules = {
   users: "administration",
   projects: "administration",
   typifications: "collections",
+  "typification-trees": "collections",
   tasks: "collections",
   queue: "collections",
   customers: "collections",
@@ -132,8 +144,12 @@ const sectionModules = {
   documents: "documents",
   sales: "sales",
   channels: "integrations",
+  recordings: "collections",
+  uploads: "collections",
+  integrations: "integrations",
   parties: "crm",
   reports: "bi",
+  "excel-web": "bi",
   alerts: "bi"
 };
 
@@ -712,6 +728,26 @@ async function loadPhase8Data() {
   state.sales = { dashboard: salesDashboard, pipeline: salesPipeline, kanban: salesKanban, leads, opportunities };
 }
 
+async function loadPhase8BData() {
+  const allowed = (...sections) => menuHasSection(...sections);
+  const [trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult, providers, integrationChannels, templates, webhooks, events] = await Promise.all([
+    allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/trees", []) : [],
+    allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/combinations", []) : [],
+    allowed("recordings", "queue", "customers") ? apiMaybe("/api/recordings", []) : [],
+    allowed("uploads") ? apiMaybe("/api/uploads/batches", []) : [],
+    allowed("uploads", "queue", "customers") ? apiMaybe("/api/uploads/demographics?page_size=50", []) : [],
+    allowed("excel-web") ? apiMaybe("/api/excel-web/sources", []) : [],
+    allowed("excel-web") ? apiMaybe("/api/excel-web/views", []) : [],
+    allowed("excel-web") ? apiMaybe("/api/excel-web/query", null, { method: "POST", body: JSON.stringify({ source: "customers", page: 1, page_size: 10, filters: {}, columns: [] }) }) : null,
+    allowed("integrations", "channels") ? apiMaybe("/api/integrations/providers", []) : [],
+    allowed("integrations", "channels") ? apiMaybe("/api/integrations/channels", []) : [],
+    allowed("integrations") ? apiMaybe("/api/integrations/templates", []) : [],
+    allowed("integrations") ? apiMaybe("/api/integrations/webhooks", []) : [],
+    allowed("integrations") ? apiMaybe("/api/integrations/events", []) : []
+  ]);
+  state.ops = { trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult, providers, integrationChannels, templates, webhooks, events };
+}
+
 async function refreshAll() {
   await loadCoreData();
   renderDynamicMenu();
@@ -726,6 +762,9 @@ async function refreshAll() {
   }
   if (menuHasSection("configuration", "alerts", "legal", "sales", "dashboard", "reports")) {
     await optionalLoad("Fase 8", loadPhase8Data);
+  }
+  if (menuHasSection("typification-trees", "recordings", "uploads", "excel-web", "integrations")) {
+    await optionalLoad("Fase 8B", loadPhase8BData);
   }
   renderAll();
 }
@@ -2098,6 +2137,91 @@ function renderSalesAdvanced() {
   document.querySelector("#salesLeadTable") && (document.querySelector("#salesLeadTable").innerHTML = table(["Lead", "Fuente", "Interes", "Estado", "Prioridad"], leadRows, "Sin leads visibles."));
 }
 
+function renderTypificationTrees() {
+  const trees = state.ops.trees || [];
+  const combinations = state.ops.combinations || [];
+  renderCardSet("#typificationTreeKpis", [
+    { label: "Arboles", value: trees.length, detail: "Configurables por tenant, modulo y cartera.", tone: trees.length ? "green" : "yellow", action: "Administra la logica de gestion sin tocar codigo." },
+    { label: "Combinaciones", value: combinations.length, detail: "Rutas validas con campos y efectos.", tone: combinations.length ? "blue" : "yellow", action: "Exige promesa, fecha, comentario o escalamiento." },
+    { label: "Cobranzas", value: trees.filter((item) => item.module === "collections").length, detail: "Producto principal Collection CRM.", tone: "green", action: "Estandarizar resultados por cartera." },
+    { label: "Activos", value: trees.filter((item) => item.status === "active").length, detail: "Disponibles para operacion.", tone: "blue", action: "Inactivar arboles obsoletos." },
+  ]);
+  const treeRows = trees.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.project_id || "Global tenant")}</td><td>${escapeHtml(item.status)}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
+  document.querySelector("#typificationTreeTable") && (document.querySelector("#typificationTreeTable").innerHTML = table(["Arbol", "Modulo", "Proyecto", "Estado", "Actualizado"], treeRows, "No hay arboles configurados."));
+  const comboRows = combinations.map((item) => `<tr><td><strong>Regla #${item.id}</strong><small>${escapeHtml((item.path || []).join(" > "))}</small></td><td>${Object.keys(item.required_fields || {}).filter((key) => item.required_fields[key]).join(", ") || "-"}</td><td>${Object.keys(item.effects || {}).join(", ") || "-"}</td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join("");
+  document.querySelector("#typificationCombinationTable") && (document.querySelector("#typificationCombinationTable").innerHTML = table(["Combinacion", "Campos requeridos", "Efectos", "Estado"], comboRows, "Sin combinaciones configuradas."));
+}
+
+function renderRecordings() {
+  const recordings = state.ops.recordings || [];
+  const totalSeconds = recordings.reduce((sum, item) => sum + (item.duration_seconds || 0), 0);
+  renderCardSet("#recordingKpis", [
+    { label: "Grabaciones", value: recordings.length, detail: "Metadatos asociados a clientes y gestiones.", tone: recordings.length ? "green" : "yellow", action: "Consultar por cliente, gestor, fecha o telefono." },
+    { label: "Minutos", value: Math.round(totalSeconds / 60), detail: "Duracion acumulada visible.", tone: "blue", action: "Control de auditoria y calidad." },
+    { label: "Disponibles", value: recordings.filter((item) => item.playback_available).length, detail: "Con placeholder o storage seguro.", tone: "green", action: "Playback auditable por permiso." },
+    { label: "Proveedor", value: new Set(recordings.map((item) => item.provider_code).filter(Boolean)).size, detail: "Troncales o fuentes metadata.", tone: "blue", action: "Integrar PBX/API en fase posterior." },
+  ]);
+  const rows = recordings.slice(0, 50).map((item) => `<tr><td><strong>${escapeHtml(item.call_id)}</strong><small>${escapeHtml(item.phone_number || "-")}</small></td><td>${escapeHtml(item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${escapeHtml(item.provider_code || "-")}</td><td>${escapeHtml(item.status)}</td><td>${item.playback_available ? "Playback seguro" : "Sin URL"}</td></tr>`).join("");
+  document.querySelector("#recordingTable") && (document.querySelector("#recordingTable").innerHTML = table(["Llamada", "Direccion", "Duracion", "Proveedor", "Estado", "Acceso"], rows, "Sin grabaciones registradas."));
+}
+
+function renderUploads() {
+  const batches = state.ops.uploads || [];
+  const demographics = state.ops.demographics || [];
+  renderCardSet("#uploadKpis", [
+    { label: "Lotes", value: batches.length, detail: "Repartos, demograficos y archivos operativos.", tone: batches.length ? "green" : "yellow", action: "Previsualizar, validar y confirmar." },
+    { label: "Registros", value: batches.reduce((sum, item) => sum + (item.total_rows || 0), 0), detail: "Filas procesadas en lotes visibles.", tone: "blue", action: "Auditoria por carga y usuario." },
+    { label: "Errores", value: batches.reduce((sum, item) => sum + (item.error_rows || 0), 0), detail: "Filas que requieren correccion.", tone: "yellow", action: "Descargar errores con permiso." },
+    { label: "Demograficos", value: demographics.length, detail: "Datos complementarios para contactabilidad.", tone: demographics.length ? "green" : "yellow", action: "Cruzar telefonos, emails y fuentes." },
+  ]);
+  const batchRows = batches.map((item) => `<tr><td><strong>${escapeHtml(item.original_filename || `Lote ${item.id}`)}</strong><small>${escapeHtml(item.upload_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${item.total_rows}</td><td>${item.valid_rows}</td><td>${item.error_rows}</td><td>${dateOnly(item.created_at)}</td></tr>`).join("");
+  document.querySelector("#uploadBatchTable") && (document.querySelector("#uploadBatchTable").innerHTML = table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha"], batchRows, "Sin lotes de carga."));
+  const demographicRows = demographics.slice(0, 30).map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.employer || "-")}</td><td>${item.score}</td></tr>`).join("");
+  document.querySelector("#demographicTable") && (document.querySelector("#demographicTable").innerHTML = table(["Cliente", "Telefono", "Email", "Ciudad", "Empleador", "Score"], demographicRows, "Sin demograficos cargados."));
+}
+
+function renderExcelWeb() {
+  const sources = state.ops.excelSources || [];
+  const views = state.ops.excelViews || [];
+  const result = state.ops.excelResult;
+  renderCardSet("#excelWebKpis", [
+    { label: "Fuentes", value: sources.length, detail: "Tablas operativas seguras sin SQL libre.", tone: sources.length ? "green" : "yellow", action: "Clientes, gestiones, pagos, juridico y ventas." },
+    { label: "Vistas", value: views.length, detail: "Consultas guardadas por usuario o tenant.", tone: views.length ? "blue" : "yellow", action: "Estandarizar reportes funcionales." },
+    { label: "Resultado", value: result?.total || 0, detail: `Fuente actual: ${result?.source || "clientes"}.`, tone: result?.total ? "green" : "yellow", action: "Exportar solo con permiso." },
+    { label: "Columnas", value: result?.columns?.length || 0, detail: "Configurables por vista.", tone: "blue", action: "Ocultar campos no requeridos." },
+  ]);
+  const sourceRows = sources.map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${(item.columns || []).length}</td><td>${escapeHtml((item.columns || []).slice(0, 6).join(", "))}</td></tr>`).join("");
+  document.querySelector("#excelSourceTable") && (document.querySelector("#excelSourceTable").innerHTML = table(["Fuente", "Columnas", "Ejemplo"], sourceRows, "Sin fuentes configuradas."));
+  const viewRows = views.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.source)}</small></td><td>${item.is_public ? "Publica" : "Privada"}</td><td>${item.is_favorite ? "Favorita" : "-"}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
+  document.querySelector("#excelViewTable") && (document.querySelector("#excelViewTable").innerHTML = table(["Vista", "Alcance", "Favorita", "Actualizada"], viewRows, "Sin vistas guardadas."));
+  const resultRows = (result?.rows || []).map((row) => `<tr>${(result.columns || []).map((column) => `<td>${escapeHtml(row[column] ?? "-")}</td>`).join("")}</tr>`).join("");
+  document.querySelector("#excelResultTable") && (document.querySelector("#excelResultTable").innerHTML = table(result?.columns || [], resultRows, "Ejecuta una consulta para ver resultados."));
+}
+
+function renderIntegrations() {
+  const providers = state.ops.providers || [];
+  const channels = state.ops.integrationChannels || [];
+  const templates = state.ops.templates || [];
+  const webhooks = state.ops.webhooks || [];
+  const events = state.ops.events || [];
+  renderCardSet("#integrationKpis", [
+    { label: "Proveedores", value: providers.length, detail: "Telefonia, WhatsApp, email y APIs.", tone: providers.length ? "green" : "yellow", action: "Secretos siempre enmascarados." },
+    { label: "Canales", value: channels.length, detail: "Lineas y cuentas configuradas.", tone: channels.length ? "blue" : "yellow", action: "Pruebas simuladas antes de produccion." },
+    { label: "Plantillas", value: templates.length, detail: "Mensajes por canal.", tone: templates.length ? "green" : "yellow", action: "Estandarizar comunicacion." },
+    { label: "Eventos", value: events.length, detail: "Logs de pruebas y webhooks.", tone: "blue", action: "Auditoria de integraciones." },
+  ]);
+  const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.provider_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "Sin secreto visible")}</td></tr>`).join("");
+  document.querySelector("#providerTable") && (document.querySelector("#providerTable").innerHTML = table(["Proveedor", "Tipo", "Estado", "Secreto"], providerRows, "Sin proveedores configurados."));
+  const channelRows = channels.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.from_value || "-")}</small></td><td>${escapeHtml(item.channel_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.provider_id || "-")}</td></tr>`).join("");
+  document.querySelector("#integrationChannelTable") && (document.querySelector("#integrationChannelTable").innerHTML = table(["Canal", "Tipo", "Estado", "Proveedor"], channelRows, "Sin canales configurados."));
+  const templateRows = templates.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.channel_type)}</td><td>${escapeHtml(item.subject || "-")}</td><td>${escapeHtml(item.status)}</td></tr>`).join("");
+  document.querySelector("#templateTable") && (document.querySelector("#templateTable").innerHTML = table(["Plantilla", "Canal", "Asunto", "Estado"], templateRows, "Sin plantillas."));
+  const webhookRows = webhooks.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.event_type)}</small></td><td>${escapeHtml(item.target_url)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "-")}</td></tr>`).join("");
+  document.querySelector("#webhookTable") && (document.querySelector("#webhookTable").innerHTML = table(["Webhook", "URL", "Estado", "Secreto"], webhookRows, "Sin webhooks."));
+  const eventRows = events.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.event_type)}</strong><small>${escapeHtml(item.channel_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.entity_type || "-")}</td><td>${dateOnly(item.created_at)}</td></tr>`).join("");
+  document.querySelector("#integrationEventTable") && (document.querySelector("#integrationEventTable").innerHTML = table(["Evento", "Estado", "Entidad", "Fecha"], eventRows, "Sin eventos de canal."));
+}
+
 function renderAll() {
   fillSelects();
   renderRoleDashboard();
@@ -2115,6 +2239,11 @@ function renderAll() {
   renderAlertsCenter();
   renderLegalAdvanced();
   renderSalesAdvanced();
+  renderTypificationTrees();
+  renderRecordings();
+  renderUploads();
+  renderExcelWeb();
+  renderIntegrations();
 }
 
 function formPayload(form) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -10,12 +11,18 @@ from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISO
 from app.core.security import hash_password
 from app.models import (
     CommunicationChannel,
+    CallRecording,
+    ChannelConfiguration,
+    ChannelEventLog,
+    CommunicationTemplate,
     Customer,
+    CustomerDemographic,
     Document,
     AlertRule,
     BusinessRule,
     FunctionalCatalog,
     Lead,
+    IntegrationProvider,
     LegalAction,
     LegalCase,
     LegalDeadline,
@@ -31,6 +38,7 @@ from app.models import (
     PaymentPromise,
     Permission,
     Project,
+    SavedDataView,
     Role,
     RolePermission,
     SaasPlan,
@@ -38,12 +46,17 @@ from app.models import (
     TenantConfiguration,
     TenantModule,
     TenantSubscription,
+    TypificationCombinationRule,
     TypificationNode,
+    TypificationTree,
+    TypificationTreeNode,
+    UploadBatch,
     User,
     UserProjectAssignment,
     UserProfile,
     WorkflowDefinition,
     WorkflowStage,
+    WebhookConfiguration,
 )
 from app.services.access_control import sync_user_profile
 
@@ -112,6 +125,8 @@ PERMISSION_DEFS = [
     ("crm.clients.delete", "Eliminar clientes", "crm"),
     ("crm.clients.export", "Exportar clientes", "crm"),
     ("crm.clients.import", "Importar clientes", "crm"),
+    ("crm.activities.view", "Ver gestiones", "crm"),
+    ("crm.activities.create", "Registrar gestiones", "crm"),
     ("parties.view", "Ver terceros maestros", "crm"),
     ("parties.create", "Crear terceros maestros", "crm"),
     ("parties.update", "Actualizar terceros maestros", "crm"),
@@ -131,6 +146,22 @@ PERMISSION_DEFS = [
     ("collections.agreements.create", "Crear acuerdos", "collections"),
     ("collections.agreements.update", "Actualizar acuerdos", "collections"),
     ("collections.agreements.export", "Exportar acuerdos", "collections"),
+    ("typifications.view", "Ver arboles de tipificacion", "collections"),
+    ("typifications.manage", "Administrar tipificaciones legacy", "collections"),
+    ("typifications.trees.manage", "Administrar arboles de gestion", "collections"),
+    ("typifications.combinations.manage", "Administrar combinaciones", "collections"),
+    ("recordings.view", "Ver grabaciones", "collections"),
+    ("recordings.playback", "Reproducir grabaciones", "collections"),
+    ("recordings.download", "Descargar grabaciones", "collections"),
+    ("recordings.manage", "Administrar grabaciones", "collections"),
+    ("recordings.audit.view", "Auditar grabaciones", "collections"),
+    ("uploads.view", "Ver cargas", "collections"),
+    ("uploads.manage", "Administrar cargas", "collections"),
+    ("uploads.repartos.manage", "Cargar repartos", "collections"),
+    ("uploads.demographics.manage", "Cargar demograficos", "collections"),
+    ("uploads.download", "Descargar resultados de cargas", "collections"),
+    ("demographics.view", "Ver demograficos", "collections"),
+    ("demographics.manage", "Administrar demograficos", "collections"),
     ("legal.read", "Leer juridico", "legal"),
     ("legal.manage", "Gestionar juridico", "legal"),
     ("legal.cases.view", "Ver casos juridicos", "legal"),
@@ -156,9 +187,20 @@ PERMISSION_DEFS = [
     ("sales.opportunities.export", "Exportar oportunidades", "sales"),
     ("reports.view", "Ver reportes", "bi"),
     ("reports.export", "Exportar reportes", "bi"),
+    ("excel_web.view", "Ver Mi Excel Web", "bi"),
+    ("excel_web.query", "Consultar Mi Excel Web", "bi"),
+    ("excel_web.export", "Exportar Mi Excel Web", "bi"),
+    ("excel_web.views.manage", "Administrar vistas Mi Excel Web", "bi"),
+    ("integrations.providers.view", "Ver proveedores de integracion", "integrations"),
+    ("integrations.providers.manage", "Administrar proveedores de integracion", "integrations"),
     ("integrations.channels.view", "Ver canales", "integrations"),
     ("integrations.channels.create", "Crear canales", "integrations"),
     ("integrations.channels.update", "Actualizar canales", "integrations"),
+    ("integrations.templates.view", "Ver plantillas de comunicacion", "integrations"),
+    ("integrations.templates.manage", "Administrar plantillas de comunicacion", "integrations"),
+    ("integrations.webhooks.view", "Ver webhooks", "integrations"),
+    ("integrations.webhooks.manage", "Administrar webhooks", "integrations"),
+    ("integrations.events.view", "Ver logs de canales", "integrations"),
     ("menu.view", "Ver menu dinamico", "core"),
 ]
 
@@ -170,43 +212,53 @@ ROLE_PERMISSION_MAP = {
         "roles.manage", "roles.view", "roles.create", "roles.update", "roles.configure",
         "modules.view", "crm.read", "crm.manage", "crm.dashboard.view",
         "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.export", "crm.clients.import",
+        "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update", "parties.export",
         "collections.read", "collections.manage", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update", "collections.promises.export",
         "collections.payments.view", "collections.payments.create", "collections.payments.export",
         "collections.agreements.view", "collections.agreements.create", "collections.agreements.update", "collections.agreements.export",
+        "typifications.view", "typifications.manage", "typifications.trees.manage", "typifications.combinations.manage",
+        "recordings.view", "recordings.playback", "recordings.download", "recordings.manage", "recordings.audit.view",
+        "uploads.view", "uploads.manage", "uploads.repartos.manage", "uploads.demographics.manage", "uploads.download",
+        "demographics.view", "demographics.manage",
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.cases.export", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update", "documents.export",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
-        "reports.view", "reports.export", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
+        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "excel_web.export", "excel_web.views.manage",
+        "integrations.providers.view", "integrations.providers.manage", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
+        "integrations.templates.view", "integrations.templates.manage", "integrations.webhooks.view", "integrations.webhooks.manage", "integrations.events.view",
         "audit.logs.view", "audit.logs.export", "menu.view",
         "configuration.view", "configuration.manage", "configuration.catalogs.manage", "configuration.rules.manage",
         "configuration.alerts.manage", "configuration.workflows.manage", "alerts.view", "alerts.manage",
     ],
     COORDINATOR: [
         "crm.read", "crm.manage", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
+        "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update",
         "collections.read", "collections.manage", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
         "collections.agreements.view", "collections.agreements.create", "collections.agreements.update",
+        "typifications.view", "recordings.view", "recordings.playback", "uploads.view", "uploads.repartos.manage", "uploads.demographics.manage", "demographics.view",
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
-        "reports.view", "reports.export", "menu.view", "alerts.view",
+        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "menu.view", "alerts.view",
     ],
     QUALITY_SUPERVISOR: [
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
         "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
+        "crm.activities.view", "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
         "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
         "reports.view", "menu.view", "alerts.view",
     ],
     AGENT: [
-        "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update",
+        "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update", "crm.activities.view", "crm.activities.create",
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "menu.view", "alerts.view",
+        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query", "menu.view", "alerts.view",
     ],
 }
 
@@ -218,6 +270,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
             "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
             "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
+            "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
             "reports.view", "audit.logs.view", "alerts.view",
         ],
     },
@@ -227,7 +280,7 @@ SPECIALIZED_ROLE_DEFS = {
         "permissions": [
             "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
             "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
-            "documents.read", "documents.view", "documents.create", "alerts.view",
+            "documents.read", "documents.view", "documents.create", "recordings.view", "demographics.view", "alerts.view",
         ],
     },
     "sales_leader": {
@@ -237,7 +290,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.clients.view", "sales.manage",
             "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export",
             "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
-            "reports.view", "alerts.view",
+            "excel_web.view", "excel_web.query", "reports.view", "alerts.view",
         ],
     },
     "sales_advisor": {
@@ -246,7 +299,7 @@ SPECIALIZED_ROLE_DEFS = {
         "permissions": [
             "menu.view", "crm.read", "crm.clients.view", "sales.read_own", "sales.manage",
             "sales.leads.view", "sales.leads.create", "sales.leads.update",
-            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "alerts.view",
+            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "excel_web.view", "excel_web.query", "alerts.view",
         ],
     },
     "collections_leader": {
@@ -266,7 +319,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
             "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
             "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
-            "reports.view", "audit.logs.view", "alerts.view",
+            "typifications.view", "recordings.view", "recordings.playback", "recordings.audit.view", "uploads.view", "demographics.view", "excel_web.view", "excel_web.query", "reports.view", "audit.logs.view", "alerts.view",
         ],
     },
 }
@@ -296,11 +349,16 @@ MENU_DEFS = [
     ("Promesas", "promises", "collections", "collections.promises.view", "company_admin", 50),
     ("Pagos", "payments", "collections", "collections.payments.view", "company_admin", 60),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "company_admin", 70),
+    ("Arboles de gestion", "typification-trees", "collections", "typifications.view", "company_admin", 72),
+    ("Grabaciones", "recordings", "collections", "recordings.view", "company_admin", 74),
+    ("Cargas y repartos", "uploads", "collections", "uploads.view", "company_admin", 76),
     ("Juridico", "legal", "legal", "legal.cases.view", "company_admin", 80),
     ("Documentos", "documents", "documents", "documents.view", "company_admin", 90),
     ("Ventas", "sales", "sales", "sales.leads.view", "company_admin", 100),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "company_admin", 108),
     ("Reportes BI", "reports", "bi", "reports.view", "company_admin", 110),
     ("Canales", "channels", "integrations", "integrations.channels.view", "company_admin", 120),
+    ("Integraciones", "integrations", "integrations", "integrations.providers.view", "company_admin", 122),
     ("Centro de Configuracion", "configuration", "administration", "configuration.view", "company_admin", 125),
     ("Alertas", "alerts", "bi", "alerts.view", "company_admin", 128),
     ("Auditoria", "audit", "administration", "audit.logs.view", "company_admin", 130),
@@ -311,9 +369,12 @@ MENU_DEFS = [
     ("Promesas", "promises", "collections", "collections.promises.view", "operational_leader", 30),
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_leader", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_leader", 50),
+    ("Grabaciones", "recordings", "collections", "recordings.view", "operational_leader", 52),
+    ("Cargas y repartos", "uploads", "collections", "uploads.view", "operational_leader", 54),
     ("Juridico", "legal", "legal", "legal.cases.view", "operational_leader", 60),
     ("Documentos", "documents", "documents", "documents.view", "operational_leader", 70),
     ("Ventas", "sales", "sales", "sales.leads.view", "operational_leader", 80),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_leader", 88),
     ("Reportes BI", "reports", "bi", "reports.view", "operational_leader", 90),
     ("Alertas", "alerts", "bi", "alerts.view", "operational_leader", 95),
     ("Inicio", "dashboard", "core", "menu.view", "operational_user", 1),
@@ -323,7 +384,9 @@ MENU_DEFS = [
     ("Promesas", "promises", "collections", "collections.promises.view", "operational_user", 30),
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
+    ("Grabaciones", "recordings", "collections", "recordings.view", "operational_user", 55),
     ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_user", 65),
     ("Alertas", "alerts", "bi", "alerts.view", "operational_user", 70),
 ]
 
@@ -1179,6 +1242,199 @@ def _ensure_sales_demo(db: Session, tenant: Tenant, project: Project, owner: Use
         opportunity.notes = "Oportunidad ficticia para demo comercial."
 
 
+def _seed_phase8b_collection_demo(db: Session, tenant: Tenant, projects: list[Project], users: dict[str, User]) -> None:
+    admin = users["admin.andina@demo.icodeup.local"]
+    gestor_1 = users["gestor1.andina@demo.icodeup.local"]
+    gestor_2 = users["gestor2.andina@demo.icodeup.local"]
+    project = projects[0]
+
+    tree = db.scalar(select(TypificationTree).where(TypificationTree.tenant_id == tenant.id, TypificationTree.code == "COBRANZA_ANDINA"))
+    if tree is None:
+        tree = TypificationTree(tenant_id=tenant.id, project_id=None, module="collections", code="COBRANZA_ANDINA", name="Arbol Cobranza Andina Demo")
+        db.add(tree)
+        db.flush()
+    tree.description = "Arbol demo de combinaciones para cobranza administrativa, prejuridica y juridica."
+    tree.status = "active"
+    node_defs = [
+        (None, 1, "CONTACTO_EFECTIVO", "Contacto efectivo", "#16a34a", 10, {"requires_comment": True}),
+        (None, 1, "NO_CONTACTO", "No contacto", "#dc2626", 20, {"requires_next_action": True}),
+        (None, 1, "TERCERO", "Contacto tercero", "#f59e0b", 30, {"requires_comment": True}),
+        ("CONTACTO_EFECTIVO", 2, "PROMESA_PAGO", "Promesa de pago", "#2563eb", 10, {"requires_promise": True, "requires_amount": True, "requires_next_action": True, "target_customer_status": "Promesa", "changes_customer_status": True}),
+        ("CONTACTO_EFECTIVO", 2, "ACUERDO", "Acuerdo de pago", "#7c3aed", 20, {"requires_amount": True, "requires_document": True, "target_customer_status": "Acuerdo", "changes_customer_status": True}),
+        ("NO_CONTACTO", 2, "NUMERO_NO_EXISTE", "Numero no existe", "#dc2626", 10, {"generates_alert": True}),
+        ("NO_CONTACTO", 2, "SIN_RESPUESTA", "Sin respuesta", "#f59e0b", 20, {"requires_next_action": True}),
+        ("TERCERO", 2, "MENSAJE_DEJADO", "Mensaje dejado", "#f59e0b", 10, {"requires_next_action": True}),
+        ("CONTACTO_EFECTIVO", 2, "ESCALAR_JURIDICO", "Escalar a juridico", "#991b1b", 30, {"escalates_to_legal": True, "requires_document": True}),
+    ]
+    nodes: dict[str, TypificationTreeNode] = {}
+    for parent_code, level, code, label, color, order, flags in node_defs:
+        node = db.scalar(select(TypificationTreeNode).where(TypificationTreeNode.tree_id == tree.id, TypificationTreeNode.code == code))
+        if node is None:
+            node = TypificationTreeNode(tree_id=tree.id, code=code, label=label)
+            db.add(node)
+            db.flush()
+        nodes[code] = node
+        node.parent_id = nodes[parent_code].id if parent_code else None
+        node.level = level
+        node.label = label
+        node.color = color
+        node.order = order
+        node.is_active = True
+        node.requires_comment = bool(flags.get("requires_comment"))
+        node.requires_promise = bool(flags.get("requires_promise"))
+        node.requires_next_action = bool(flags.get("requires_next_action"))
+        node.requires_amount = bool(flags.get("requires_amount"))
+        node.requires_document = bool(flags.get("requires_document"))
+        node.changes_customer_status = bool(flags.get("changes_customer_status"))
+        node.target_customer_status = flags.get("target_customer_status")
+        node.generates_alert = bool(flags.get("generates_alert"))
+        node.escalates_to_legal = bool(flags.get("escalates_to_legal"))
+    combinations = [
+        (["CONTACTO_EFECTIVO", "PROMESA_PAGO"], {"promise_amount": True, "promise_due_date": True, "note": True}, {"customer_status": "Promesa", "next_action": "Confirmar cumplimiento de promesa"}),
+        (["CONTACTO_EFECTIVO", "ACUERDO"], {"amount": True, "document": True}, {"customer_status": "Acuerdo", "enable_agreement": True}),
+        (["NO_CONTACTO", "NUMERO_NO_EXISTE"], {"next_contact_at": True}, {"generate_alert": True, "next_action": "Cruzar demograficos"}),
+        (["CONTACTO_EFECTIVO", "ESCALAR_JURIDICO"], {"document": True, "note": True}, {"escalate_to_legal": True}),
+    ]
+    for path, required, effects in combinations:
+        path_ids = [nodes[code].id for code in path if code in nodes]
+        path_json = json.dumps(path_ids)
+        rule = db.scalar(select(TypificationCombinationRule).where(TypificationCombinationRule.tree_id == tree.id, TypificationCombinationRule.path_json == path_json))
+        if rule is None:
+            rule = TypificationCombinationRule(tenant_id=tenant.id, project_id=None, tree_id=tree.id, path_json=path_json)
+            db.add(rule)
+        rule.required_fields_json = json.dumps(required)
+        rule.effects_json = json.dumps(effects)
+        rule.is_active = True
+
+    customers = list(db.scalars(select(Customer).where(Customer.tenant_id == tenant.id).order_by(Customer.id).limit(60)))
+    activities = list(db.scalars(select(ManagementActivity).where(ManagementActivity.tenant_id == tenant.id).order_by(ManagementActivity.id).limit(30)))
+    for index, customer in enumerate(customers[:30], start=1):
+        demographic = db.scalar(select(CustomerDemographic).where(CustomerDemographic.tenant_id == tenant.id, CustomerDemographic.customer_id == customer.id, CustomerDemographic.source == "DEMO_FASE_8B"))
+        if demographic is None:
+            demographic = CustomerDemographic(tenant_id=tenant.id, customer_id=customer.id, source="DEMO_FASE_8B")
+            db.add(demographic)
+        demographic.phone = f"3008{index:06d}"
+        demographic.email = f"demografico{index:03d}@demo.local"
+        demographic.address = f"Calle Demo {index:02d} # 8B-00"
+        demographic.city = customer.city
+        demographic.state = "Departamento Demo"
+        demographic.employer = f"Empresa Demo {index:02d}"
+        demographic.job_title = "Cargo demo"
+        demographic.reference_name = f"Referencia Demo {index:02d}"
+        demographic.reference_phone = f"3018{index:06d}"
+        demographic.score = 60 + (index % 35)
+        demographic.metadata_json = json.dumps({"demo": True, "contactabilidad": customer.contactability})
+    for index, customer in enumerate(customers[:20], start=1):
+        activity = activities[(index - 1) % len(activities)] if activities else None
+        recording = db.scalar(select(CallRecording).where(CallRecording.tenant_id == tenant.id, CallRecording.call_id == f"CALL-DEMO-8B-{index:03d}"))
+        if recording is None:
+            recording = CallRecording(tenant_id=tenant.id, call_id=f"CALL-DEMO-8B-{index:03d}")
+            db.add(recording)
+        recording.project_id = customer.project_id
+        recording.customer_id = customer.id
+        recording.activity_id = activity.id if activity else None
+        recording.user_id = customer.assigned_user_id or (gestor_1.id if index % 2 else gestor_2.id)
+        recording.phone_number = customer.phone
+        recording.direction = "outbound"
+        recording.started_at = datetime.now(timezone.utc) - timedelta(days=index)
+        recording.duration_seconds = 60 + (index * 13)
+        recording.recording_url = None
+        recording.storage_path = f"tenants/demo/andina/recordings/call_demo_8b_{index:03d}.mp3"
+        recording.provider_code = "TRONCAL_DEMO_SIP_ANDINA"
+        recording.status = "available"
+        recording.metadata_json = json.dumps({"demo": True, "quality_score": 70 + (index % 25)})
+    batch_defs = [
+        ("reparto_cartera", "reparto_andina_demo_8b.csv", 60, 60, 0),
+        ("demograficos", "demograficos_andina_demo_8b.csv", 30, 30, 0),
+        ("grabaciones", "metadata_grabaciones_demo_8b.csv", 20, 20, 0),
+    ]
+    for upload_type, filename, total, valid, errors in batch_defs:
+        batch = db.scalar(select(UploadBatch).where(UploadBatch.tenant_id == tenant.id, UploadBatch.original_filename == filename))
+        if batch is None:
+            batch = UploadBatch(tenant_id=tenant.id, project_id=project.id, uploaded_by_id=admin.id, upload_type=upload_type, original_filename=filename)
+            db.add(batch)
+        batch.status = "completed"
+        batch.total_rows = total
+        batch.valid_rows = valid
+        batch.error_rows = errors
+        batch.created_rows = valid
+        batch.updated_rows = 0
+        batch.result_file_path = f"tenants/demo/andina/uploads/{filename}"
+        batch.summary_json = json.dumps({"demo": True, "message": "Lote ficticio para demo comercial"})
+    view_defs = [
+        ("Clientes alto riesgo", "customers", ["name", "document", "balance", "dpd", "risk"], {"risk": "Alto"}),
+        ("Promesas vencidas", "promises", ["customer_id", "amount", "due_date", "status"], {"status": "Vencida"}),
+        ("Clientes sin gestion 7 dias", "customers", ["name", "document", "next_action", "last_contact_at"], {"text": "Demo"}),
+        ("Casos juridicos proximos", "legal_cases", ["case_number", "stage", "risk", "next_deadline_at"], {}),
+        ("Pagos del mes", "payments", ["customer_id", "amount", "paid_at", "method"], {}),
+        ("Clientes con grabacion", "recordings", ["call_id", "customer_id", "duration_seconds", "provider_code"], {}),
+    ]
+    for name, source, columns, filters in view_defs:
+        view = db.scalar(select(SavedDataView).where(SavedDataView.tenant_id == tenant.id, SavedDataView.user_id == admin.id, SavedDataView.name == name))
+        if view is None:
+            view = SavedDataView(tenant_id=tenant.id, user_id=admin.id, name=name, source=source)
+            db.add(view)
+        view.columns_json = json.dumps(columns)
+        view.filters_json = json.dumps(filters)
+        view.sort_json = json.dumps({"field": "id", "direction": "desc"})
+        view.is_public = True
+        view.is_favorite = True
+    provider_defs = [
+        ("TRONCAL_DEMO_SIP_ANDINA", "Troncal Demo SIP Andina", "telephony"),
+        ("WHATSAPP_BUSINESS_DEMO", "WhatsApp Business Demo", "whatsapp"),
+        ("SMTP_DEMO_ANDINA", "SMTP Demo Andina", "email"),
+    ]
+    provider_ids: dict[str, int] = {}
+    for code, name, provider_type in provider_defs:
+        provider = db.scalar(select(IntegrationProvider).where(IntegrationProvider.tenant_id == tenant.id, IntegrationProvider.code == code))
+        if provider is None:
+            provider = IntegrationProvider(tenant_id=tenant.id, code=code, name=name, provider_type=provider_type)
+            db.add(provider)
+            db.flush()
+        provider.status = "configured"
+        provider.base_url = f"https://demo.icodeup.local/{provider_type}"
+        provider.config_json = json.dumps({"demo": True, "mode": "simulated"})
+        provider.secret_mask = "de****mo"
+        provider_ids[code] = provider.id
+    channel_defs = [
+        ("telephony", "Telefonia WebRTC Demo", "TRONCAL_DEMO_SIP_ANDINA", "+570000000000"),
+        ("whatsapp", "Linea WhatsApp Cobranzas Demo", "WHATSAPP_BUSINESS_DEMO", "+570000000001"),
+        ("email", "Correo Cobranzas Demo", "SMTP_DEMO_ANDINA", "cobranzas@demo.icodeup.local"),
+        ("sms", "SMS Demo", None, "ICODEUP"),
+    ]
+    for channel_type, name, provider_code, from_value in channel_defs:
+        channel = db.scalar(select(ChannelConfiguration).where(ChannelConfiguration.tenant_id == tenant.id, ChannelConfiguration.channel_type == channel_type, ChannelConfiguration.name == name))
+        if channel is None:
+            channel = ChannelConfiguration(tenant_id=tenant.id, channel_type=channel_type, name=name)
+            db.add(channel)
+        channel.provider_id = provider_ids.get(provider_code) if provider_code else None
+        channel.status = "active"
+        channel.from_value = from_value
+        channel.config_json = json.dumps({"demo": True})
+    template_defs = [
+        ("whatsapp", "PROMESA_RECORDATORIO", "Recordatorio promesa", None, "Hola {{cliente}}, recuerda tu compromiso de pago demo."),
+        ("email", "ACUERDO_PAGO", "Acuerdo de pago", "Acuerdo de pago demo", "Adjuntamos resumen demo de acuerdo de pago."),
+        ("sms", "CONTACTO_RAPIDO", "Contacto rapido", None, "Icodeup 360 demo: por favor comunicate con nosotros."),
+    ]
+    for channel_type, code, name, subject, body in template_defs:
+        template = db.scalar(select(CommunicationTemplate).where(CommunicationTemplate.tenant_id == tenant.id, CommunicationTemplate.code == code))
+        if template is None:
+            template = CommunicationTemplate(tenant_id=tenant.id, channel_type=channel_type, code=code, name=name, body=body)
+            db.add(template)
+        template.subject = subject
+        template.body = body
+        template.status = "active"
+    webhook = db.scalar(select(WebhookConfiguration).where(WebhookConfiguration.tenant_id == tenant.id, WebhookConfiguration.name == "Webhook Pagos Demo"))
+    if webhook is None:
+        webhook = WebhookConfiguration(tenant_id=tenant.id, name="Webhook Pagos Demo", event_type="payment.created", target_url="https://demo.icodeup.local/webhooks/payments")
+        db.add(webhook)
+    webhook.status = "active"
+    webhook.secret_mask = "wh****mo"
+    event = db.scalar(select(ChannelEventLog).where(ChannelEventLog.tenant_id == tenant.id, ChannelEventLog.event_type == "demo.seed.8b"))
+    if event is None:
+        db.add(ChannelEventLog(tenant_id=tenant.id, channel_type="system", event_type="demo.seed.8b", status="simulated", payload_json=json.dumps({"demo": True, "message": "Semilla Fase 8B"})))
+
+
 def _seed_secondary_demo_tenants(db: Session, tenants: dict[str, Tenant], modules: dict[str, Module]) -> None:
     for tenant_def in DEMO_TENANTS[1:]:
         tenant = tenants[tenant_def["slug"]]
@@ -1286,6 +1542,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
             global_index += 1
 
     _ensure_sales_demo(db, andina, projects[0], commercial)
+    _seed_phase8b_collection_demo(db, andina, projects, users)
     _seed_secondary_demo_tenants(db, tenants, modules)
 
 def bootstrap_platform(db: Session) -> None:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -10,7 +10,8 @@ from app.api.deps import current_user
 from app.db.session import get_db
 from app.models import ManagementActivity, PaymentPromise, TypificationNode, User
 from app.schemas.crm import ActivityCreate, ActivityOut
-from app.services.access_control import require_permission
+from app.services.access_control import require_permission, user_has_permission
+from app.services.audit_service import record_audit
 
 from .access import activity_to_out, customer_for_access, ensure_read_access
 from .utils import next_action_for, priority_score
@@ -21,7 +22,8 @@ router = APIRouter()
 
 @router.get("/customers/{customer_id}/activities", response_model=list[ActivityOut])
 def list_activities(customer_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ActivityOut]:
-    require_permission(db, user, "crm.clients.view")
+    if not user_has_permission(db, user, "crm.activities.view"):
+        require_permission(db, user, "crm.clients.view")
     ensure_read_access(user)
     customer_for_access(db, customer_id, user)
     activities = list(db.scalars(select(ManagementActivity).where(ManagementActivity.customer_id == customer_id).order_by(ManagementActivity.created_at.desc()).limit(10)))
@@ -29,8 +31,9 @@ def list_activities(customer_id: int, db: Session = Depends(get_db), user: User 
 
 
 @router.post("/customers/{customer_id}/activities", response_model=ActivityOut, status_code=status.HTTP_201_CREATED)
-def create_activity(customer_id: int, payload: ActivityCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ActivityOut:
-    require_permission(db, user, "crm.clients.update")
+def create_activity(customer_id: int, payload: ActivityCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ActivityOut:
+    if not user_has_permission(db, user, "crm.activities.create"):
+        require_permission(db, user, "crm.clients.update")
     ensure_read_access(user)
     customer = customer_for_access(db, customer_id, user, write=True)
     typification = db.get(TypificationNode, payload.typification_id) if payload.typification_id else None
@@ -69,6 +72,18 @@ def create_activity(customer_id: int, payload: ActivityCreate, db: Session = Dep
         )
         customer.status = "Promesa"
         customer.next_action = "Confirmar cumplimiento de promesa"
+    record_audit(
+        db,
+        user,
+        "management_activity",
+        "create",
+        tenant_id=customer.tenant_id,
+        module="collections",
+        entity_id=customer.id,
+        object_id=customer.id,
+        after={"customer_id": customer.id, "channel": payload.channel, "result": result, "has_promise": bool(payload.promise_amount and payload.promise_due_date)},
+        request=request,
+    )
     db.commit()
     db.refresh(activity)
     return activity_to_out(db, activity)

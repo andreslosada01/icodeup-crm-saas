@@ -161,3 +161,16 @@
 - Validar que Centro de Configuracion no aparezca en menu de usuarios operativos sin permiso.
 - Validar que Alertas aparezca solo con `alerts.view`.
 - Validar que el badge de alertas no bloquee navegacion ni rompa responsive.
+
+## Checklist adicional Fase 8B
+
+- Validar que el gestor solo registre gestiones sobre clientes asignados.
+- Validar que `crm.activities.create` no habilite edicion global de clientes.
+- Validar que arboles y combinaciones de tipificacion no crucen tenant/proyecto.
+- Validar que grabaciones no expongan `recording_url` sin permiso de playback/download.
+- Validar que cada playback/download de grabacion registre log.
+- Validar que cargas no persistan archivos reales ni CSV completo en auditoria.
+- Validar que demograficos no dupliquen datos identicos por cliente/fuente.
+- Validar que Mi Excel Web no permita SQL libre.
+- Validar que exportes de Mi Excel Web requieran `excel_web.export`.
+- Validar que integraciones enmascaren secretos y usen pruebas simuladas.

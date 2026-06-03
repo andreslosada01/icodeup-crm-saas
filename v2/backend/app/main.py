@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import administration, alerts, auth, configuration, crm, dashboard, documents, governance, health, legal, menu, sales, subscriptions, tenants, typifications
+from app.api.routes import administration, alerts, auth, configuration, crm, dashboard, documents, excel_web, governance, health, integrations, legal, menu, recordings, sales, subscriptions, tenants, typifications, uploads
 from app.core.config import settings
 from app.db.session import SessionLocal, init_database
 from app.services.bootstrap_service import bootstrap_platform
@@ -29,6 +29,10 @@ app.include_router(subscriptions.router, prefix="/api/subscriptions", tags=["sub
 app.include_router(legal.router, prefix="/api/legal", tags=["legal"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(sales.router, prefix="/api/sales", tags=["sales"])
+app.include_router(recordings.router, prefix="/api/recordings", tags=["recordings"])
+app.include_router(uploads.router, prefix="/api/uploads", tags=["uploads"])
+app.include_router(excel_web.router, prefix="/api/excel-web", tags=["excel-web"])
+app.include_router(integrations.router, prefix="/api/integrations", tags=["integrations"])
 app.include_router(tenants.router, prefix="/api/tenants", tags=["tenants"])
 app.include_router(typifications.router, prefix="/api/typifications", tags=["typifications"])
 
