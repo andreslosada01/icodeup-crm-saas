@@ -17,6 +17,7 @@ from app.models import (
     CommunicationTemplate,
     Customer,
     CustomerDemographic,
+    CustomerObligation,
     Document,
     AlertRule,
     BusinessRule,
@@ -258,7 +259,8 @@ ROLE_PERMISSION_MAP = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "demographics.view", "menu.view", "alerts.view",
+        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "demographics.view",
+        "excel_web.view", "excel_web.query", "excel_web.views.manage", "menu.view", "alerts.view",
     ],
 }
 
@@ -385,6 +387,7 @@ MENU_DEFS = [
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
     ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_user", 65),
     ("Alertas", "alerts", "bi", "alerts.view", "operational_user", 70),
 ]
 
@@ -1016,6 +1019,40 @@ def _ensure_customer(
     return customer
 
 
+def _ensure_customer_obligations(db: Session, customer: Customer, leader: User | None = None) -> list[CustomerObligation]:
+    count = 1 + (customer.id % 3)
+    obligations: list[CustomerObligation] = []
+    remaining_balance = customer.balance
+    product_types = ["Consumo", "Microcredito", "Tarjeta privada", "Judicializada"]
+    for position in range(1, count + 1):
+        number = f"{customer.obligation or 'OBL-DEMO'}-{position}"
+        item = db.scalar(select(CustomerObligation).where(CustomerObligation.tenant_id == customer.tenant_id, CustomerObligation.obligation_number == number))
+        if item is None:
+            item = CustomerObligation(tenant_id=customer.tenant_id, customer_id=customer.id, obligation_number=number)
+            db.add(item)
+            db.flush()
+        share = max(150000, int(remaining_balance / (count - position + 1)))
+        remaining_balance -= share
+        item.project_id = customer.project_id
+        item.customer_id = customer.id
+        item.product_type = product_types[(customer.id + position) % len(product_types)]
+        item.portfolio_name = customer.segment or "Cartera demo"
+        item.purchase_number = f"COMPRA-DEMO-{customer.project_id or 0}-{position:02d}"
+        item.original_amount = share + 250000
+        item.current_balance = share
+        item.capital_amount = int(share * 0.74)
+        item.interest_amount = int(share * 0.19)
+        item.fees_amount = share - (item.capital_amount or 0) - (item.interest_amount or 0)
+        item.days_past_due = max(0, customer.dpd - ((position - 1) * 12))
+        item.status = "judicializada" if customer.status == "Escalado" else "active"
+        item.risk = "Alto" if item.days_past_due >= 75 else "Medio" if item.days_past_due >= 25 else "Bajo"
+        item.assigned_user_id = customer.assigned_user_id
+        item.assigned_leader_id = leader.id if leader else None
+        item.metadata_json = json.dumps({"demo": True, "source": "bootstrap_operativo", "summary_from_customer": customer.id})
+        obligations.append(item)
+    return obligations
+
+
 def _ensure_activity(db: Session, customer: Customer, user: User, typification: TypificationNode | None, channel: str, result: str, note: str, days_ago: int) -> None:
     existing = db.scalar(select(ManagementActivity).where(ManagementActivity.customer_id == customer.id, ManagementActivity.note == note))
     if existing is None:
@@ -1244,6 +1281,7 @@ def _ensure_sales_demo(db: Session, tenant: Tenant, project: Project, owner: Use
 
 def _seed_phase8b_collection_demo(db: Session, tenant: Tenant, projects: list[Project], users: dict[str, User]) -> None:
     admin = users["admin.andina@demo.icodeup.local"]
+    leader = users["coord.cobranzas.andina@demo.icodeup.local"]
     gestor_1 = users["gestor1.andina@demo.icodeup.local"]
     gestor_2 = users["gestor2.andina@demo.icodeup.local"]
     project = projects[0]
@@ -1362,21 +1400,28 @@ def _seed_phase8b_collection_demo(db: Session, tenant: Tenant, projects: list[Pr
         batch.result_file_path = f"tenants/demo/andina/uploads/{filename}"
         batch.summary_json = json.dumps({"demo": True, "message": "Lote ficticio para demo comercial"})
     view_defs = [
-        ("Cartera alto riesgo", "customers", ["name", "document", "balance", "dpd", "risk"], {"risk": "Alto"}),
-        ("Promesas vigentes", "promises", ["customer_id", "amount", "due_date", "status"], {"status": "Vigente"}),
-        ("Clientes sin gestion 7 dias", "customers", ["name", "document", "next_action", "last_contact_at"], {"text": "Demo"}),
-        ("Casos juridicos proximos", "legal_cases", ["case_number", "stage", "risk", "next_deadline_at"], {}),
-        ("Pagos del mes", "payments", ["customer_id", "amount", "paid_at", "method"], {}),
+        (admin, "Cartera alto riesgo", "customers", ["name", "document", "balance", "dpd", "risk"], {"risk": "Alto"}, True),
+        (admin, "Pagos del mes", "payments", ["customer_id", "amount", "paid_at", "method"], {}, True),
+        (admin, "Reparto por gestor", "customers", ["name", "document", "assigned_user_id", "balance", "status"], {}, True),
+        (leader, "Productividad equipo", "activities", ["customer_id", "user_id", "channel", "result", "created_at"], {}, True),
+        (leader, "Promesas vencidas equipo", "promises", ["customer_id", "user_id", "amount", "due_date", "status"], {"status": "Vencida"}, True),
+        (leader, "Obligaciones equipo alto riesgo", "obligations", ["customer_id", "obligation_number", "current_balance", "days_past_due", "risk", "assigned_user_id"], {"risk": "Alto"}, True),
+        (gestor_1, "Mis clientes pendientes", "customers", ["name", "document", "balance", "dpd", "status", "risk"], {}, False),
+        (gestor_1, "Mis promesas vencidas", "promises", ["customer_id", "amount", "due_date", "status"], {"status": "Vencida"}, False),
+        (gestor_1, "Mis gestiones de hoy", "activities", ["customer_id", "channel", "result", "note", "created_at"], {}, False),
+        (gestor_1, "Mis obligaciones alto riesgo", "obligations", ["customer_id", "obligation_number", "current_balance", "days_past_due", "risk"], {"risk": "Alto"}, False),
+        (gestor_2, "Mis clientes pendientes", "customers", ["name", "document", "balance", "dpd", "status", "risk"], {}, False),
+        (gestor_2, "Mis obligaciones alto riesgo", "obligations", ["customer_id", "obligation_number", "current_balance", "days_past_due", "risk"], {"risk": "Alto"}, False),
     ]
-    for name, source, columns, filters in view_defs:
-        view = db.scalar(select(SavedDataView).where(SavedDataView.tenant_id == tenant.id, SavedDataView.user_id == admin.id, SavedDataView.name == name))
+    for owner, name, source, columns, filters, is_public in view_defs:
+        view = db.scalar(select(SavedDataView).where(SavedDataView.tenant_id == tenant.id, SavedDataView.user_id == owner.id, SavedDataView.name == name))
         if view is None:
-            view = SavedDataView(tenant_id=tenant.id, user_id=admin.id, name=name, source=source)
+            view = SavedDataView(tenant_id=tenant.id, user_id=owner.id, name=name, source=source)
             db.add(view)
         view.columns_json = json.dumps(columns)
         view.filters_json = json.dumps(filters)
         view.sort_json = json.dumps({"field": "id", "direction": "desc"})
-        view.is_public = True
+        view.is_public = is_public
         view.is_favorite = True
     provider_defs = [
         ("TRONCAL_DEMO_SIP_ANDINA", "Troncal Demo SIP Andina", "telephony"),
@@ -1482,6 +1527,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
 
     gestor_1 = users["gestor1.andina@demo.icodeup.local"]
     gestor_2 = users["gestor2.andina@demo.icodeup.local"]
+    leader = users["coord.cobranzas.andina@demo.icodeup.local"]
     lawyer = users["abogado.andina@demo.icodeup.local"]
     commercial = users["comercial.andina@demo.icodeup.local"]
     global_index = 1
@@ -1492,6 +1538,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
             segment = ["Consumo castigado", "Microcredito", "Tarjeta privada", "Judicializado"][project_idx]
             judicialized = code == "CARTERA-JUDICIALIZADA"
             customer = _ensure_customer(db, andina, project, assigned, global_index, segment, judicialized)
+            _ensure_customer_obligations(db, customer, leader)
             _ensure_activity(db, customer, assigned, typifications.get("CONTACTO"), "phone", "Llamada efectiva", f"DEMO FASE 5 gestion telefonica {customer.document}", global_index % 10)
             if global_index % 3 == 0:
                 _ensure_activity(db, customer, assigned, typifications.get("PROMESA"), "whatsapp", "Promesa generada", f"DEMO FASE 5 promesa whatsapp {customer.document}", 2)

@@ -17,7 +17,7 @@ from app.models.collection_ops import (
     WebhookConfiguration,
 )
 from app.models.configuration import AlertRule, BusinessRule, FunctionalCatalog, GeneratedAlert, TenantConfiguration, WorkflowDefinition, WorkflowStage, WorkflowTransition
-from app.models.crm import CommunicationChannel, Customer, ImportBatch, ManagementActivity, Payment, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, TypificationNode
+from app.models.crm import CommunicationChannel, Customer, CustomerObligation, ImportBatch, ManagementActivity, Payment, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, TypificationNode
 from app.models.documents import Document
 from app.models.identity import User, UserProjectAssignment
 from app.models.legal import LegalAction, LegalCase, LegalDeadline, LegalHearing
@@ -38,6 +38,7 @@ __all__ = [
     "CommunicationChannel",
     "CommunicationTemplate",
     "Customer",
+    "CustomerObligation",
     "CustomerDemographic",
     "DataExportLog",
     "Document",

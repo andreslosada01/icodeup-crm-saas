@@ -56,8 +56,10 @@ def test_agent_role_has_operational_activity_permission(client, admin_headers):
     permissions = set(collections_agent.get("permission_codes") or [])
     assert "crm.activities.create" in permissions
     assert "crm.clients.export" not in permissions
-    assert "excel_web.view" not in permissions
-    assert "excel_web.query" not in permissions
+    assert "excel_web.view" in permissions
+    assert "excel_web.query" in permissions
+    assert "excel_web.views.manage" in permissions
+    assert "excel_web.export" not in permissions
     assert "integrations.providers.manage" not in permissions
 
 
@@ -66,14 +68,28 @@ def test_agent_menu_hides_non_demo_operational_modules(client, agent_headers):
     assert response.status_code == 200, response.text
     sections = {item["section"] for item in response.json().get("items", [])}
     assert "recordings" not in sections
-    assert "excel-web" not in sections
+    assert "excel-web" in sections
     assert "uploads" not in sections
     assert "integrations" not in sections
     assert "configuration" not in sections
 
 
-def test_agent_cannot_access_excel_web_or_recordings(client, agent_headers):
+def test_agent_can_access_scoped_excel_web_but_not_recordings(client, agent_headers):
     response = client.get("/api/excel-web/sources", headers=agent_headers)
-    assert response.status_code == 403, response.text
+    assert response.status_code == 200, response.text
+    source_codes = {item["code"] for item in response.json()}
+    assert "customers" in source_codes
+    assert "obligations" in source_codes
+    assert "recordings" not in source_codes
+    response = client.post(
+        "/api/excel-web/query",
+        headers=agent_headers,
+        json={"source": "customers", "filters": {}, "columns": ["id", "assigned_user_id", "name"], "page": 1, "page_size": 50},
+    )
+    assert response.status_code == 200, response.text
+    rows = response.json()["rows"]
+    assert rows
+    agent_id = rows[0]["assigned_user_id"]
+    assert all(row["assigned_user_id"] == agent_id for row in rows)
     response = client.get("/api/recordings", headers=agent_headers)
     assert response.status_code == 403, response.text

@@ -392,6 +392,11 @@ function menuUser() {
   return state.core.menu?.user || currentUser || {};
 }
 
+function canExportExcelWeb() {
+  const audience = menuUser().audience;
+  return ["platform_admin", "company_admin", "operational_leader"].includes(audience);
+}
+
 function activeTenant() {
   return state.core.menu?.tenant || currentUser || {};
 }
@@ -2626,7 +2631,7 @@ function renderExcelWeb() {
       <label>Filas por pagina<input name="page_size" type="number" min="1" max="100" value="${result?.page_size || 25}" /></label>
       <label class="wide">Columnas visibles<div class="checkbox-grid">${columnChecks || "<p class='empty'>Selecciona una fuente para ver columnas.</p>"}</div></label>
       <button type="submit">Ejecutar consulta</button>
-      <button class="secondary-button" data-excel-export type="button">Exportar</button>
+      ${canExportExcelWeb() ? `<button class="secondary-button" data-excel-export type="button">Exportar</button>` : `<p class="form-note">Exportacion no disponible para gestores. La consulta queda limitada a tu operacion.</p>`}
     </form>
     <p class="form-note">${result ? `${result.total} registros - pagina ${result.page} de ${result.total_pages}` : "Configura la fuente y ejecuta una consulta segura."}</p>
     ${table(result?.columns || selectedColumns, resultRows, "Ejecuta una consulta para ver resultados.")}

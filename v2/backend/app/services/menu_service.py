@@ -54,7 +54,7 @@ def build_menu(db: Session, user: User) -> dict:
     for item in items:
         if item.route_name in seen_sections:
             continue
-        if audience == "operational_user" and item.route_name in {"recordings", "uploads", "integrations", "excel-web"}:
+        if audience == "operational_user" and item.route_name in {"recordings", "uploads", "integrations"}:
             continue
         if not _audience_allowed(item.audience, user, db):
             continue

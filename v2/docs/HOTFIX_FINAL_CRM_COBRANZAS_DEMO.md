@@ -26,10 +26,11 @@ Para el perfil gestor de cobranzas se ocultaron o bloquearon:
 - Cargas y repartos
 - Integraciones
 - Centro de configuracion
-- Mi Excel Web
 - Gobierno SaaS
 - Auditoria
 - Salud de sistema
+
+Nota posterior: `Mi Excel Web` fue restaurado para gestor con alcance limitado a su operacion propia. El gestor no tiene exportacion masiva.
 
 ## 5. Estado final de Mi Excel Web
 
@@ -43,7 +44,7 @@ Mi Excel Web queda enfocado en Admin Empresa para demo:
 - Permite guardar vistas.
 - Permite solicitar exportacion auditada.
 
-Para gestor, Mi Excel Web queda oculto del menu y bloqueado por backend con 403.
+Para gestor, Mi Excel Web queda disponible con scope de usuario: clientes, obligaciones, gestiones, promesas, pagos, acuerdos, documentos y alertas propias/asignadas. Export queda deshabilitado para evitar descarga masiva.
 
 ## 6. Pruebas con gestor
 
@@ -60,7 +61,7 @@ Validaciones:
 - `GET /api/crm/customers/{id}/activities` muestra la gestion creada.
 - Cliente no asignado queda bloqueado.
 - Cliente cross-tenant queda bloqueado.
-- `/api/excel-web/sources` responde 403.
+- `/api/excel-web/sources` responde fuentes permitidas por alcance.
 - `/api/recordings` responde 403.
 
 ## 7. Pruebas con admin
@@ -85,7 +86,6 @@ Validaciones:
 ## 9. Modulos que no se deben mostrar al gestor
 
 - Grabaciones
-- Mi Excel Web
 - Cargas
 - Integraciones
 - Configuracion
