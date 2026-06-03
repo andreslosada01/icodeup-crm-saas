@@ -4,7 +4,7 @@ import json
 from math import ceil
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,8 @@ from app.models import (
     User,
 )
 from app.schemas.collection_ops import ExcelWebQuery, ExcelWebQueryResult, SavedDataViewCreate, SavedDataViewOut
-from app.services.access_control import is_platform_admin, require_permission
+from app.core.roles import AGENT
+from app.services.access_control import get_profile_role_code, is_platform_admin, require_permission
 from app.services.audit_service import record_audit
 
 
@@ -70,6 +71,11 @@ SOURCE_MODELS = {
 }
 
 
+def _ensure_excel_web_allowed(db: Session, user: User) -> None:
+    if user.role == AGENT or get_profile_role_code(db, user) == "collections_agent":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Mi Excel Web no esta habilitado para gestores en esta demo.")
+
+
 def _row(model: Any, item: Any, columns: list[str]) -> dict[str, Any]:
     return {column: getattr(item, column, None) for column in columns}
 
@@ -96,12 +102,14 @@ def _apply_filters(query, model: Any, filters: dict[str, Any]):
 
 @router.get("/sources")
 def sources(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    _ensure_excel_web_allowed(db, user)
     require_permission(db, user, "excel_web.view")
     return [{"code": code, **definition} for code, definition in SOURCE_DEFS.items()]
 
 
 @router.post("/query", response_model=ExcelWebQueryResult)
 def query_data(payload: ExcelWebQuery, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ExcelWebQueryResult:
+    _ensure_excel_web_allowed(db, user)
     require_permission(db, user, "excel_web.query")
     if payload.source not in SOURCE_MODELS:
         return ExcelWebQueryResult(source=payload.source, columns=[], rows=[], total=0, page=payload.page, page_size=payload.page_size, total_pages=0)
@@ -121,6 +129,7 @@ def query_data(payload: ExcelWebQuery, db: Session = Depends(get_db), user: User
 
 @router.get("/views", response_model=list[SavedDataViewOut])
 def list_views(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[SavedDataViewOut]:
+    _ensure_excel_web_allowed(db, user)
     require_permission(db, user, "excel_web.views.manage")
     query = select(SavedDataView).where((SavedDataView.user_id == user.id) | (SavedDataView.is_public.is_(True))).order_by(SavedDataView.is_favorite.desc(), SavedDataView.name)
     if not is_platform_admin(db, user):
@@ -130,6 +139,7 @@ def list_views(db: Session = Depends(get_db), user: User = Depends(current_user)
 
 @router.post("/views", response_model=SavedDataViewOut, status_code=status.HTTP_201_CREATED)
 def create_view(payload: SavedDataViewCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> SavedDataViewOut:
+    _ensure_excel_web_allowed(db, user)
     require_permission(db, user, "excel_web.views.manage")
     view = SavedDataView(
         tenant_id=user.tenant_id,
@@ -150,6 +160,7 @@ def create_view(payload: SavedDataViewCreate, db: Session = Depends(get_db), use
 
 @router.patch("/views/{view_id}", response_model=SavedDataViewOut)
 def update_view(view_id: int, payload: SavedDataViewCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> SavedDataViewOut:
+    _ensure_excel_web_allowed(db, user)
     require_permission(db, user, "excel_web.views.manage")
     view = db.get(SavedDataView, view_id)
     if view is None or (not is_platform_admin(db, user) and view.tenant_id != user.tenant_id) or (view.user_id != user.id and not is_platform_admin(db, user)):
@@ -169,6 +180,7 @@ def update_view(view_id: int, payload: SavedDataViewCreate, db: Session = Depend
 
 @router.post("/export")
 def export_data(payload: ExcelWebQuery, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _ensure_excel_web_allowed(db, user)
     require_permission(db, user, "excel_web.export")
     result = query_data(payload, db, user)
     log = DataExportLog(tenant_id=user.tenant_id, user_id=user.id, source=payload.source, filters_json=json.dumps(payload.filters), columns_json=json.dumps(result.columns), row_count=result.total, status="completed")

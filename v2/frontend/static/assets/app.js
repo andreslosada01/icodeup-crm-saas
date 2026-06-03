@@ -1579,18 +1579,46 @@ async function submitActivity(event) {
     return;
   }
   if (message) message.textContent = "";
-  await runAction(button, async () => {
+  setButtonLoading(button, true, "Guardando...");
+  try {
     await api(`/api/crm/customers/${customerId}/activities`, { method: "POST", body: JSON.stringify(body) });
-    form.reset();
-    await loadCrmData();
-    await loadBi();
-    await loadPhase8BData();
-    await selectCustomer(customerId);
-    renderAll();
-    if (!document.querySelector("#managementDrawer")?.classList.contains("hidden")) renderManagementDrawer();
-    if (message) message.textContent = "Gestion guardada correctamente.";
-    showToast("success", "Gestion guardada correctamente.");
-  }, "Guardando...");
+  } catch (error) {
+    console.warn(error);
+    showToast("error", error.message || "No tienes permiso para gestionar este cliente.");
+    return;
+  } finally {
+    setButtonLoading(button, false);
+  }
+  form.reset();
+  await refreshCustomerAfterActivity(customerId);
+  const activeMessage = document.querySelector("#drawerActivityForm [data-form-message]");
+  if (activeMessage) activeMessage.textContent = "Gestion guardada correctamente.";
+  showToast("success", "Gestion guardada correctamente.");
+}
+
+async function refreshCustomerAfterActivity(customerId) {
+  const activityRequest = api(`/api/crm/customers/${customerId}/activities`);
+  const [queueResult, customersResult, activitiesResult, promisesResult, paymentsResult] = await Promise.allSettled([
+    loadQueue(),
+    loadCustomers(),
+    activityRequest,
+    menuHasSection("promises") ? api("/api/crm/promises") : Promise.resolve(state.crm.promises || []),
+    menuHasSection("payments") ? api("/api/crm/payments") : Promise.resolve(state.crm.payments || []),
+  ]);
+  [queueResult, customersResult, activitiesResult, promisesResult, paymentsResult].forEach((result) => {
+    if (result.status === "rejected") console.warn("Refresh posterior a gestion omitido:", result.reason);
+  });
+  if (activitiesResult.status === "fulfilled") state.selectedActivities = activitiesResult.value;
+  if (promisesResult.status === "fulfilled") state.crm.promises = promisesResult.value;
+  if (paymentsResult.status === "fulfilled") state.crm.payments = paymentsResult.value;
+  const refreshedCustomer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
+  if (refreshedCustomer) state.selectedCustomer = refreshedCustomer;
+  renderQueue();
+  renderCustomers();
+  renderPromises();
+  renderPayments();
+  renderQueueDetail();
+  if (!document.querySelector("#managementDrawer")?.classList.contains("hidden")) renderManagementDrawer();
 }
 
 function renderCustomers() {
@@ -2553,6 +2581,18 @@ function renderExcelWeb() {
   const selectedSource = state.ops.excelDraft?.source || result?.source || sources[0]?.code || "customers";
   const source = sources.find((item) => item.code === selectedSource) || sources[0] || { code: selectedSource, columns: [] };
   const selectedColumns = state.ops.excelDraft?.columns?.length ? state.ops.excelDraft.columns : (result?.columns || source.columns || []).slice(0, 8);
+  const activeFilters = state.ops.excelDraft?.filters || {};
+  const projectOptions = optionList(state.crm.options.projects || [], "id", "label", activeFilters.project_id || "");
+  const userOptions = optionList(state.crm.options.users || [], "id", "label", activeFilters.assigned_user_id || activeFilters.user_id || "");
+  const sourceOptions = sources.length
+    ? sources.map((item) => `<option value="${escapeHtml(item.code)}" ${item.code === selectedSource ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")
+    : `<option value="customers">Clientes</option>`;
+  const columnChecks = (source.columns || []).map((column) => `
+    <label class="checkbox-chip">
+      <input name="columns" type="checkbox" value="${escapeHtml(column)}" ${selectedColumns.includes(column) ? "checked" : ""} />
+      <span>${escapeHtml(column)}</span>
+    </label>
+  `).join("");
   renderCardSet("#excelWebKpis", [
     { label: "Fuentes", value: sources.length, detail: "Tablas operativas seguras sin SQL libre.", tone: sources.length ? "green" : "yellow", action: "Clientes, gestiones, pagos, juridico y ventas." },
     { label: "Vistas", value: views.length, detail: "Consultas guardadas por usuario o tenant.", tone: views.length ? "blue" : "yellow", action: "Estandarizar reportes funcionales." },
@@ -2574,11 +2614,17 @@ function renderExcelWeb() {
   const resultRows = (result?.rows || []).map((row) => `<tr>${(result.columns || []).map((column) => `<td>${escapeHtml(row[column] ?? "-")}</td>`).join("")}</tr>`).join("");
   document.querySelector("#excelResultTable") && (document.querySelector("#excelResultTable").innerHTML = `
     <form id="excelQueryForm" class="ops-form form-grid">
-      <label>Fuente<select name="source">${sources.map((item) => `<option value="${escapeHtml(item.code)}" ${item.code === selectedSource ? "selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}</select></label>
-      <label>Busqueda texto<input name="q" placeholder="cliente, documento, estado..." value="${escapeHtml(state.ops.excelDraft?.filters?.q || "")}" /></label>
+      <label>Fuente<select name="source">${sourceOptions}</select></label>
+      <label>Busqueda texto<input name="q" placeholder="cliente, documento, estado..." value="${escapeHtml(activeFilters.text || activeFilters.q || "")}" /></label>
+      <label>Estado<input name="status" placeholder="Vigente, Promesa, Activo..." value="${escapeHtml(activeFilters.status || "")}" /></label>
+      <label>Riesgo<select name="risk"><option value="">Todos</option><option value="Alto" ${activeFilters.risk === "Alto" ? "selected" : ""}>Alto</option><option value="Medio" ${activeFilters.risk === "Medio" ? "selected" : ""}>Medio</option><option value="Bajo" ${activeFilters.risk === "Bajo" ? "selected" : ""}>Bajo</option></select></label>
+      <label>Proyecto<select name="project_id"><option value="">Todos</option>${projectOptions}</select></label>
+      <label>Gestor<select name="assigned_user_id"><option value="">Todos</option>${userOptions}</select></label>
+      <label>Mora minima<input name="dpd_min" type="number" min="0" value="${escapeHtml(activeFilters.dpd_min ?? "")}" /></label>
+      <label>Mora maxima<input name="dpd_max" type="number" min="0" value="${escapeHtml(activeFilters.dpd_max ?? "")}" /></label>
       <label>Pagina<input name="page" type="number" min="1" value="${result?.page || 1}" /></label>
       <label>Filas por pagina<input name="page_size" type="number" min="1" max="100" value="${result?.page_size || 25}" /></label>
-      <label class="wide">Columnas visibles<input name="columns" value="${escapeHtml(selectedColumns.join(", "))}" placeholder="id, name, document" /></label>
+      <label class="wide">Columnas visibles<div class="checkbox-grid">${columnChecks || "<p class='empty'>Selecciona una fuente para ver columnas.</p>"}</div></label>
       <button type="submit">Ejecutar consulta</button>
       <button class="secondary-button" data-excel-export type="button">Exportar</button>
     </form>
@@ -3002,6 +3048,7 @@ function setupEvents() {
     if (excelSource) {
       const source = state.ops.excelSources.find((item) => item.code === excelSource.dataset.excelSource);
       state.ops.excelDraft = { source: excelSource.dataset.excelSource, filters: {}, columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 25 };
+      state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
     }
@@ -3493,13 +3540,21 @@ async function confirmUpload(button) {
 }
 
 function excelPayloadFromForm(form) {
-  const columns = String(form.elements.columns.value || "")
-    .split(",")
-    .map((item) => item.trim())
+  const columns = Array.from(form.querySelectorAll('input[name="columns"]:checked'))
+    .map((item) => item.value)
     .filter(Boolean);
+  const filters = {
+    text: form.elements.q.value || "",
+    status: form.elements.status.value || "",
+    risk: form.elements.risk.value || "",
+    project_id: optionalNumber(form.elements.project_id.value),
+    assigned_user_id: optionalNumber(form.elements.assigned_user_id.value),
+    dpd_min: optionalNumber(form.elements.dpd_min.value),
+    dpd_max: optionalNumber(form.elements.dpd_max.value),
+  };
   return {
     source: form.elements.source.value,
-    filters: { text: form.elements.q.value || "" },
+    filters,
     columns,
     page: Number(form.elements.page.value || 1),
     page_size: Number(form.elements.page_size.value || 25),

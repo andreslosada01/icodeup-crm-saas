@@ -258,7 +258,7 @@ ROLE_PERMISSION_MAP = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "demographics.view", "excel_web.view", "excel_web.query", "menu.view", "alerts.view",
+        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "demographics.view", "menu.view", "alerts.view",
     ],
 }
 
@@ -385,7 +385,6 @@ MENU_DEFS = [
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
     ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
-    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_user", 65),
     ("Alertas", "alerts", "bi", "alerts.view", "operational_user", 70),
 ]
 
@@ -1363,12 +1362,11 @@ def _seed_phase8b_collection_demo(db: Session, tenant: Tenant, projects: list[Pr
         batch.result_file_path = f"tenants/demo/andina/uploads/{filename}"
         batch.summary_json = json.dumps({"demo": True, "message": "Lote ficticio para demo comercial"})
     view_defs = [
-        ("Clientes alto riesgo", "customers", ["name", "document", "balance", "dpd", "risk"], {"risk": "Alto"}),
-        ("Promesas vencidas", "promises", ["customer_id", "amount", "due_date", "status"], {"status": "Vencida"}),
+        ("Cartera alto riesgo", "customers", ["name", "document", "balance", "dpd", "risk"], {"risk": "Alto"}),
+        ("Promesas vigentes", "promises", ["customer_id", "amount", "due_date", "status"], {"status": "Vigente"}),
         ("Clientes sin gestion 7 dias", "customers", ["name", "document", "next_action", "last_contact_at"], {"text": "Demo"}),
         ("Casos juridicos proximos", "legal_cases", ["case_number", "stage", "risk", "next_deadline_at"], {}),
         ("Pagos del mes", "payments", ["customer_id", "amount", "paid_at", "method"], {}),
-        ("Clientes con grabacion", "recordings", ["call_id", "customer_id", "duration_seconds", "provider_code"], {}),
     ]
     for name, source, columns, filters in view_defs:
         view = db.scalar(select(SavedDataView).where(SavedDataView.tenant_id == tenant.id, SavedDataView.user_id == admin.id, SavedDataView.name == name))

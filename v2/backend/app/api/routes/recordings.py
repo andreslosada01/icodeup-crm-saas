@@ -7,10 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
+from app.core.roles import AGENT
 from app.db.session import get_db
 from app.models import CallRecording, Customer, ManagementActivity, RecordingAccessLog, User
 from app.schemas.collection_ops import CallRecordingCreate, CallRecordingOut, RecordingLinkRequest
-from app.services.access_control import is_platform_admin, require_permission, require_tenant, user_has_permission
+from app.services.access_control import get_profile_role_code, is_platform_admin, require_permission, require_tenant, user_has_permission
 from app.services.audit_service import record_audit
 
 
@@ -23,6 +24,11 @@ def _json(value: str | None) -> dict:
 
 def _tenant_id(db: Session, user: User, requested: int | None = None) -> int:
     return require_tenant(db, user, requested).id
+
+
+def _ensure_recordings_allowed(db: Session, user: User) -> None:
+    if user.role == AGENT or get_profile_role_code(db, user) == "collections_agent":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Grabaciones no esta habilitado para gestores en esta demo.")
 
 
 def _recording_to_out(item: CallRecording, include_playback: bool = False) -> CallRecordingOut:
@@ -71,6 +77,7 @@ def list_recordings(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[CallRecordingOut]:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.view")
     query = select(CallRecording).order_by(CallRecording.started_at.desc().nullslast(), CallRecording.created_at.desc()).limit(100)
     if is_platform_admin(db, user):
@@ -93,6 +100,7 @@ def list_recordings(
 
 @router.post("", response_model=CallRecordingOut, status_code=status.HTTP_201_CREATED)
 def create_recording(payload: CallRecordingCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> CallRecordingOut:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.manage")
     tenant_id = _tenant_id(db, user, payload.tenant_id)
     if payload.customer_id:
@@ -110,6 +118,7 @@ def create_recording(payload: CallRecordingCreate, request: Request, db: Session
 
 @router.get("/access-logs")
 def access_logs(recording_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.audit.view")
     query = select(RecordingAccessLog).order_by(RecordingAccessLog.created_at.desc()).limit(100)
     if not is_platform_admin(db, user):
@@ -132,12 +141,14 @@ def access_logs(recording_id: int | None = None, db: Session = Depends(get_db), 
 
 @router.get("/{recording_id}", response_model=CallRecordingOut)
 def get_recording(recording_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> CallRecordingOut:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.view")
     return _recording_to_out(_recording_for_access(db, recording_id, user))
 
 
 @router.get("/{recording_id}/playback")
 def playback(recording_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.playback")
     recording = _recording_for_access(db, recording_id, user)
     db.add(RecordingAccessLog(tenant_id=recording.tenant_id, recording_id=recording.id, user_id=user.id, action="playback", ip_address=request.client.host if request.client else None, user_agent=request.headers.get("user-agent")))
@@ -148,6 +159,7 @@ def playback(recording_id: int, request: Request, db: Session = Depends(get_db),
 
 @router.get("/{recording_id}/download")
 def download(recording_id: int, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.download")
     recording = _recording_for_access(db, recording_id, user)
     db.add(RecordingAccessLog(tenant_id=recording.tenant_id, recording_id=recording.id, user_id=user.id, action="download", ip_address=request.client.host if request.client else None, user_agent=request.headers.get("user-agent")))
@@ -158,6 +170,7 @@ def download(recording_id: int, request: Request, db: Session = Depends(get_db),
 
 @router.post("/link-activity")
 def link_activity(payload: RecordingLinkRequest, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.manage")
     recording = _recording_for_access(db, payload.recording_id, user)
     if payload.activity_id:
