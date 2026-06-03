@@ -14,6 +14,7 @@ const state = {
   ui: { tablePages: {} },
   selectedCustomer: null,
   selectedActivities: [],
+  selectedObligations: [],
   queuePage: 1,
   customerPage: 1
 };
@@ -1410,8 +1411,51 @@ function renderQueue() {
 async function selectCustomer(customerId) {
   const customer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
   state.selectedCustomer = customer || null;
-  state.selectedActivities = customer ? await api(`/api/crm/customers/${customer.id}/activities`) : [];
+  if (customer) {
+    const [activities, obligations] = await Promise.all([
+      api(`/api/crm/customers/${customer.id}/activities`),
+      apiMaybe(`/api/crm/customers/${customer.id}/obligations`, [])
+    ]);
+    state.selectedActivities = activities;
+    state.selectedObligations = obligations;
+  } else {
+    state.selectedActivities = [];
+    state.selectedObligations = [];
+  }
   renderQueueDetail();
+}
+
+function obligationLabel(item) {
+  const product = item.product_type || item.portfolio_name || "Obligacion";
+  return `${product} - ${item.obligation_number}`;
+}
+
+function obligationOptions(selected = "") {
+  const options = [`<option value="">Cliente completo</option>`];
+  (state.selectedObligations || []).forEach((item) => {
+    const label = `${obligationLabel(item)} - ${money(item.current_balance || 0)} - ${item.days_past_due || 0} dias`;
+    options.push(`<option value="${item.id}" ${String(selected) === String(item.id) ? "selected" : ""}>${escapeHtml(label)}</option>`);
+  });
+  return options.join("");
+}
+
+function selectedObligationSummary(obligationId) {
+  const item = (state.selectedObligations || []).find((obligation) => String(obligation.id) === String(obligationId));
+  return item ? `Obligacion: ${item.obligation_number}` : "";
+}
+
+function renderObligationMatrix(obligations = state.selectedObligations) {
+  return relatedRows(
+    obligations,
+    (item) => `
+      <article class="activity-card">
+        <strong>${escapeHtml(obligationLabel(item))}</strong>
+        <span>${money(item.current_balance || 0)} - ${item.days_past_due || 0} dias mora - ${escapeHtml(item.risk || "-")}</span>
+        <p>${escapeHtml(item.status || "Activa")} - ${escapeHtml(item.assigned_user_name || "Sin gestor")}</p>
+      </article>
+    `,
+    "Este cliente aun no tiene obligaciones detalladas."
+  );
 }
 
 function channelHref(kind, customer) {
@@ -1438,6 +1482,7 @@ function renderQueueDetail() {
         <article class="activity-card">
           <strong>${escapeHtml(item.result)}</strong>
           <span>${dateOnly(item.created_at)} - ${escapeHtml(item.user_name || "")}</span>
+          ${item.obligation_number ? `<span>${escapeHtml(item.obligation_number)}</span>` : ""}
           <p>${escapeHtml(item.note || "Gestion registrada.")}</p>
         </article>
       `
@@ -1462,7 +1507,10 @@ function renderQueueDetail() {
       <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
       <a href="${channelHref("email", customer)}">Email</a>
     </div>
+    <div class="activity-head"><strong>Obligaciones</strong><span>Gestiona por deuda o cliente completo</span></div>
+    <div class="activity-matrix">${renderObligationMatrix()}</div>
     <form id="activityForm" class="form-grid management-grid" data-customer-id="${customer.id}">
+      <label class="wide">Gestionar sobre<select name="obligation_id">${obligationOptions()}</select></label>
       <label>Tipificacion<select name="typification_id">${typificationOptionsForCustomer(customer)}</select></label>
       <label>Canal<select name="channel"><option value="phone">Llamada</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="manual">Manual</option></select></label>
       <label>Resultado<select name="result"><option>Contactado</option><option>Sin contacto</option><option>Promesa</option><option>Escalado</option><option>Disputa</option></select></label>
@@ -1549,10 +1597,15 @@ function renderManagementDrawer() {
         <button type="button" data-section-jump="agreements">Crear acuerdo</button>
         <button type="button" data-prefill-result="Escalado">Escalar juridico</button>
       </div>
+      <article class="drawer-card">
+        <h3>Obligaciones del cliente</h3>
+        <div class="activity-matrix">${renderObligationMatrix()}</div>
+      </article>
       <div class="drawer-content-grid">
         <article class="drawer-card">
           <h3>Registrar gestion</h3>
           <form id="drawerActivityForm" class="form-grid management-grid" data-customer-id="${customer.id}">
+            <label class="wide">Gestionar sobre<select name="obligation_id">${obligationOptions()}</select></label>
             <label>Tipificacion<select name="typification_id">${typificationOptionsForCustomer(customer)}</select></label>
             <label>Canal<select name="channel"><option value="phone">Llamada</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="manual">Manual</option></select></label>
             <label>Resultado<select name="result"><option>Contactado</option><option>Sin contacto</option><option>Promesa</option><option>Escalado</option><option>Disputa</option></select></label>
@@ -1567,13 +1620,38 @@ function renderManagementDrawer() {
         </article>
         <article class="drawer-card">
           <h3>Actividad reciente</h3>
-          <div class="activity-matrix compact">${relatedRows(activities, (item) => `<article class="activity-card"><strong>${escapeHtml(item.result)}</strong><span>${dateOnly(item.created_at)} - ${escapeHtml(item.user_name || "")}</span><p>${escapeHtml(item.note || "Gestion registrada.")}</p></article>`, "Sin gestiones registradas.")}</div>
+          <div class="activity-matrix compact">${relatedRows(activities, (item) => `<article class="activity-card"><strong>${escapeHtml(item.result)}</strong><span>${dateOnly(item.created_at)} - ${escapeHtml(item.user_name || "")}</span>${item.obligation_number ? `<span>${escapeHtml(item.obligation_number)}</span>` : ""}<p>${escapeHtml(item.note || "Gestion registrada.")}</p></article>`, "Sin gestiones registradas.")}</div>
         </article>
         <article class="drawer-card">
           <h3>Promesas y pagos</h3>
-          <div class="mini-list">${relatedRows(promises, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.due_date)} - ${escapeHtml(item.status)}</span></p>`, "Sin promesas para este cliente.")}</div>
+          <div class="mini-list">${relatedRows(promises, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.due_date)} - ${escapeHtml(item.status)}</span>${item.obligation_number ? `<span>${escapeHtml(item.obligation_number)}</span>` : ""}</p>`, "Sin promesas para este cliente.")}</div>
           <div class="mini-list">${relatedRows(payments, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.paid_at)} - ${escapeHtml(item.method || "-")}</span></p>`, "Sin pagos para este cliente.")}</div>
         </article>
+        ${menuHasSection("agreements") ? `
+        <article class="drawer-card">
+          <h3>Crear acuerdo</h3>
+          <form id="drawerAgreementForm" class="form-grid management-grid" data-customer-id="${customer.id}">
+            <label class="wide">Obligacion<select name="obligation_id">${obligationOptions()}</select></label>
+            <label>Monto total<input name="total_amount" type="number" min="1" required /></label>
+            <label>Cuotas<input name="installment_count" type="number" min="1" value="3" required /></label>
+            <label>Inicio<input name="start_date" type="date" required /></label>
+            <label class="wide">Notas<textarea name="notes" placeholder="Condiciones acordadas, periodicidad o soporte pendiente."></textarea></label>
+            <button type="submit">Guardar acuerdo</button>
+            <p class="form-message wide" data-form-message></p>
+          </form>
+        </article>` : ""}
+        ${menuHasSection("documents") ? `
+        <article class="drawer-card">
+          <h3>Registrar soporte</h3>
+          <form id="drawerDocumentForm" class="form-grid management-grid" data-customer-id="${customer.id}" data-project-id="${customer.project_id || ""}">
+            <label>Tipo<select name="document_type"><option value="Soporte de gestion">Soporte de gestion</option><option value="Acuerdo de pago">Acuerdo de pago</option><option value="Comprobante">Comprobante</option><option value="Contrato">Contrato</option></select></label>
+            <label>Nombre<input name="original_name" placeholder="soporte_demo.pdf" required /></label>
+            <label class="wide">Obligacion relacionada<select name="obligation_id">${obligationOptions()}</select></label>
+            <label class="wide">Nota<textarea name="notes" placeholder="Detalle del soporte registrado como metadata."></textarea></label>
+            <button type="submit">Registrar soporte</button>
+            <p class="form-message wide" data-form-message></p>
+          </form>
+        </article>` : ""}
         <article class="drawer-card">
           <h3>Datos complementarios</h3>
           <div class="mini-list">${relatedRows(demographics, (item) => `<p><strong>${escapeHtml(item.source)}</strong><span>${escapeHtml(item.phone || item.email || item.city || "-")}</span></p>`, "Sin demograficos asociados.")}</div>
@@ -1583,6 +1661,8 @@ function renderManagementDrawer() {
     </section>
   `;
   drawer.querySelector("#drawerActivityForm")?.addEventListener("submit", submitActivity);
+  drawer.querySelector("#drawerAgreementForm")?.addEventListener("submit", saveDrawerAgreement);
+  drawer.querySelector("#drawerDocumentForm")?.addEventListener("submit", saveDrawerDocument);
 }
 
 async function submitActivity(event) {
@@ -1596,6 +1676,7 @@ async function submitActivity(event) {
     return;
   }
   const body = {
+    obligation_id: form.elements.obligation_id?.value ? Number(form.elements.obligation_id.value) : null,
     typification_id: form.elements.typification_id.value ? Number(form.elements.typification_id.value) : null,
     channel: form.elements.channel.value,
     result: form.elements.result.value,
@@ -1631,19 +1712,93 @@ async function submitActivity(event) {
   showToast("success", "Gestion guardada correctamente.");
 }
 
+async function saveDrawerAgreement(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const message = form.querySelector("[data-form-message]");
+  const customerId = form.dataset.customerId || state.selectedCustomer?.id;
+  if (!customerId) return showToast("error", "No hay cliente seleccionado para crear el acuerdo.");
+  const body = {
+    customer_id: Number(customerId),
+    obligation_id: form.elements.obligation_id?.value ? Number(form.elements.obligation_id.value) : null,
+    total_amount: Number(form.elements.total_amount.value || 0),
+    installment_count: Number(form.elements.installment_count.value || 0),
+    start_date: toDateTime(form.elements.start_date.value),
+    notes: form.elements.notes.value || null
+  };
+  if (!body.total_amount || !body.installment_count || !body.start_date) {
+    showToast("warning", "Completa monto, cuotas y fecha de inicio del acuerdo.");
+    return;
+  }
+  setButtonLoading(button, true, "Guardando...");
+  try {
+    await api("/api/crm/agreements", { method: "POST", body: JSON.stringify(body) });
+    form.reset();
+    if (message) message.textContent = "Acuerdo registrado correctamente.";
+    showToast("success", "Acuerdo registrado correctamente.");
+    await refreshCustomerAfterActivity(customerId);
+  } catch (error) {
+    console.warn(error);
+    showToast("error", error.message || "No fue posible crear el acuerdo.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+async function saveDrawerDocument(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button[type='submit']");
+  const message = form.querySelector("[data-form-message]");
+  const customerId = form.dataset.customerId || state.selectedCustomer?.id;
+  if (!customerId) return showToast("error", "No hay cliente seleccionado para registrar el soporte.");
+  const obligationNote = selectedObligationSummary(form.elements.obligation_id?.value);
+  const rawNotes = form.elements.notes.value || "";
+  const body = {
+    project_id: form.dataset.projectId ? Number(form.dataset.projectId) : null,
+    customer_id: Number(customerId),
+    document_type: form.elements.document_type.value,
+    original_name: form.elements.original_name.value,
+    mime_type: "application/pdf",
+    size_bytes: 0,
+    status: "registered",
+    notes: [obligationNote, rawNotes].filter(Boolean).join(" | ") || null
+  };
+  if (!body.original_name) {
+    showToast("warning", "Indica un nombre de soporte.");
+    return;
+  }
+  setButtonLoading(button, true, "Registrando...");
+  try {
+    await api("/api/documents", { method: "POST", body: JSON.stringify(body) });
+    form.reset();
+    if (message) message.textContent = "Soporte registrado como metadata.";
+    showToast("success", "Soporte registrado como metadata documental.");
+  } catch (error) {
+    console.warn(error);
+    showToast("error", error.message || "No fue posible registrar el soporte.");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
 async function refreshCustomerAfterActivity(customerId) {
   const activityRequest = api(`/api/crm/customers/${customerId}/activities`);
-  const [queueResult, customersResult, activitiesResult, promisesResult, paymentsResult] = await Promise.allSettled([
+  const obligationsRequest = apiMaybe(`/api/crm/customers/${customerId}/obligations`, []);
+  const [queueResult, customersResult, activitiesResult, obligationsResult, promisesResult, paymentsResult] = await Promise.allSettled([
     loadQueue(),
     loadCustomers(),
     activityRequest,
+    obligationsRequest,
     menuHasSection("promises") ? api("/api/crm/promises") : Promise.resolve(state.crm.promises || []),
     menuHasSection("payments") ? api("/api/crm/payments") : Promise.resolve(state.crm.payments || []),
   ]);
-  [queueResult, customersResult, activitiesResult, promisesResult, paymentsResult].forEach((result) => {
+  [queueResult, customersResult, activitiesResult, obligationsResult, promisesResult, paymentsResult].forEach((result) => {
     if (result.status === "rejected") console.warn("Refresh posterior a gestion omitido:", result.reason);
   });
   if (activitiesResult.status === "fulfilled") state.selectedActivities = activitiesResult.value;
+  if (obligationsResult.status === "fulfilled") state.selectedObligations = obligationsResult.value;
   if (promisesResult.status === "fulfilled") state.crm.promises = promisesResult.value;
   if (paymentsResult.status === "fulfilled") state.crm.payments = paymentsResult.value;
   const refreshedCustomer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
@@ -1685,6 +1840,7 @@ function renderPromises() {
       (item) => `
         <tr>
           <td>${escapeHtml(item.customer_name || "-")}</td>
+          <td>${escapeHtml(item.obligation_number || "-")}</td>
           <td>${money(item.amount)}</td>
           <td>${dateOnly(item.due_date)}</td>
           <td>${escapeHtml(item.channel || "-")}</td>
@@ -1694,7 +1850,7 @@ function renderPromises() {
       `
     )
     .join("");
-  document.querySelector("#promiseTable").innerHTML = table(["Cliente", "Monto", "Fecha", "Canal", "Estado", ""], rows, "No hay promesas.");
+  document.querySelector("#promiseTable").innerHTML = table(["Cliente", "Obligacion", "Monto", "Fecha", "Canal", "Estado", ""], rows, "No hay promesas.");
 }
 
 function renderPayments() {

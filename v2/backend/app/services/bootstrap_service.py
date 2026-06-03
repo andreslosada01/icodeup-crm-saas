@@ -260,7 +260,8 @@ ROLE_PERMISSION_MAP = {
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "typifications.view", "demographics.view",
+        "collections.agreements.view", "collections.agreements.create",
+        "documents.read", "documents.view", "documents.create", "typifications.view", "demographics.view",
         "excel_web.view", "excel_web.query", "excel_web.views.manage", "menu.view", "alerts.view",
     ],
 }
@@ -1088,7 +1089,12 @@ def _ensure_operational_sheet_rows(db: Session, tenant: Tenant, customers: list[
         row.metadata_json = json.dumps({"demo": True, "source": "bootstrap_excel_web_operativo", "customer_id": customer.id})
 
 
+def _first_customer_obligation(db: Session, customer: Customer) -> CustomerObligation | None:
+    return db.scalar(select(CustomerObligation).where(CustomerObligation.customer_id == customer.id).order_by(CustomerObligation.id))
+
+
 def _ensure_activity(db: Session, customer: Customer, user: User, typification: TypificationNode | None, channel: str, result: str, note: str, days_ago: int) -> None:
+    obligation = _first_customer_obligation(db, customer)
     existing = db.scalar(select(ManagementActivity).where(ManagementActivity.customer_id == customer.id, ManagementActivity.note == note))
     if existing is None:
         db.add(
@@ -1096,6 +1102,7 @@ def _ensure_activity(db: Session, customer: Customer, user: User, typification: 
                 tenant_id=customer.tenant_id,
                 project_id=customer.project_id,
                 customer_id=customer.id,
+                obligation_id=obligation.id if obligation else None,
                 user_id=user.id,
                 typification_id=typification.id if typification else None,
                 channel=channel,
@@ -1105,9 +1112,12 @@ def _ensure_activity(db: Session, customer: Customer, user: User, typification: 
                 created_at=datetime.now(timezone.utc) - timedelta(days=days_ago),
             )
         )
+    elif obligation and existing.obligation_id is None:
+        existing.obligation_id = obligation.id
 
 
 def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, due_in_days: int, status: str) -> None:
+    obligation = _first_customer_obligation(db, customer)
     existing = db.scalar(select(PaymentPromise).where(PaymentPromise.customer_id == customer.id, PaymentPromise.amount == amount, PaymentPromise.status == status))
     if existing is None:
         db.add(
@@ -1115,6 +1125,7 @@ def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, du
                 tenant_id=customer.tenant_id,
                 project_id=customer.project_id,
                 customer_id=customer.id,
+                obligation_id=obligation.id if obligation else None,
                 user_id=user.id,
                 amount=amount,
                 due_date=datetime.now(timezone.utc) + timedelta(days=due_in_days),
@@ -1122,6 +1133,8 @@ def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, du
                 status=status,
             )
         )
+    elif obligation and existing.obligation_id is None:
+        existing.obligation_id = obligation.id
 
 
 def _ensure_payment(db: Session, customer: Customer, user: User, amount: int, days_ago: int) -> None:
@@ -1143,6 +1156,7 @@ def _ensure_payment(db: Session, customer: Customer, user: User, amount: int, da
 
 
 def _ensure_agreement(db: Session, customer: Customer, user: User, installments: int, total_amount: int, status: str) -> PaymentAgreement:
+    obligation = _first_customer_obligation(db, customer)
     note = f"DEMO-ACUERDO-{customer.document}"
     agreement = db.scalar(select(PaymentAgreement).where(PaymentAgreement.customer_id == customer.id, PaymentAgreement.notes == note))
     if agreement is None:
@@ -1150,6 +1164,7 @@ def _ensure_agreement(db: Session, customer: Customer, user: User, installments:
             tenant_id=customer.tenant_id,
             project_id=customer.project_id,
             customer_id=customer.id,
+            obligation_id=obligation.id if obligation else None,
             user_id=user.id,
             total_amount=total_amount,
             installment_count=installments,
@@ -1159,6 +1174,8 @@ def _ensure_agreement(db: Session, customer: Customer, user: User, installments:
         )
         db.add(agreement)
         db.flush()
+    elif obligation and agreement.obligation_id is None:
+        agreement.obligation_id = obligation.id
     agreement.status = status
     existing_installments = list(db.scalars(select(PaymentAgreementInstallment).where(PaymentAgreementInstallment.agreement_id == agreement.id)))
     if not existing_installments:

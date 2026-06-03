@@ -15,6 +15,7 @@ from app.services.access_control import get_profile_role_code, is_company_admin,
 from app.services.audit_service import record_audit
 
 from .access import activity_to_out, customer_for_access, ensure_read_access
+from .obligations import obligation_for_access
 from .utils import next_action_for, priority_score
 
 
@@ -48,6 +49,9 @@ def create_activity(customer_id: int, payload: ActivityCreate, request: Request,
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes permiso para gestionar este cliente.")
     ensure_read_access(user)
     customer = customer_for_access(db, customer_id, user, write=True)
+    obligation = obligation_for_access(db, payload.obligation_id, user, write=False) if payload.obligation_id else None
+    if obligation and obligation.customer_id != customer.id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="La obligacion no pertenece al cliente seleccionado.")
     typification = db.get(TypificationNode, payload.typification_id) if payload.typification_id else None
     if typification and typification.tenant_id != customer.tenant_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Tipificacion fuera de la empresa.")
@@ -56,6 +60,7 @@ def create_activity(customer_id: int, payload: ActivityCreate, request: Request,
         tenant_id=customer.tenant_id,
         project_id=customer.project_id,
         customer_id=customer.id,
+        obligation_id=obligation.id if obligation else None,
         user_id=user.id,
         typification_id=payload.typification_id,
         channel=payload.channel,
@@ -76,6 +81,7 @@ def create_activity(customer_id: int, payload: ActivityCreate, request: Request,
                 tenant_id=customer.tenant_id,
                 project_id=customer.project_id,
                 customer_id=customer.id,
+                obligation_id=obligation.id if obligation else None,
                 user_id=user.id,
                 amount=payload.promise_amount,
                 due_date=payload.promise_due_date,
@@ -93,7 +99,13 @@ def create_activity(customer_id: int, payload: ActivityCreate, request: Request,
         module="collections",
         entity_id=customer.id,
         object_id=customer.id,
-        after={"customer_id": customer.id, "channel": payload.channel, "result": result, "has_promise": bool(payload.promise_amount and payload.promise_due_date)},
+        after={
+            "customer_id": customer.id,
+            "obligation_id": obligation.id if obligation else None,
+            "channel": payload.channel,
+            "result": result,
+            "has_promise": bool(payload.promise_amount and payload.promise_due_date),
+        },
         request=request,
     )
     db.commit()

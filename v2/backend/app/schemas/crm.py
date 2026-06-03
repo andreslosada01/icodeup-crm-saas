@@ -155,6 +155,7 @@ class ImportCustomersResponse(BaseModel):
 
 
 class ActivityCreate(BaseModel):
+    obligation_id: int | None = None
     typification_id: int | None = None
     channel: str = "manual"
     result: str = "Gestion registrada"
@@ -167,6 +168,8 @@ class ActivityCreate(BaseModel):
 class ActivityOut(BaseModel):
     id: int
     customer_id: int
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     user_id: int
     user_name: str | None = None
     typification_id: int | None = None
@@ -180,6 +183,7 @@ class ActivityOut(BaseModel):
 
 class PromiseCreate(BaseModel):
     customer_id: int
+    obligation_id: int | None = None
     amount: int = Field(gt=0)
     due_date: datetime
     channel: str | None = None
@@ -189,6 +193,8 @@ class PromiseOut(BaseModel):
     id: int
     customer_id: int
     customer_name: str | None = None
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     amount: int
     due_date: datetime
     channel: str | None = None
@@ -239,6 +245,7 @@ class AgreementInstallmentOut(BaseModel):
 
 class PaymentAgreementCreate(BaseModel):
     customer_id: int
+    obligation_id: int | None = None
     total_amount: int = Field(gt=0)
     installment_count: int = Field(gt=0)
     start_date: datetime
@@ -253,6 +260,8 @@ class PaymentAgreementOut(BaseModel):
     project_id: int | None = None
     customer_id: int
     customer_name: str | None = None
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     user_id: int
     total_amount: int
     installment_count: int

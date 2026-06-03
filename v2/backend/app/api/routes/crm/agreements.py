@@ -9,12 +9,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
 from app.db.session import get_db
-from app.models import Customer, PaymentAgreement, PaymentAgreementInstallment, User
+from app.models import Customer, CustomerObligation, PaymentAgreement, PaymentAgreementInstallment, User
 from app.schemas.crm import AgreementInstallmentOut, AgreementInstallmentPatch, PaymentAgreementCreate, PaymentAgreementOut
 from app.services.audit_service import record_audit
 from app.services.access_control import require_permission
 
 from .access import customer_for_access, customer_query, ensure_read_access, is_platform
+from .obligations import obligation_for_access
 
 
 router = APIRouter()
@@ -38,6 +39,7 @@ def agreement_for_access(db: Session, agreement_id: int, user: User, write: bool
 
 def agreement_to_out(db: Session, agreement: PaymentAgreement) -> PaymentAgreementOut:
     customer = db.get(Customer, agreement.customer_id)
+    obligation = db.get(CustomerObligation, agreement.obligation_id) if agreement.obligation_id else None
     installments = sorted(agreement.installments, key=lambda item: item.due_date)
     return PaymentAgreementOut(
         id=agreement.id,
@@ -45,6 +47,8 @@ def agreement_to_out(db: Session, agreement: PaymentAgreement) -> PaymentAgreeme
         project_id=agreement.project_id,
         customer_id=agreement.customer_id,
         customer_name=customer.name if customer else None,
+        obligation_id=agreement.obligation_id,
+        obligation_number=obligation.obligation_number if obligation else None,
         user_id=agreement.user_id,
         total_amount=agreement.total_amount,
         installment_count=agreement.installment_count,
@@ -74,6 +78,9 @@ def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_
     require_permission(db, user, "collections.agreements.create")
     ensure_agreement_write(user)
     customer = customer_for_access(db, payload.customer_id, user, write=False)
+    obligation = obligation_for_access(db, payload.obligation_id, user, write=False) if payload.obligation_id else None
+    if obligation and obligation.customer_id != customer.id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="La obligacion no pertenece al cliente seleccionado.")
     installments_payload = payload.installments or []
     if installments_payload and len(installments_payload) != payload.installment_count:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El numero de cuotas no coincide con installment_count.")
@@ -81,6 +88,7 @@ def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_
         tenant_id=customer.tenant_id,
         project_id=customer.project_id,
         customer_id=customer.id,
+        obligation_id=obligation.id if obligation else None,
         user_id=user.id,
         total_amount=payload.total_amount,
         installment_count=payload.installment_count,
@@ -99,7 +107,7 @@ def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_
             db.add(PaymentAgreementInstallment(agreement_id=agreement.id, due_date=payload.start_date + timedelta(days=30 * index), amount=amount))
     customer.status = "Acuerdo"
     customer.next_action = "Monitorear cumplimiento de acuerdo"
-    record_audit(db, user, "payment_agreement", "create", agreement.id, agreement.tenant_id, after={"customer_id": customer.id, "total_amount": agreement.total_amount})
+    record_audit(db, user, "payment_agreement", "create", agreement.id, agreement.tenant_id, after={"customer_id": customer.id, "obligation_id": agreement.obligation_id, "total_amount": agreement.total_amount})
     db.commit()
     db.refresh(agreement)
     return agreement_to_out(db, agreement)

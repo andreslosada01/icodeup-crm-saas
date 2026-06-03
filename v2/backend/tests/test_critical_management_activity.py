@@ -9,6 +9,14 @@ def _first_customer(client, headers):
     return items[0]
 
 
+def _first_obligation(client, headers, customer_id):
+    response = client.get(f"/api/crm/customers/{customer_id}/obligations", headers=headers)
+    assert response.status_code == 200, response.text
+    items = response.json()
+    assert items
+    return items[0]
+
+
 def test_agent_can_create_management_activity_for_assigned_customer(client, agent_headers):
     customer = _first_customer(client, agent_headers)
     response = client.post(
@@ -20,6 +28,46 @@ def test_agent_can_create_management_activity_for_assigned_customer(client, agen
     history = client.get(f"/api/crm/customers/{customer['id']}/activities", headers=agent_headers)
     assert history.status_code == 200, history.text
     assert any(item["note"] == "Gestion critica test asignado." for item in history.json())
+
+
+def test_agent_can_manage_obligation_context_from_drawer_flow(client, agent_headers):
+    customer = _first_customer(client, agent_headers)
+    obligation = _first_obligation(client, agent_headers, customer["id"])
+    activity = client.post(
+        f"/api/crm/customers/{customer['id']}/activities",
+        headers=agent_headers,
+        json={
+            "obligation_id": obligation["id"],
+            "channel": "phone",
+            "result": "Contactado",
+            "note": "Gestion asociada a obligacion test.",
+            "promise_amount": 100000,
+            "promise_due_date": "2026-06-08T00:00:00Z",
+        },
+    )
+    assert activity.status_code == 201, activity.text
+    assert activity.json()["obligation_id"] == obligation["id"]
+    assert activity.json()["obligation_number"] == obligation["obligation_number"]
+
+    promises = client.get("/api/crm/promises", headers=agent_headers)
+    assert promises.status_code == 200, promises.text
+    assert any(item.get("obligation_id") == obligation["id"] for item in promises.json())
+
+    agreement = client.post(
+        "/api/crm/agreements",
+        headers=agent_headers,
+        json={
+            "customer_id": customer["id"],
+            "obligation_id": obligation["id"],
+            "total_amount": 300000,
+            "installment_count": 3,
+            "start_date": "2026-06-10T00:00:00Z",
+            "notes": "Acuerdo operativo test asociado a obligacion.",
+        },
+    )
+    assert agreement.status_code == 201, agreement.text
+    assert agreement.json()["obligation_id"] == obligation["id"]
+    assert agreement.json()["obligation_number"] == obligation["obligation_number"]
 
 
 def test_agent_cannot_create_management_activity_for_unassigned_customer(client, admin_headers, agent_headers, agent_session):
@@ -60,6 +108,9 @@ def test_agent_role_has_operational_activity_permission(client, admin_headers):
     assert "excel_web.query" in permissions
     assert "excel_web.views.manage" in permissions
     assert "excel_web.export" not in permissions
+    assert "collections.agreements.create" in permissions
+    assert "documents.create" in permissions
+    assert "documents.export" not in permissions
     assert "integrations.providers.manage" not in permissions
 
 
