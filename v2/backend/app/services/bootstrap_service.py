@@ -32,6 +32,7 @@ from app.models import (
     MenuItem,
     Module,
     Opportunity,
+    OperationalSheetRow,
     Party,
     Payment,
     PaymentAgreement,
@@ -1053,6 +1054,40 @@ def _ensure_customer_obligations(db: Session, customer: Customer, leader: User |
     return obligations
 
 
+def _ensure_operational_sheet_rows(db: Session, tenant: Tenant, customers: list[Customer], users_by_id: dict[int, User]) -> None:
+    statuses = ["Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"]
+    for index, customer in enumerate(customers[:24], start=1):
+        owner = users_by_id.get(customer.assigned_user_id or 0)
+        if owner is None:
+            continue
+        obligation = db.scalar(select(CustomerObligation).where(CustomerObligation.customer_id == customer.id).order_by(CustomerObligation.id))
+        obligation_number = obligation.obligation_number if obligation else customer.obligation
+        commitment = f"Seguimiento demo hoja operativa {index:02d}"
+        row = db.scalar(
+            select(OperationalSheetRow).where(
+                OperationalSheetRow.tenant_id == tenant.id,
+                OperationalSheetRow.user_id == owner.id,
+                OperationalSheetRow.document == customer.document,
+                OperationalSheetRow.obligation_number == obligation_number,
+                OperationalSheetRow.commitment == commitment,
+            )
+        )
+        if row is None:
+            row = OperationalSheetRow(tenant_id=tenant.id, user_id=owner.id, document=customer.document, obligation_number=obligation_number, commitment=commitment)
+            db.add(row)
+        row.project_id = customer.project_id
+        row.customer_id = customer.id
+        row.obligation_id = obligation.id if obligation else None
+        row.date = (datetime.now(timezone.utc) - timedelta(days=index % 6)).date()
+        row.portfolio = customer.segment or "Cartera demo"
+        row.customer_name = customer.name
+        row.management_note = "Registro ficticio de seguimiento para demo operacional."
+        row.amount = max(120000, int((obligation.current_balance if obligation else customer.balance) * (0.08 + (index % 4) * 0.03)))
+        row.status = statuses[index % len(statuses)]
+        row.next_action_at = datetime.now(timezone.utc) + timedelta(days=(index % 7) + 1)
+        row.metadata_json = json.dumps({"demo": True, "source": "bootstrap_excel_web_operativo", "customer_id": customer.id})
+
+
 def _ensure_activity(db: Session, customer: Customer, user: User, typification: TypificationNode | None, channel: str, result: str, note: str, days_ago: int) -> None:
     existing = db.scalar(select(ManagementActivity).where(ManagementActivity.customer_id == customer.id, ManagementActivity.note == note))
     if existing is None:
@@ -1587,6 +1622,8 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
                 )
             global_index += 1
 
+    andina_customers = list(db.scalars(select(Customer).where(Customer.tenant_id == andina.id).order_by(Customer.id)))
+    _ensure_operational_sheet_rows(db, andina, andina_customers, {user.id: user for user in users.values()})
     _ensure_sales_demo(db, andina, projects[0], commercial)
     _seed_phase8b_collection_demo(db, andina, projects, users)
     _seed_secondary_demo_tenants(db, tenants, modules)

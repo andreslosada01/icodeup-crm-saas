@@ -4,7 +4,7 @@ import json
 from math import ceil
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -23,15 +23,25 @@ from app.models import (
     LegalCase,
     ManagementActivity,
     Opportunity,
+    OperationalSheetRow,
     Payment,
     PaymentAgreement,
     PaymentPromise,
+    Project,
     SavedDataView,
     UploadBatch,
     User,
     UserProjectAssignment,
 )
-from app.schemas.collection_ops import ExcelWebQuery, ExcelWebQueryResult, SavedDataViewCreate, SavedDataViewOut
+from app.schemas.collection_ops import (
+    ExcelWebQuery,
+    ExcelWebQueryResult,
+    OperationalSheetRowCreate,
+    OperationalSheetRowOut,
+    OperationalSheetRowPatch,
+    SavedDataViewCreate,
+    SavedDataViewOut,
+)
 from app.core.roles import AGENT, COORDINATOR
 from app.services.access_control import get_profile_role_code, is_platform_admin, require_permission
 from app.services.audit_service import record_audit
@@ -79,6 +89,8 @@ AGENT_SOURCES = {"customers", "obligations", "activities", "promises", "payments
 LEADER_SOURCES = AGENT_SOURCES | {"demographics"}
 SALES_SOURCES = {"customers", "sales_leads", "opportunities", "alerts"}
 LEGAL_SOURCES = {"customers", "legal_cases", "documents", "alerts"}
+EXCEL_PAGE_SIZE = 20
+SHEET_STATUSES = {"Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"}
 
 
 def _profile_code(db: Session, user: User) -> str | None:
@@ -183,6 +195,10 @@ def _row(model: Any, item: Any, columns: list[str]) -> dict[str, Any]:
     return {column: getattr(item, column, None) for column in columns}
 
 
+def _page_size(value: int | None) -> int:
+    return min(max(int(value or EXCEL_PAGE_SIZE), 1), EXCEL_PAGE_SIZE)
+
+
 def _apply_filters(query, model: Any, filters: dict[str, Any]):
     text = filters.get("text") or filters.get("search")
     if text:
@@ -204,7 +220,100 @@ def _apply_filters(query, model: Any, filters: dict[str, Any]):
         query = query.where(model.days_past_due >= int(filters["dpd_min"]))
     if filters.get("dpd_max") is not None and hasattr(model, "days_past_due"):
         query = query.where(model.days_past_due <= int(filters["dpd_max"]))
+    date_field = next((getattr(model, field) for field in ("created_at", "paid_at", "due_date", "next_deadline_at", "date") if hasattr(model, field)), None)
+    if date_field is not None and filters.get("date_from"):
+        query = query.where(date_field >= filters["date_from"])
+    if date_field is not None and filters.get("date_to"):
+        query = query.where(date_field <= filters["date_to"])
     return query
+
+
+def _apply_sheet_scope(db: Session, user: User, query):
+    if is_platform_admin(db, user):
+        return query
+    query = query.where(OperationalSheetRow.tenant_id == user.tenant_id)
+    if user.role == "tenant_admin":
+        return query
+    customer_ids = _customer_scope_select(db, user)
+    team_ids = _team_user_ids(db, user)
+    project_ids = _project_ids(db, user)
+    if _is_agent_scope(db, user):
+        return query.where((OperationalSheetRow.user_id == user.id) | OperationalSheetRow.customer_id.in_(customer_ids))
+    if _is_leader_scope(db, user):
+        conditions = [OperationalSheetRow.user_id.in_(team_ids), OperationalSheetRow.customer_id.in_(customer_ids)]
+        if project_ids:
+            conditions.append(OperationalSheetRow.project_id.in_(project_ids))
+        return query.where(or_(*conditions))
+    profile = _profile_code(db, user)
+    if profile in {"lawyer", "sales_advisor"}:
+        return query.where((OperationalSheetRow.user_id == user.id) | OperationalSheetRow.customer_id.in_(customer_ids))
+    return query.where(OperationalSheetRow.user_id == user.id)
+
+
+def _apply_sheet_filters(query, filters: dict[str, Any]):
+    text = filters.get("text") or filters.get("q") or filters.get("search")
+    if text:
+        pattern = f"%{text}%"
+        query = query.where(
+            or_(
+                OperationalSheetRow.customer_name.ilike(pattern),
+                OperationalSheetRow.document.ilike(pattern),
+                OperationalSheetRow.obligation_number.ilike(pattern),
+                OperationalSheetRow.management_note.ilike(pattern),
+                OperationalSheetRow.commitment.ilike(pattern),
+                OperationalSheetRow.status.ilike(pattern),
+                OperationalSheetRow.portfolio.ilike(pattern),
+            )
+        )
+    for field in ("status", "project_id", "user_id", "customer_id", "obligation_id"):
+        value = filters.get(field)
+        if value not in (None, ""):
+            query = query.where(getattr(OperationalSheetRow, field) == value)
+    if filters.get("date_from"):
+        query = query.where(OperationalSheetRow.date >= filters["date_from"])
+    if filters.get("date_to"):
+        query = query.where(OperationalSheetRow.date <= filters["date_to"])
+    return query
+
+
+def _ensure_sheet_references(db: Session, user: User, payload: OperationalSheetRowCreate | OperationalSheetRowPatch) -> None:
+    if payload.project_id is not None:
+        project = db.get(Project, payload.project_id)
+        if project is None or (not is_platform_admin(db, user) and project.tenant_id != user.tenant_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Proyecto no autorizado para esta fila.")
+    if payload.customer_id is not None:
+        accessible_customer = db.scalar(select(Customer.id).where(Customer.id == payload.customer_id, Customer.id.in_(_customer_scope_select(db, user))))
+        if accessible_customer is None and not (is_platform_admin(db, user) and db.get(Customer, payload.customer_id) is not None):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cliente no autorizado para esta fila.")
+    if payload.obligation_id is not None:
+        query = select(CustomerObligation.id).where(CustomerObligation.id == payload.obligation_id)
+        query = _apply_role_scope(db, user, "obligations", CustomerObligation, query)
+        if db.scalar(query) is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Obligacion no autorizada para esta fila.")
+
+
+def _sheet_to_out(item: OperationalSheetRow) -> OperationalSheetRowOut:
+    return OperationalSheetRowOut(
+        id=item.id,
+        tenant_id=item.tenant_id,
+        project_id=item.project_id,
+        user_id=item.user_id,
+        customer_id=item.customer_id,
+        obligation_id=item.obligation_id,
+        date=item.date,
+        portfolio=item.portfolio,
+        customer_name=item.customer_name,
+        document=item.document,
+        obligation_number=item.obligation_number,
+        management_note=item.management_note,
+        commitment=item.commitment,
+        amount=item.amount,
+        status=item.status,
+        next_action_at=item.next_action_at,
+        metadata=json.loads(item.metadata_json or "{}"),
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
 
 
 @router.get("/sources")
@@ -231,10 +340,11 @@ def sources(db: Session = Depends(get_db), user: User = Depends(current_user)) -
 @router.post("/query", response_model=ExcelWebQueryResult)
 def query_data(payload: ExcelWebQuery, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ExcelWebQueryResult:
     require_permission(db, user, "excel_web.query")
+    page_size = _page_size(payload.page_size)
     if payload.source not in _allowed_source_codes(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Fuente no autorizada para tu alcance.")
     if payload.source not in SOURCE_MODELS:
-        return ExcelWebQueryResult(source=payload.source, columns=[], rows=[], total=0, page=payload.page, page_size=payload.page_size, total_pages=0)
+        return ExcelWebQueryResult(source=payload.source, columns=[], rows=[], total=0, page=payload.page, page_size=page_size, total_pages=0)
     model = SOURCE_MODELS[payload.source]
     columns = [column for column in (payload.columns or SOURCE_DEFS[payload.source]["columns"]) if column in SOURCE_DEFS[payload.source]["columns"]]
     query = select(model)
@@ -244,8 +354,101 @@ def query_data(payload: ExcelWebQuery, db: Session = Depends(get_db), user: User
     query = _apply_filters(query, model, payload.filters)
     count_query = _apply_filters(count_query, model, payload.filters)
     total = db.scalar(count_query) or 0
-    items = list(db.scalars(query.order_by(model.id.desc()).offset((payload.page - 1) * payload.page_size).limit(payload.page_size)))
-    return ExcelWebQueryResult(source=payload.source, columns=columns, rows=[_row(model, item, columns) for item in items], total=total, page=payload.page, page_size=payload.page_size, total_pages=ceil(total / payload.page_size) if total else 0)
+    items = list(db.scalars(query.order_by(model.id.desc()).offset((payload.page - 1) * page_size).limit(page_size)))
+    return ExcelWebQueryResult(source=payload.source, columns=columns, rows=[_row(model, item, columns) for item in items], total=total, page=payload.page, page_size=page_size, total_pages=ceil(total / page_size) if total else 0)
+
+
+@router.get("/sheet-rows")
+def list_sheet_rows(
+    page: int = 1,
+    page_size: int = EXCEL_PAGE_SIZE,
+    q: str | None = None,
+    row_status: str | None = Query(default=None, alias="status"),
+    project_id: int | None = None,
+    user_id: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    require_permission(db, user, "excel_web.query")
+    page_size = _page_size(page_size)
+    filters = {
+        "q": q or "",
+        "status": row_status or "",
+        "project_id": project_id,
+        "user_id": user_id,
+        "date_from": date_from,
+        "date_to": date_to,
+    }
+    query = _apply_sheet_scope(db, user, select(OperationalSheetRow))
+    count_query = _apply_sheet_scope(db, user, select(func.count(OperationalSheetRow.id)))
+    query = _apply_sheet_filters(query, filters)
+    count_query = _apply_sheet_filters(count_query, filters)
+    total = db.scalar(count_query) or 0
+    items = list(db.scalars(query.order_by(OperationalSheetRow.id.desc()).offset((max(page, 1) - 1) * page_size).limit(page_size)))
+    return {
+        "items": [_sheet_to_out(item).model_dump(mode="json") for item in items],
+        "total": total,
+        "page": max(page, 1),
+        "page_size": page_size,
+        "total_pages": ceil(total / page_size) if total else 0,
+        "statuses": sorted(SHEET_STATUSES),
+    }
+
+
+@router.post("/sheet-rows", status_code=status.HTTP_201_CREATED, response_model=OperationalSheetRowOut)
+def create_sheet_row(payload: OperationalSheetRowCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> OperationalSheetRowOut:
+    require_permission(db, user, "excel_web.views.manage")
+    _ensure_sheet_references(db, user, payload)
+    item = OperationalSheetRow(
+        tenant_id=user.tenant_id,
+        project_id=payload.project_id,
+        user_id=user.id,
+        customer_id=payload.customer_id,
+        obligation_id=payload.obligation_id,
+        date=payload.date,
+        portfolio=payload.portfolio,
+        customer_name=payload.customer_name,
+        document=payload.document,
+        obligation_number=payload.obligation_number,
+        management_note=payload.management_note,
+        commitment=payload.commitment,
+        amount=payload.amount,
+        status=payload.status if payload.status in SHEET_STATUSES else "Pendiente",
+        next_action_at=payload.next_action_at,
+        metadata_json=json.dumps(payload.metadata),
+    )
+    db.add(item)
+    db.flush()
+    record_audit(db, user, "excel_web_sheet_row", "create", entity_id=item.id, tenant_id=user.tenant_id, module="excel_web", after={"status": item.status, "amount": item.amount}, request=request)
+    db.commit()
+    db.refresh(item)
+    return _sheet_to_out(item)
+
+
+@router.patch("/sheet-rows/{row_id}", response_model=OperationalSheetRowOut)
+def update_sheet_row(row_id: int, payload: OperationalSheetRowPatch, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> OperationalSheetRowOut:
+    require_permission(db, user, "excel_web.views.manage")
+    query = _apply_sheet_scope(db, user, select(OperationalSheetRow).where(OperationalSheetRow.id == row_id))
+    item = db.scalar(query)
+    if item is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fila de seguimiento no encontrada.")
+    _ensure_sheet_references(db, user, payload)
+    before = {"status": item.status, "amount": item.amount}
+    data = payload.model_dump(exclude_unset=True)
+    if data.get("status") and data["status"] not in SHEET_STATUSES:
+        data["status"] = "Pendiente"
+    metadata = data.pop("metadata", None)
+    for key, value in data.items():
+        setattr(item, key, value)
+    if metadata is not None:
+        item.metadata_json = json.dumps(metadata)
+    db.flush()
+    record_audit(db, user, "excel_web_sheet_row", "update", entity_id=item.id, tenant_id=item.tenant_id, module="excel_web", before=before, after={"status": item.status, "amount": item.amount}, request=request)
+    db.commit()
+    db.refresh(item)
+    return _sheet_to_out(item)
 
 
 @router.get("/views", response_model=list[SavedDataViewOut])

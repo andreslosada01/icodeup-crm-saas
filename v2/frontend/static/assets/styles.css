@@ -1467,6 +1467,10 @@ nav {
   border-radius: 8px;
 }
 
+.data-table-shell {
+  min-width: 100%;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -1499,6 +1503,34 @@ tbody tr:hover {
   background: #f8fbfb;
 }
 
+.table-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: #fbfdfc;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.table-pager button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #253940;
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.table-pager button:disabled {
+  color: #8ca0a9;
+  background: #eef3f5;
+}
+
 .table-button {
   min-height: 34px;
   border-radius: 8px;
@@ -1523,6 +1555,95 @@ tbody tr:hover {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fbfdfc;
+}
+
+.scope-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(21, 149, 111, 0.2);
+  border-radius: 8px;
+  color: #17363b;
+  background: linear-gradient(90deg, rgba(21, 149, 111, 0.1), rgba(37, 99, 235, 0.08));
+}
+
+.scope-banner strong {
+  font-size: 13px;
+}
+
+.scope-banner span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.excel-status-summary {
+  min-height: 96px;
+}
+
+.excel-status-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.excel-status-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+}
+
+.excel-status-row span,
+.excel-status-row strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.excel-status-row div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5eef0;
+}
+
+.excel-status-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+}
+
+.excel-query-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.excel-query-head .pager {
+  padding-top: 0;
+}
+
+.excel-table-wrap {
+  max-height: 620px;
+}
+
+.excel-row-ok td {
+  background: rgba(21, 149, 111, 0.055);
+}
+
+.excel-row-watch td {
+  background: rgba(243, 165, 31, 0.075);
+}
+
+.excel-row-risk td {
+  background: rgba(194, 65, 45, 0.065);
 }
 
 .compact-form {

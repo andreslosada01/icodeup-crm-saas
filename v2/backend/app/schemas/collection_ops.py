@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date as date_type, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -258,7 +258,7 @@ class ExcelWebQuery(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     columns: list[str] = Field(default_factory=list)
     page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=25, ge=1, le=100)
+    page_size: int = Field(default=20, ge=1, le=20)
 
 
 class ExcelWebQueryResult(BaseModel):
@@ -269,6 +269,48 @@ class ExcelWebQueryResult(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class OperationalSheetRowCreate(BaseModel):
+    project_id: int | None = None
+    customer_id: int | None = None
+    obligation_id: int | None = None
+    date: date_type | None = None
+    portfolio: str | None = Field(default=None, max_length=180)
+    customer_name: str | None = Field(default=None, max_length=220)
+    document: str | None = Field(default=None, max_length=80)
+    obligation_number: str | None = Field(default=None, max_length=180)
+    management_note: str | None = None
+    commitment: str | None = None
+    amount: int = Field(default=0, ge=0)
+    status: str = Field(default="Pendiente", max_length=60)
+    next_action_at: datetime | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class OperationalSheetRowPatch(BaseModel):
+    project_id: int | None = None
+    customer_id: int | None = None
+    obligation_id: int | None = None
+    date: date_type | None = None
+    portfolio: str | None = Field(default=None, max_length=180)
+    customer_name: str | None = Field(default=None, max_length=220)
+    document: str | None = Field(default=None, max_length=80)
+    obligation_number: str | None = Field(default=None, max_length=180)
+    management_note: str | None = None
+    commitment: str | None = None
+    amount: int | None = Field(default=None, ge=0)
+    status: str | None = Field(default=None, max_length=60)
+    next_action_at: datetime | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class OperationalSheetRowOut(OperationalSheetRowCreate):
+    id: int
+    tenant_id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
 
 
 class IntegrationProviderCreate(BaseModel):

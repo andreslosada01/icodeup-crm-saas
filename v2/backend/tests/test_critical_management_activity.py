@@ -84,7 +84,7 @@ def test_agent_can_access_scoped_excel_web_but_not_recordings(client, agent_head
     response = client.post(
         "/api/excel-web/query",
         headers=agent_headers,
-        json={"source": "customers", "filters": {}, "columns": ["id", "assigned_user_id", "name"], "page": 1, "page_size": 50},
+        json={"source": "customers", "filters": {}, "columns": ["id", "assigned_user_id", "name"], "page": 1, "page_size": 20},
     )
     assert response.status_code == 200, response.text
     rows = response.json()["rows"]
@@ -93,3 +93,38 @@ def test_agent_can_access_scoped_excel_web_but_not_recordings(client, agent_head
     assert all(row["assigned_user_id"] == agent_id for row in rows)
     response = client.get("/api/recordings", headers=agent_headers)
     assert response.status_code == 403, response.text
+
+
+def test_excel_web_limits_page_size_and_persists_agent_sheet_rows(client, agent_headers):
+    response = client.post(
+        "/api/excel-web/query",
+        headers=agent_headers,
+        json={"source": "customers", "filters": {}, "columns": ["id", "assigned_user_id", "name"], "page": 1, "page_size": 20},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["page_size"] <= 20
+    assert len(payload["rows"]) <= 20
+
+    create = client.post(
+        "/api/excel-web/sheet-rows",
+        headers=agent_headers,
+        json={
+            "date": "2026-06-03",
+            "portfolio": "Cartera demo test",
+            "customer_name": "Cliente Demo Hoja Test",
+            "document": "DEMO-SHEET-001",
+            "obligation_number": "OBL-SHEET-001",
+            "management_note": "Seguimiento operativo test.",
+            "commitment": "Confirmar pago demo.",
+            "amount": 150000,
+            "status": "Seguimiento",
+            "next_action_at": "2026-06-05T00:00:00Z",
+        },
+    )
+    assert create.status_code == 201, create.text
+    row_id = create.json()["id"]
+    listing = client.get("/api/excel-web/sheet-rows?page_size=20", headers=agent_headers)
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["page_size"] <= 20
+    assert any(item["id"] == row_id for item in listing.json()["items"])
