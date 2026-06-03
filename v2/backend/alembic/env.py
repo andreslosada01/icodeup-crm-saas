@@ -7,7 +7,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import settings
 from app.db.session import Base
-from app.models import audit, configuration, crm, documents, identity, legal, menu, party, sales, security, subscription, tenant  # noqa: F401
+from app.models import audit, collection_ops, configuration, crm, documents, identity, legal, menu, party, sales, security, subscription, tenant  # noqa: F401
 
 
 config = context.config

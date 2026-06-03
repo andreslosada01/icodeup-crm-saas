@@ -16,6 +16,7 @@ from app.models import (
     CustomerDemographic,
     DataExportLog,
     Document,
+    GeneratedAlert,
     ImportBatch,
     Lead,
     LegalCase,
@@ -49,6 +50,7 @@ SOURCE_DEFS = {
     "opportunities": {"label": "Oportunidades", "columns": ["id", "lead_id", "customer_id", "assigned_user_id", "name", "amount", "stage", "probability", "status"]},
     "documents": {"label": "Documentos", "columns": ["id", "project_id", "customer_id", "legal_case_id", "document_type", "original_name", "status", "created_at"]},
     "uploads": {"label": "Cargas", "columns": ["id", "project_id", "upload_type", "original_filename", "status", "total_rows", "valid_rows", "error_rows", "created_at"]},
+    "alerts": {"label": "Alertas", "columns": ["id", "module", "entity_type", "entity_id", "title", "severity", "status", "due_at", "assigned_user_id"]},
 }
 
 SOURCE_MODELS = {
@@ -64,6 +66,7 @@ SOURCE_MODELS = {
     "opportunities": Opportunity,
     "documents": Document,
     "uploads": UploadBatch,
+    "alerts": GeneratedAlert,
 }
 
 
