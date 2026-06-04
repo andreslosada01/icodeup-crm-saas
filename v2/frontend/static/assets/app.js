@@ -10,7 +10,7 @@ const state = {
   alerts: { items: [], summary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
-  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
+  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, excelSheetChanges: {}, excelSheetNewRow: {}, excelSheetActiveCell: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   ui: { tablePages: {} },
   selectedCustomer: null,
   selectedActivities: [],
@@ -1389,6 +1389,9 @@ function table(headers, rows, emptyMessage, options = {}) {
   const allRows = rowsToArray(rows);
   if (!allRows.length) return `<p class="empty">${escapeHtml(emptyMessage)}</p>`;
   const key = options.key || tableKey(headers, emptyMessage);
+  if (options.noClientPager) {
+    return `<div class="data-table-shell"><table><thead><tr>${headers.map((item) => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${allRows.join("")}</tbody></table><div class="table-pager muted"><span>${allRows.length} filas visibles</span></div></div>`;
+  }
   const pageSize = Math.min(Number(options.pageSize || 20), 20);
   const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
   const requestedPage = Number(state.ui.tablePages[key] || 1);
@@ -2911,47 +2914,114 @@ function excelSheetFilterPayloadFromForm(form) {
   };
 }
 
-function editableSheetInput(row, field, type = "text") {
-  const value = row[field] || "";
-  return `<input data-sheet-field="${field}" type="${type}" value="${escapeHtml(type === "date" ? dateOnly(value) : value)}" />`;
+const SHEET_STATUSES = ["Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"];
+const SHEET_EDITABLE_FIELDS = ["date", "project_id", "customer_name", "document", "obligation_number", "management_note", "commitment", "amount", "status", "next_action_at"];
+
+function sheetFieldValue(row, field) {
+  const changes = state.ops.excelSheetChanges?.[row.id] || {};
+  if (Object.prototype.hasOwnProperty.call(changes, field)) return changes[field];
+  if (field === "date" || field === "next_action_at") return dateOnly(row[field]);
+  return row[field] ?? "";
+}
+
+function sheetNewValue(field) {
+  return state.ops.excelSheetNewRow?.[field] ?? (field === "status" ? "Pendiente" : "");
+}
+
+function sheetCellClass(rowId, field, extra = "") {
+  const isNew = rowId === "new";
+  const changed = isNew
+    ? Object.prototype.hasOwnProperty.call(state.ops.excelSheetNewRow || {}, field)
+    : Object.prototype.hasOwnProperty.call(state.ops.excelSheetChanges?.[rowId] || {}, field);
+  const active = state.ops.excelSheetActiveCell === `${rowId}:${field}`;
+  return ["sheet-cell", "sheet-editable-cell", changed ? "sheet-cell-dirty" : "", active ? "sheet-cell-active" : "", extra].filter(Boolean).join(" ");
+}
+
+function sheetProjectOptionsHtml(selected = "") {
+  const projects = state.crm.options.projects || [];
+  if (!projects.length) return "";
+  return `<option value="">Sin proyecto</option>${projects.map((item) => `<option value="${item.id}" ${String(selected || "") === String(item.id) ? "selected" : ""}>${escapeHtml(item.label || item.name || `Proyecto ${item.id}`)}</option>`).join("")}`;
+}
+
+function renderSheetEditor(rowId, field, value, options = {}) {
+  const attr = rowId === "new" ? "data-new-sheet-cell" : "data-sheet-cell";
+  const rowAttr = rowId === "new" ? "" : ` data-row-id="${rowId}"`;
+  const common = `${attr}="${field}"${rowAttr} data-field="${field}" aria-label="${escapeHtml(options.label || field)}"`;
+  if (field === "status") {
+    return `<select ${common}>${sheetStatusOptionsHtml(value || "Pendiente")}</select>`;
+  }
+  if (field === "project_id") {
+    const projectOptions = sheetProjectOptionsHtml(value);
+    if (projectOptions) return `<select ${common}>${projectOptions}</select>`;
+    return `<input ${common} type="text" value="${escapeHtml(options.portfolio || "")}" placeholder="Cartera/proyecto" />`;
+  }
+  if (["management_note", "commitment"].includes(field)) {
+    return `<textarea ${common} placeholder="${escapeHtml(options.placeholder || "")}">${escapeHtml(value || "")}</textarea>`;
+  }
+  const type = field === "amount" ? "number" : ["date", "next_action_at"].includes(field) ? "date" : "text";
+  return `<input ${common} type="${type}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(options.placeholder || "")}" />`;
+}
+
+function renderSheetCell(row, field, options = {}) {
+  const value = sheetFieldValue(row, field);
+  const displayValue = field === "project_id" ? value || row.project_id || "" : value;
+  return `<td class="${sheetCellClass(row.id, field, options.className || "")}">${renderSheetEditor(row.id, field, displayValue, { ...options, portfolio: row.portfolio })}</td>`;
+}
+
+function renderNewSheetCell(field, options = {}) {
+  return `<td class="${sheetCellClass("new", field, options.className || "")}">${renderSheetEditor("new", field, sheetNewValue(field), options)}</td>`;
+}
+
+function hasSheetRowChanges(rowId) {
+  return Object.keys(state.ops.excelSheetChanges?.[rowId] || {}).length > 0;
+}
+
+function hasSheetNewRowData() {
+  return Object.entries(state.ops.excelSheetNewRow || {}).some(([key, value]) => key !== "status" && String(value ?? "").trim() !== "");
+}
+
+function hasExcelSheetUnsavedChanges() {
+  return Object.keys(state.ops.excelSheetChanges || {}).length > 0 || hasSheetNewRowData();
+}
+
+function renderSheetNewRow() {
+  const dirty = hasSheetNewRowData();
+  return `
+    <tr class="sheet-new-row ${dirty ? "sheet-row-dirty" : ""}" data-excel-sheet-new-row>
+      <td><strong>Nueva fila</strong><small>Escribe directo</small></td>
+      <td><span class="muted">Tu usuario</span></td>
+      ${renderNewSheetCell("date", { label: "Fecha" })}
+      ${renderNewSheetCell("project_id", { label: "Cartera / proyecto" })}
+      ${renderNewSheetCell("customer_name", { label: "Cliente", placeholder: "Cliente" })}
+      ${renderNewSheetCell("document", { label: "Documento", placeholder: "Documento" })}
+      ${renderNewSheetCell("obligation_number", { label: "Obligacion", placeholder: "Obligacion" })}
+      ${renderNewSheetCell("management_note", { label: "Gestion / Nota", placeholder: "Gestion realizada o pendiente" })}
+      ${renderNewSheetCell("commitment", { label: "Compromiso", placeholder: "Compromiso o siguiente paso" })}
+      ${renderNewSheetCell("amount", { label: "Valor" })}
+      ${renderNewSheetCell("status", { label: "Estado" })}
+      ${renderNewSheetCell("next_action_at", { label: "Proxima accion" })}
+      <td><span class="sheet-state ${dirty ? "sheet-state-pending" : ""}">${dirty ? "Sin guardar" : "Lista"}</span></td>
+    </tr>
+  `;
 }
 
 function renderSheetRow(row) {
-  const editing = Number(state.ops.excelSheetEditingId) === Number(row.id);
-  if (editing) {
-    return `
-      <tr class="${excelRowClass(row)}" data-excel-sheet-row="${row.id}">
-        <td><strong>${row.id}</strong></td>
-        <td>${escapeHtml(row.user_name || `Usuario ${row.user_id}`)}</td>
-        <td>${editableSheetInput(row, "date", "date")}</td>
-        <td>${editableSheetInput(row, "portfolio")}</td>
-        <td>${editableSheetInput(row, "customer_name")}</td>
-        <td>${editableSheetInput(row, "document")}</td>
-        <td>${editableSheetInput(row, "obligation_number")}</td>
-        <td><textarea data-sheet-field="management_note">${escapeHtml(row.management_note || "")}</textarea></td>
-        <td><textarea data-sheet-field="commitment">${escapeHtml(row.commitment || "")}</textarea></td>
-        <td>${editableSheetInput(row, "amount", "number")}</td>
-        <td><select data-sheet-field="status">${sheetStatusOptionsHtml(row.status)}</select></td>
-        <td>${editableSheetInput(row, "next_action_at", "date")}</td>
-        <td><button class="table-button" data-excel-sheet-save="${row.id}" type="button">Guardar</button><button class="table-button secondary-button" data-excel-sheet-cancel type="button">Cancelar</button></td>
-      </tr>
-    `;
-  }
+  const dirty = hasSheetRowChanges(row.id);
   return `
-    <tr class="${excelRowClass(row)}" data-excel-sheet-row="${row.id}">
-      <td><strong>${row.id}</strong></td>
+    <tr class="${excelRowClass(row)} ${dirty ? "sheet-row-dirty" : ""}" data-excel-sheet-row="${row.id}">
+      <td><strong>${row.id}</strong><small>${dirty ? "Sin guardar" : "Guardado"}</small></td>
       <td>${escapeHtml(row.user_name || `Usuario ${row.user_id}`)}</td>
-      <td><strong>${dateOnly(row.date)}</strong></td>
-      <td>${escapeHtml(row.portfolio || "-")}</td>
-      <td><strong>${escapeHtml(row.customer_name || "-")}</strong><small>${escapeHtml(row.document || "-")}</small></td>
-      <td>${escapeHtml(row.document || "-")}</td>
-      <td>${escapeHtml(row.obligation_number || "-")}</td>
-      <td>${escapeHtml(row.management_note || "-")}</td>
-      <td>${escapeHtml(row.commitment || "-")}</td>
-      <td>${money(row.amount)}</td>
-      <td><span class="badge">${escapeHtml(row.status)}</span></td>
-      <td>${dateOnly(row.next_action_at)}</td>
-      <td><button class="table-button" data-excel-sheet-edit="${row.id}" type="button">Editar</button></td>
+      ${renderSheetCell(row, "date", { label: "Fecha" })}
+      ${renderSheetCell(row, "project_id", { label: "Cartera / proyecto" })}
+      ${renderSheetCell(row, "customer_name", { label: "Cliente" })}
+      ${renderSheetCell(row, "document", { label: "Documento" })}
+      ${renderSheetCell(row, "obligation_number", { label: "Obligacion" })}
+      ${renderSheetCell(row, "management_note", { label: "Gestion / Nota" })}
+      ${renderSheetCell(row, "commitment", { label: "Compromiso" })}
+      ${renderSheetCell(row, "amount", { label: "Valor" })}
+      ${renderSheetCell(row, "status", { label: "Estado" })}
+      ${renderSheetCell(row, "next_action_at", { label: "Proxima accion" })}
+      <td><span class="sheet-state ${dirty ? "sheet-state-pending" : ""}">${dirty ? "Sin guardar" : "Guardado"}</span></td>
     </tr>
   `;
 }
@@ -2980,16 +3050,18 @@ function renderExcelWeb() {
     </label>
   `).join("");
   const resultRows = (result?.rows || []).map((row) => `<tr class="${excelRowClass(row)}">${(result.columns || selectedColumns).map((column) => `<td>${excelCell(column, row[column])}</td>`).join("")}</tr>`).join("");
-  const sheetTableRows = sheetRows.map(renderSheetRow).join("");
+  const sheetTableRows = `${renderSheetNewRow()}${sheetRows.map(renderSheetRow).join("")}`;
   const statusRows = [...(result?.rows || []), ...sheetRows];
   const valueTotal = sumBy(result?.rows || [], (row) => row.current_balance || row.balance || row.amount || row.total_amount || 0);
   const sheetValueTotal = sumBy(sheetRows, (row) => row.amount || 0);
   const pendingCount = countBy(sheetRows, (row) => String(row.status).toLowerCase().includes("pend"));
   const followCount = countBy(sheetRows, (row) => String(row.status).toLowerCase().includes("segu"));
   const doneCount = countBy(sheetRows, (row) => ["gestionado", "pagos", "cerrado"].includes(String(row.status).toLowerCase()));
-  const sheetProjectOptions = optionList(state.crm.options.projects || [], "id", "label", "");
   const sheetFilterProjectOptions = optionList(state.crm.options.projects || [], "id", "label", sheetFilters.project_id || "");
   const sheetFilterUserOptions = optionList(state.crm.options.users || [], "id", "label", sheetFilters.user_id || "");
+  const changedRowsCount = Object.keys(state.ops.excelSheetChanges || {}).length;
+  const hasNewRow = hasSheetNewRowData();
+  const unsavedCount = changedRowsCount + (hasNewRow ? 1 : 0);
   const sheetStatusCards = sheetStatusStats(sheetRows).map((item) => `
     <article class="excel-status-card">
       <span>${escapeHtml(item.status)}</span>
@@ -3060,19 +3132,16 @@ function renderExcelWeb() {
       <button class="secondary-button" data-excel-sheet-clear type="button">Limpiar</button>
     </form>
     <div class="excel-status-card-grid">${sheetStatusCards}</div>
-    <form id="excelSheetRowForm" class="ops-form form-grid excel-sheet-form">
-      <label>Fecha compromiso<input name="date" type="date" required /></label>
-      <label>Cartera/proyecto<select name="project_id"><option value="">Sin proyecto</option>${sheetProjectOptions}</select></label>
-      <label>Cliente<input name="customer_name" placeholder="Nombre del cliente" required /></label>
-      <label>Cedula/documento<input name="document" placeholder="Documento demo o identificador" /></label>
-      <label>Obligacion<input name="obligation_number" placeholder="Numero de obligacion" /></label>
-      <label>Valor<input name="amount" type="number" min="0" value="0" /></label>
-      <label>Estado<select name="status">${sheetStatusOptionsHtml()}</select></label>
-      <label>Proxima accion<input name="next_action_at" type="date" /></label>
-      <label class="wide">Gestion / Nota<textarea name="management_note" placeholder="Resumen de la gestion realizada o pendiente"></textarea></label>
-      <label class="wide">Compromiso<textarea name="commitment" placeholder="Compromiso, acuerdo o siguiente paso"></textarea></label>
-      <button type="submit">Agregar fila de seguimiento</button>
-    </form>
+    <div class="sheet-edit-toolbar">
+      <div>
+        <strong>Hoja editable</strong>
+        <span>${unsavedCount ? `${unsavedCount} fila(s) con cambios sin guardar` : "Sin cambios pendientes"}</span>
+      </div>
+      <div class="sheet-edit-actions">
+        <button data-excel-sheet-save-all type="button" ${!unsavedCount ? "disabled" : ""}>Guardar cambios</button>
+        <button class="secondary-button" data-excel-sheet-cancel-all type="button" ${!unsavedCount ? "disabled" : ""}>Cancelar cambios</button>
+      </div>
+    </div>
     <div class="excel-query-head">
       <p class="form-note">Mi hoja de seguimiento · ${sheetResponse.total || 0} filas guardadas · pagina ${sheetResponse.page || 1} de ${Math.max(sheetResponse.total_pages || 1, 1)}</p>
       <div class="pager">
@@ -3080,7 +3149,7 @@ function renderExcelWeb() {
         <button data-excel-sheet-page="${(sheetResponse.page || 1) + 1}" type="button" ${!sheetResponse.total || sheetResponse.page >= (sheetResponse.total_pages || 1) ? "disabled" : ""}>Siguiente</button>
       </div>
     </div>
-    <div class="table-wrap excel-table-wrap excel-operational-table">${table(["ID", "Usuario", "Fecha", "Cartera", "Cliente", "Documento", "Obligacion", "Gestion", "Compromiso", "Valor", "Estado", "Proxima accion", "Acciones"], sheetTableRows, "Agrega tu primera fila de seguimiento para trabajar tu cartera como una hoja operativa.", { key: "excel-sheet", pageSize: 20 })}</div>
+    <div class="table-wrap excel-table-wrap excel-operational-table">${table(["ID", "Usuario", "Fecha", "Cartera", "Cliente", "Documento", "Obligacion", "Gestion", "Compromiso", "Valor", "Estado", "Proxima accion", "Estado fila"], sheetTableRows, "Agrega tu primera fila de seguimiento para trabajar tu cartera como una hoja operativa.", { key: "excel-sheet", noClientPager: true })}</div>
   `);
 }
 
@@ -3414,6 +3483,7 @@ function setupEvents() {
     }
     if (form.id === "excelSheetFilterForm") {
       event.preventDefault();
+      if (guardExcelSheetNavigation()) return;
       state.ops.excelSheetFilters = excelSheetFilterPayloadFromForm(form);
       await loadExcelSheetRows(1);
       renderExcelWeb();
@@ -3559,15 +3629,26 @@ function setupEvents() {
     }
     const excelSheetPage = event.target.closest("[data-excel-sheet-page]");
     if (excelSheetPage) {
+      if (guardExcelSheetNavigation()) return;
       await loadExcelSheetRows(Math.max(1, Number(excelSheetPage.dataset.excelSheetPage || 1)));
       renderExcelWeb();
       return;
     }
     if (event.target.closest("[data-excel-sheet-clear]")) {
+      if (guardExcelSheetNavigation()) return;
       state.ops.excelSheetFilters = {};
       state.ops.excelSheetEditingId = null;
       await loadExcelSheetRows(1);
       renderExcelWeb();
+      return;
+    }
+    const excelSheetSaveAll = event.target.closest("[data-excel-sheet-save-all]");
+    if (excelSheetSaveAll) {
+      await saveExcelSheetChanges(excelSheetSaveAll);
+      return;
+    }
+    if (event.target.closest("[data-excel-sheet-cancel-all]")) {
+      cancelExcelSheetChanges();
       return;
     }
     const excelSheetEdit = event.target.closest("[data-excel-sheet-edit]");
@@ -3661,9 +3742,28 @@ function setupEvents() {
     }
   });
   document.addEventListener("keydown", (event) => {
+    const sheetCell = event.target.closest?.("[data-new-sheet-cell], [data-sheet-cell]");
+    if (sheetCell) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        setExcelSheetCellChange(sheetCell);
+        focusRelativeSheetCell(sheetCell, "down");
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelExcelSheetChanges();
+        return;
+      }
+    }
     if (event.key === "Escape") closeManagementDrawer();
   });
   document.addEventListener("change", async (event) => {
+    const sheetCell = event.target.closest("[data-new-sheet-cell], [data-sheet-cell]");
+    if (sheetCell) {
+      setExcelSheetCellChange(sheetCell);
+      return;
+    }
     if (event.target.closest("#roleModuleFilter") || event.target.closest("#roleRiskFilter")) {
       renderRoleMatrix();
       return;
@@ -3720,10 +3820,24 @@ function setupEvents() {
     }
   });
   document.addEventListener("input", (event) => {
+    const sheetCell = event.target.closest("[data-new-sheet-cell], [data-sheet-cell]");
+    if (sheetCell) {
+      setExcelSheetCellChange(sheetCell);
+      return;
+    }
     if (event.target.closest("#recordingSearch")) {
       state.ops.recordingFilters = { text: event.target.value };
       renderRecordings();
     }
+  });
+  document.addEventListener("focusin", (event) => {
+    const sheetCell = event.target.closest("[data-new-sheet-cell], [data-sheet-cell]");
+    document.querySelectorAll(".sheet-cell-active").forEach((cell) => cell.classList.remove("sheet-cell-active"));
+    if (!sheetCell) return;
+    const rowId = sheetCell.dataset.rowId || "new";
+    const field = sheetCell.dataset.field || sheetCell.dataset.sheetCell || sheetCell.dataset.newSheetCell;
+    state.ops.excelSheetActiveCell = `${rowId}:${field}`;
+    sheetCell.closest("td")?.classList.add("sheet-cell-active");
   });
   document.querySelector("#exportPayments").addEventListener("click", async () => {
     try {
@@ -4125,6 +4239,178 @@ async function loadExcelSheetRows(page = 1) {
     date_from: filters.date_from || "",
     date_to: filters.date_to || "",
   })}`);
+}
+
+function sheetRowsById() {
+  const rows = state.ops.excelSheetRows?.items || [];
+  return new Map(rows.map((row) => [String(row.id), row]));
+}
+
+function sheetProjectLabel(projectId) {
+  const project = (state.crm.options.projects || []).find((item) => String(item.id) === String(projectId));
+  return project?.label || project?.name || "";
+}
+
+function normalizeSheetCellValue(field, value) {
+  if (field === "amount") return Number(value || 0);
+  if (field === "project_id") return optionalNumber(value);
+  if (["date", "next_action_at"].includes(field)) return value || null;
+  return value === "" ? null : value;
+}
+
+function originalSheetValue(row, field) {
+  if (!row) return "";
+  if (field === "date" || field === "next_action_at") return dateOnly(row[field]) || null;
+  if (field === "amount") return Number(row[field] || 0);
+  if (field === "project_id") return row.project_id || null;
+  return row[field] ?? null;
+}
+
+function refreshSheetEditToolbar() {
+  const unsavedCount = Object.keys(state.ops.excelSheetChanges || {}).length + (hasSheetNewRowData() ? 1 : 0);
+  const toolbar = document.querySelector(".sheet-edit-toolbar");
+  if (!toolbar) return;
+  const status = toolbar.querySelector("span");
+  const buttons = toolbar.querySelectorAll("[data-excel-sheet-save-all], [data-excel-sheet-cancel-all]");
+  if (status) status.textContent = unsavedCount ? `${unsavedCount} fila(s) con cambios sin guardar` : "Sin cambios pendientes";
+  buttons.forEach((button) => { button.disabled = !unsavedCount; });
+}
+
+function markSheetCell(target, dirty) {
+  const cell = target.closest("td");
+  const row = target.closest("tr");
+  cell?.classList.toggle("sheet-cell-dirty", dirty);
+  row?.classList.toggle("sheet-row-dirty", Boolean(row?.querySelector(".sheet-cell-dirty")) || row?.matches(".sheet-new-row") && hasSheetNewRowData());
+  const stateLabel = row?.querySelector(".sheet-state");
+  if (stateLabel) {
+    const pending = row.classList.contains("sheet-row-dirty");
+    stateLabel.textContent = pending ? "Sin guardar" : row?.matches(".sheet-new-row") ? "Lista" : "Guardado";
+    stateLabel.classList.toggle("sheet-state-pending", pending);
+  }
+}
+
+function setExcelSheetCellChange(target) {
+  const field = target.dataset.field || target.dataset.sheetCell || target.dataset.newSheetCell;
+  const rawValue = target.value;
+  if (target.dataset.newSheetCell) {
+    const value = normalizeSheetCellValue(field, rawValue);
+    if (value === null || value === "") delete state.ops.excelSheetNewRow[field];
+    else state.ops.excelSheetNewRow[field] = value;
+    if (field === "project_id") {
+      const label = sheetProjectLabel(value);
+      if (label) state.ops.excelSheetNewRow.portfolio = label;
+      else delete state.ops.excelSheetNewRow.portfolio;
+    }
+    markSheetCell(target, Object.prototype.hasOwnProperty.call(state.ops.excelSheetNewRow, field));
+    refreshSheetEditToolbar();
+    return;
+  }
+  const rowId = String(target.dataset.rowId || "");
+  const row = sheetRowsById().get(rowId);
+  if (!row) return;
+  const value = normalizeSheetCellValue(field, rawValue);
+  const original = originalSheetValue(row, field);
+  state.ops.excelSheetChanges[rowId] = state.ops.excelSheetChanges[rowId] || {};
+  if (String(value ?? "") === String(original ?? "")) {
+    delete state.ops.excelSheetChanges[rowId][field];
+  } else {
+    state.ops.excelSheetChanges[rowId][field] = value;
+  }
+  if (field === "project_id") {
+    const label = sheetProjectLabel(value);
+    const originalPortfolio = row.portfolio || null;
+    if (String(label || "") === String(originalPortfolio || "")) delete state.ops.excelSheetChanges[rowId].portfolio;
+    else state.ops.excelSheetChanges[rowId].portfolio = label || null;
+  }
+  if (!Object.keys(state.ops.excelSheetChanges[rowId]).length) delete state.ops.excelSheetChanges[rowId];
+  markSheetCell(target, Boolean(state.ops.excelSheetChanges[rowId]?.[field]));
+  refreshSheetEditToolbar();
+}
+
+function workingSheetRow(row, changes = {}) {
+  return { ...(row || {}), ...(changes || {}) };
+}
+
+function validateSheetData(data, isNew = false) {
+  const errors = [];
+  const customer = String(data.customer_name || "").trim();
+  const documentValue = String(data.document || "").trim();
+  const note = String(data.management_note || "").trim();
+  const commitment = String(data.commitment || "").trim();
+  if (!customer && !documentValue) errors.push("Cliente o documento es obligatorio.");
+  if (isNew && !note && !commitment) errors.push("Gestion o compromiso es obligatorio para crear una fila.");
+  if (data.status && !SHEET_STATUSES.includes(data.status)) errors.push("Estado no permitido.");
+  if (data.amount !== null && data.amount !== undefined && (Number.isNaN(Number(data.amount)) || Number(data.amount) < 0)) errors.push("Valor debe ser numerico y mayor o igual a cero.");
+  if (data.date && Number.isNaN(Date.parse(data.date))) errors.push("Fecha no valida.");
+  if (data.next_action_at && Number.isNaN(Date.parse(data.next_action_at))) errors.push("Proxima accion no valida.");
+  return errors;
+}
+
+function sheetApiPayload(data) {
+  const payload = { ...data };
+  if (Object.prototype.hasOwnProperty.call(payload, "amount")) payload.amount = Number(payload.amount || 0);
+  if (Object.prototype.hasOwnProperty.call(payload, "project_id")) payload.project_id = optionalNumber(payload.project_id);
+  if (Object.prototype.hasOwnProperty.call(payload, "next_action_at")) payload.next_action_at = toDateTime(payload.next_action_at);
+  if (!payload.status) payload.status = "Pendiente";
+  return payload;
+}
+
+async function saveExcelSheetChanges(button) {
+  await runAction(button, async () => {
+    const rows = sheetRowsById();
+    const updates = Object.entries(state.ops.excelSheetChanges || {});
+    const newRow = state.ops.excelSheetNewRow || {};
+    const shouldCreate = hasSheetNewRowData();
+    if (shouldCreate) {
+      const createData = workingSheetRow({}, newRow);
+      const errors = validateSheetData(createData, true);
+      if (errors.length) throw new Error(errors.join(" "));
+    }
+    for (const [rowId, changes] of updates) {
+      const row = rows.get(String(rowId));
+      const errors = validateSheetData(workingSheetRow(row, changes), false);
+      if (errors.length) throw new Error(`Fila ${rowId}: ${errors.join(" ")}`);
+    }
+    let created = 0;
+    let updated = 0;
+    if (shouldCreate) {
+      await api("/api/excel-web/sheet-rows", { method: "POST", body: JSON.stringify({ ...sheetApiPayload(newRow), metadata: { source: "frontend_excel_grid" } }) });
+      created += 1;
+    }
+    for (const [rowId, changes] of updates) {
+      await api(`/api/excel-web/sheet-rows/${rowId}`, { method: "PATCH", body: JSON.stringify(sheetApiPayload(changes)) });
+      updated += 1;
+    }
+    state.ops.excelSheetChanges = {};
+    state.ops.excelSheetNewRow = {};
+    state.ops.excelSheetActiveCell = null;
+    await loadExcelSheetRows(state.ops.excelSheetRows?.page || 1);
+    showToast("success", `${created ? `${created} fila creada. ` : ""}${updated ? `${updated} fila(s) actualizada(s).` : ""}`.trim() || "Cambios guardados.");
+    renderExcelWeb();
+  }, "Guardando...");
+}
+
+function cancelExcelSheetChanges() {
+  state.ops.excelSheetChanges = {};
+  state.ops.excelSheetNewRow = {};
+  state.ops.excelSheetActiveCell = null;
+  renderExcelWeb();
+  showToast("info", "Cambios locales cancelados.");
+}
+
+function guardExcelSheetNavigation() {
+  if (!hasExcelSheetUnsavedChanges()) return false;
+  showToast("warning", "Tienes cambios sin guardar. Guarda o cancela antes de cambiar de pagina.");
+  return true;
+}
+
+function focusRelativeSheetCell(target, direction = "down") {
+  const cells = Array.from(document.querySelectorAll("[data-new-sheet-cell], [data-sheet-cell]"));
+  const index = cells.indexOf(target);
+  if (index < 0) return;
+  const columns = SHEET_EDITABLE_FIELDS.length;
+  const nextIndex = direction === "down" ? index + columns : index + 1;
+  cells[nextIndex]?.focus();
 }
 
 function excelSheetPayloadFromForm(form) {
