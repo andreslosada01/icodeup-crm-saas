@@ -408,6 +408,18 @@ async function downloadCsvPost(path, fileName, body) {
   URL.revokeObjectURL(url);
 }
 
+function downloadCsvText(filename, csvText) {
+  const blob = new Blob([csvText || ""], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "icodeup360.csv";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function isPlatform() {
   return currentUser?.role === "platform_admin";
 }
@@ -2787,29 +2799,71 @@ function renderUploads() {
   ]);
   const projectOptions = (state.crm.options.projects || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
   const preview = state.ops.uploadPreview;
+  const uploadTypes = [
+    ["clientes", "Clientes"],
+    ["obligaciones", "Obligaciones"],
+    ["reparto_cartera", "Reparto / cartera"],
+    ["demograficos", "Demograficos"],
+    ["telefonos_emails_direcciones", "Telefonos, emails y direcciones"],
+    ["pagos", "Pagos / recaudos"],
+    ["novedades_operativas", "Novedades operativas"],
+  ];
+  const mappingRows = preview
+    ? Object.entries(preview.suggested_mapping || {})
+        .filter(([field]) => (preview.required_fields || []).includes(field) || (preview.optional_fields || []).includes(field))
+        .slice(0, 24)
+        .map(([field, source]) => `<tr><td>${escapeHtml(field)}</td><td>${escapeHtml(source)}</td><td>${(preview.required_fields || []).includes(field) ? '<span class="status-pill status-pill-warn">Requerido</span>' : '<span class="status-pill">Opcional</span>'}</td></tr>`)
+        .join("")
+    : "";
+  const errorRows = preview
+    ? (preview.errors || [])
+        .slice(0, 20)
+        .map((item) => `<tr><td>${item.row}</td><td>${escapeHtml(item.document || "-")}</td><td>${escapeHtml(item.message || (item.errors || []).join(", "))}</td></tr>`)
+        .join("")
+    : "";
   const previewPanel = preview ? `
     <article class="preview-panel">
-      <header><strong>Preview de carga</strong><span>${preview.valid_rows}/${preview.total_rows} validas</span></header>
-      <p>${preview.error_rows ? `${preview.error_rows} filas requieren revision antes de confirmar.` : "Archivo validado sin errores criticos."}</p>
-      <div class="inline-controls">
+      <header><strong>2. Preview y validaciones</strong><span>${preview.valid_rows}/${preview.total_rows} validas</span></header>
+      <p>${escapeHtml(preview.summary?.message || (preview.error_rows ? `${preview.error_rows} filas requieren revision antes de confirmar.` : "Archivo validado sin errores criticos."))}</p>
+      <div class="dashboard-grid">
+        <article class="compact-card">
+          <h3>Mapeo sugerido</h3>
+          ${table(["Campo destino", "Columna archivo", "Tipo"], mappingRows, "No se detecto mapeo automatico. Ajusta el JSON de mapeo y vuelve a previsualizar.")}
+        </article>
+        <article class="compact-card">
+          <h3>Errores detectados</h3>
+          ${table(["Fila", "Documento", "Detalle"], errorRows, "Sin errores criticos en las primeras validaciones.")}
+        </article>
+      </div>
+      <div class="inline-controls upload-actions">
         <button data-confirm-upload type="button">Confirmar carga</button>
         <button class="secondary-button" data-clear-upload-preview type="button">Descartar preview</button>
       </div>
       ${table(preview.columns || [], (preview.sample || []).map((row) => `<tr>${(preview.columns || []).map((column) => `<td>${escapeHtml(row[column] || "-")}</td>`).join("")}</tr>`).join(""), "Sin filas de muestra.")}
     </article>
-  ` : `<article class="empty-state compact"><strong>Sin preview activo</strong><p>Selecciona un CSV y previsualiza antes de confirmar. El sistema no guarda archivos reales en el repositorio.</p></article>`;
+  ` : `<article class="empty-state compact"><strong>2. Sin preview activo</strong><p>Selecciona un CSV y previsualiza antes de confirmar. El sistema valida columnas, tenant, proyecto, lider, gestor y errores por fila.</p></article>`;
   const batchRows = batches.map((item) => `<tr><td><strong>${escapeHtml(item.original_filename || `Lote ${item.id}`)}</strong><small>${escapeHtml(item.upload_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${item.total_rows}</td><td>${item.valid_rows}</td><td>${item.error_rows}</td><td>${dateOnly(item.created_at)}</td><td><button class="table-button" data-upload-result="${item.id}" type="button">Resultado</button><button class="table-button" data-upload-errors="${item.id}" type="button">Errores</button></td></tr>`).join("");
   document.querySelector("#uploadBatchTable") && (document.querySelector("#uploadBatchTable").innerHTML = `
+    <div class="upload-flow">
+      <article><strong>1. Preparar archivo</strong><span>CSV con datos ficticios o reales del tenant.</span></article>
+      <article><strong>2. Mapear columnas</strong><span>El sistema sugiere campos destino.</span></article>
+      <article><strong>3. Validar y confirmar</strong><span>Solo roles autorizados procesan filas.</span></article>
+      <article><strong>4. Auditar lote</strong><span>Descarga errores/resultados por lote.</span></article>
+    </div>
     <form id="uploadPreviewForm" class="ops-form form-grid">
-      <label>Tipo de carga<select name="upload_type"><option value="reparto_cartera">Reparto / cartera</option><option value="demograficos">Demograficos</option><option value="pagos">Pagos</option><option value="documentos">Documentos</option><option value="grabaciones_metadata">Grabaciones metadata</option><option value="generico">Generico</option></select></label>
+      <label>Tipo de carga<select name="upload_type">${uploadTypes.map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
       <label>Proyecto<select name="project_id"><option value="">Sin proyecto</option>${projectOptions}</select></label>
       <label class="wide">Archivo CSV<input name="csv_file" type="file" accept=".csv,text/csv" required /></label>
-      <label class="wide">Mapeo JSON opcional<textarea name="mapping" placeholder='{"document":"documento","name":"cliente","balance":"saldo"}'></textarea></label>
-      <label class="checkbox-row"><input name="create_records" type="checkbox" /> Crear/actualizar registros si aplica</label>
+      <label class="wide">Mapeo JSON opcional<textarea name="mapping" placeholder='{"document":"documento","name":"cliente","current_balance":"saldo_actual","assigned_user_email":"gestor_email"}'></textarea></label>
+      <label class="checkbox-row"><input name="create_records" type="checkbox" checked /> Crear/actualizar registros al confirmar</label>
       <button type="submit">Previsualizar</button>
+      <button class="secondary-button" data-upload-template type="button">Descargar plantilla</button>
     </form>
     ${previewPanel}
-    ${table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha", ""], batchRows, "Sin lotes de carga. Previsualiza y confirma el primer reparto.")}
+    <article class="preview-panel">
+      <header><strong>4. Lotes auditables</strong><span>${batches.length} visibles</span></header>
+      ${table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha", ""], batchRows, "Sin lotes de carga. Previsualiza y confirma el primer reparto.")}
+    </article>
   `);
   const demographicRows = demographics.slice(0, 30).map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.employer || "-")}</td><td>${item.score}</td></tr>`).join("");
   document.querySelector("#demographicTable") && (document.querySelector("#demographicTable").innerHTML = table(["Cliente", "Telefono", "Email", "Ciudad", "Empleador", "Score"], demographicRows, "Sin demograficos cargados."));
@@ -3763,6 +3817,17 @@ function setupEvents() {
       await confirmUpload(confirmUploadButton);
       return;
     }
+    const uploadTemplate = event.target.closest("[data-upload-template]");
+    if (uploadTemplate) {
+      const form = document.querySelector("#uploadPreviewForm");
+      const uploadType = form?.elements.upload_type?.value || "reparto_cartera";
+      await runAction(uploadTemplate, async () => {
+        const template = await api(`/api/uploads/templates/${uploadType}`);
+        downloadCsvText(template.filename || `plantilla_${uploadType}.csv`, template.csv_text || "");
+        showToast("success", "Plantilla descargada.");
+      }, "Preparando...");
+      return;
+    }
     if (event.target.closest("[data-clear-upload-preview]")) {
       state.ops.uploadPreview = null;
       state.ops.uploadDraft = null;
@@ -3773,7 +3838,8 @@ function setupEvents() {
     if (uploadResult) {
       await runAction(uploadResult, async () => {
         const result = await api(`/api/uploads/batches/${uploadResult.dataset.uploadResult}/result`);
-        showToast("info", result.result_file_path || "Resultado disponible en metadata del lote.");
+        downloadCsvText(result.filename || `resultado_lote_${uploadResult.dataset.uploadResult}.csv`, result.csv_text || "");
+        showToast("success", "Resultado descargado.");
       }, "Consultando...");
       return;
     }
@@ -3781,7 +3847,8 @@ function setupEvents() {
     if (uploadErrors) {
       await runAction(uploadErrors, async () => {
         const result = await api(`/api/uploads/batches/${uploadErrors.dataset.uploadErrors}/errors`);
-        showToast(result.error_file_path ? "warning" : "info", result.error_file_path || "El lote no tiene archivo de errores.");
+        downloadCsvText(result.filename || `errores_lote_${uploadErrors.dataset.uploadErrors}.csv`, result.csv_text || "");
+        showToast("success", "Archivo de errores descargado.");
       }, "Consultando...");
       return;
     }

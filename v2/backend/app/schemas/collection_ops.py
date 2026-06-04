@@ -123,15 +123,21 @@ class UploadPreviewRequest(BaseModel):
 
 
 class UploadConfirmRequest(UploadPreviewRequest):
-    create_records: bool = False
+    create_records: bool = True
 
 
 class UploadPreviewResponse(BaseModel):
+    upload_type: str
+    file_name: str | None = None
     total_rows: int
     valid_rows: int
     error_rows: int
     columns: list[str]
     sample: list[dict[str, str]]
+    suggested_mapping: dict[str, str] = Field(default_factory=dict)
+    required_fields: list[str] = Field(default_factory=list)
+    optional_fields: list[str] = Field(default_factory=list)
+    summary: dict[str, Any] = Field(default_factory=dict)
     errors: list[dict[str, Any]]
 
 
