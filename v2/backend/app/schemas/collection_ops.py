@@ -309,6 +309,7 @@ class OperationalSheetRowOut(OperationalSheetRowCreate):
     id: int
     tenant_id: int
     user_id: int
+    user_name: str | None = None
     created_at: datetime
     updated_at: datetime
 

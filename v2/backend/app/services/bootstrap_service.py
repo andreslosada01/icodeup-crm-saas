@@ -193,6 +193,7 @@ PERMISSION_DEFS = [
     ("excel_web.query", "Consultar Mi Excel Web", "bi"),
     ("excel_web.export", "Exportar Mi Excel Web", "bi"),
     ("excel_web.views.manage", "Administrar vistas Mi Excel Web", "bi"),
+    ("excel_web.sheet.manage", "Administrar hoja operativa Mi Excel Web", "bi"),
     ("integrations.providers.view", "Ver proveedores de integracion", "integrations"),
     ("integrations.providers.manage", "Administrar proveedores de integracion", "integrations"),
     ("integrations.channels.view", "Ver canales", "integrations"),
@@ -227,7 +228,7 @@ ROLE_PERMISSION_MAP = {
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.cases.export", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update", "documents.export",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
-        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "excel_web.export", "excel_web.views.manage",
+        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "excel_web.export", "excel_web.views.manage", "excel_web.sheet.manage",
         "integrations.providers.view", "integrations.providers.manage", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
         "integrations.templates.view", "integrations.templates.manage", "integrations.webhooks.view", "integrations.webhooks.manage", "integrations.events.view",
         "audit.logs.view", "audit.logs.export", "menu.view",
@@ -246,7 +247,7 @@ ROLE_PERMISSION_MAP = {
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
-        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "menu.view", "alerts.view",
+        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "excel_web.sheet.manage", "menu.view", "alerts.view",
     ],
     QUALITY_SUPERVISOR: [
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
@@ -262,7 +263,7 @@ ROLE_PERMISSION_MAP = {
         "collections.payments.view", "collections.payments.create",
         "collections.agreements.view", "collections.agreements.create",
         "documents.read", "documents.view", "documents.create", "typifications.view", "demographics.view",
-        "excel_web.view", "excel_web.query", "excel_web.views.manage", "menu.view", "alerts.view",
+        "excel_web.view", "excel_web.query", "excel_web.views.manage", "excel_web.sheet.manage", "menu.view", "alerts.view",
     ],
 }
 

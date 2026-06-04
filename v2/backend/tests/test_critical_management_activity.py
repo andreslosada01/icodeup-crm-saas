@@ -175,6 +175,14 @@ def test_excel_web_limits_page_size_and_persists_agent_sheet_rows(client, agent_
     )
     assert create.status_code == 201, create.text
     row_id = create.json()["id"]
+    patch = client.patch(
+        f"/api/excel-web/sheet-rows/{row_id}",
+        headers=agent_headers,
+        json={"status": "Gestionado", "management_note": "Seguimiento operativo test actualizado."},
+    )
+    assert patch.status_code == 200, patch.text
+    assert patch.json()["status"] == "Gestionado"
+    assert patch.json()["user_name"]
     listing = client.get("/api/excel-web/sheet-rows?page_size=20", headers=agent_headers)
     assert listing.status_code == 200, listing.text
     assert listing.json()["page_size"] <= 20

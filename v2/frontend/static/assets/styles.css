@@ -1617,6 +1617,36 @@ tbody tr:hover {
   background: linear-gradient(90deg, var(--primary), var(--blue));
 }
 
+.excel-status-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.excel-status-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.excel-status-card span,
+.excel-status-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.excel-status-card strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 950;
+}
+
 .excel-query-head {
   display: flex;
   flex-wrap: wrap;
@@ -1632,6 +1662,39 @@ tbody tr:hover {
 
 .excel-table-wrap {
   max-height: 620px;
+}
+
+.excel-operational-table table {
+  min-width: 1320px;
+}
+
+.excel-operational-table td {
+  vertical-align: top;
+}
+
+.excel-operational-table input,
+.excel-operational-table select,
+.excel-operational-table textarea {
+  width: 100%;
+  min-width: 112px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #ffffff;
+  font: inherit;
+  font-size: 12px;
+}
+
+.excel-operational-table textarea {
+  min-width: 180px;
+  min-height: 58px;
+  resize: vertical;
+}
+
+.excel-operational-table .table-button {
+  min-height: 30px;
+  padding: 6px 10px;
 }
 
 .excel-row-ok td {

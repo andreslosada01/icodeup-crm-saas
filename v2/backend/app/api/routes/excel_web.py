@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import csv
 import json
 from math import ceil
+from io import StringIO
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
@@ -43,7 +46,7 @@ from app.schemas.collection_ops import (
     SavedDataViewOut,
 )
 from app.core.roles import AGENT, COORDINATOR
-from app.services.access_control import get_profile_role_code, is_platform_admin, require_permission
+from app.services.access_control import get_profile_role_code, is_platform_admin, require_permission, user_has_permission
 from app.services.audit_service import record_audit
 
 
@@ -53,10 +56,10 @@ router = APIRouter()
 SOURCE_DEFS = {
     "customers": {"label": "Clientes", "columns": ["id", "name", "document", "phone", "email", "city", "segment", "balance", "dpd", "status", "risk", "assigned_user_id"]},
     "obligations": {"label": "Obligaciones", "columns": ["id", "customer_id", "obligation_number", "product_type", "portfolio_name", "original_amount", "current_balance", "days_past_due", "status", "risk", "assigned_user_id", "assigned_leader_id"]},
-    "activities": {"label": "Gestiones", "columns": ["id", "customer_id", "user_id", "channel", "result", "note", "created_at"]},
-    "promises": {"label": "Promesas", "columns": ["id", "customer_id", "user_id", "amount", "due_date", "status", "channel"]},
+    "activities": {"label": "Gestiones", "columns": ["id", "customer_id", "obligation_id", "user_id", "channel", "result", "note", "created_at"]},
+    "promises": {"label": "Promesas", "columns": ["id", "customer_id", "obligation_id", "user_id", "amount", "due_date", "status", "channel"]},
     "payments": {"label": "Pagos", "columns": ["id", "customer_id", "user_id", "amount", "paid_at", "method", "reference"]},
-    "agreements": {"label": "Acuerdos", "columns": ["id", "customer_id", "user_id", "total_amount", "installment_count", "status", "created_at"]},
+    "agreements": {"label": "Acuerdos", "columns": ["id", "customer_id", "obligation_id", "user_id", "total_amount", "installment_count", "status", "created_at"]},
     "demographics": {"label": "Demograficos", "columns": ["id", "customer_id", "source", "phone", "email", "city", "state", "employer", "score"]},
     "recordings": {"label": "Grabaciones", "columns": ["id", "customer_id", "user_id", "call_id", "phone_number", "direction", "duration_seconds", "status", "provider_code"]},
     "legal_cases": {"label": "Juridico", "columns": ["id", "customer_id", "assigned_lawyer_id", "case_number", "process_type", "status", "stage", "risk", "next_deadline_at"]},
@@ -90,6 +93,7 @@ LEADER_SOURCES = AGENT_SOURCES | {"demographics"}
 SALES_SOURCES = {"customers", "sales_leads", "opportunities", "alerts"}
 LEGAL_SOURCES = {"customers", "legal_cases", "documents", "alerts"}
 EXCEL_PAGE_SIZE = 20
+EXCEL_EXPORT_LIMIT = 5000
 SHEET_STATUSES = {"Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"}
 
 
@@ -199,6 +203,12 @@ def _page_size(value: int | None) -> int:
     return min(max(int(value or EXCEL_PAGE_SIZE), 1), EXCEL_PAGE_SIZE)
 
 
+def _require_sheet_manage(db: Session, user: User) -> None:
+    if user_has_permission(db, user, "excel_web.sheet.manage") or user_has_permission(db, user, "excel_web.views.manage"):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso insuficiente para administrar la hoja operativa.")
+
+
 def _apply_filters(query, model: Any, filters: dict[str, Any]):
     text = filters.get("text") or filters.get("search")
     if text:
@@ -292,12 +302,22 @@ def _ensure_sheet_references(db: Session, user: User, payload: OperationalSheetR
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Obligacion no autorizada para esta fila.")
 
 
-def _sheet_to_out(item: OperationalSheetRow) -> OperationalSheetRowOut:
+def _safe_csv_value(value: Any) -> Any:
+    if value is None:
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value
+
+
+def _sheet_to_out(db: Session, item: OperationalSheetRow) -> OperationalSheetRowOut:
+    owner = db.get(User, item.user_id)
     return OperationalSheetRowOut(
         id=item.id,
         tenant_id=item.tenant_id,
         project_id=item.project_id,
         user_id=item.user_id,
+        user_name=owner.name if owner else None,
         customer_id=item.customer_id,
         obligation_id=item.obligation_id,
         date=item.date,
@@ -388,7 +408,7 @@ def list_sheet_rows(
     total = db.scalar(count_query) or 0
     items = list(db.scalars(query.order_by(OperationalSheetRow.id.desc()).offset((max(page, 1) - 1) * page_size).limit(page_size)))
     return {
-        "items": [_sheet_to_out(item).model_dump(mode="json") for item in items],
+        "items": [_sheet_to_out(db, item).model_dump(mode="json") for item in items],
         "total": total,
         "page": max(page, 1),
         "page_size": page_size,
@@ -399,7 +419,7 @@ def list_sheet_rows(
 
 @router.post("/sheet-rows", status_code=status.HTTP_201_CREATED, response_model=OperationalSheetRowOut)
 def create_sheet_row(payload: OperationalSheetRowCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> OperationalSheetRowOut:
-    require_permission(db, user, "excel_web.views.manage")
+    _require_sheet_manage(db, user)
     _ensure_sheet_references(db, user, payload)
     item = OperationalSheetRow(
         tenant_id=user.tenant_id,
@@ -424,12 +444,12 @@ def create_sheet_row(payload: OperationalSheetRowCreate, request: Request, db: S
     record_audit(db, user, "excel_web_sheet_row", "create", entity_id=item.id, tenant_id=user.tenant_id, module="excel_web", after={"status": item.status, "amount": item.amount}, request=request)
     db.commit()
     db.refresh(item)
-    return _sheet_to_out(item)
+    return _sheet_to_out(db, item)
 
 
 @router.patch("/sheet-rows/{row_id}", response_model=OperationalSheetRowOut)
 def update_sheet_row(row_id: int, payload: OperationalSheetRowPatch, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> OperationalSheetRowOut:
-    require_permission(db, user, "excel_web.views.manage")
+    _require_sheet_manage(db, user)
     query = _apply_sheet_scope(db, user, select(OperationalSheetRow).where(OperationalSheetRow.id == row_id))
     item = db.scalar(query)
     if item is None:
@@ -448,7 +468,7 @@ def update_sheet_row(row_id: int, payload: OperationalSheetRowPatch, request: Re
     record_audit(db, user, "excel_web_sheet_row", "update", entity_id=item.id, tenant_id=item.tenant_id, module="excel_web", before=before, after={"status": item.status, "amount": item.amount}, request=request)
     db.commit()
     db.refresh(item)
-    return _sheet_to_out(item)
+    return _sheet_to_out(db, item)
 
 
 @router.get("/views", response_model=list[SavedDataViewOut])
@@ -504,15 +524,36 @@ def update_view(view_id: int, payload: SavedDataViewCreate, db: Session = Depend
 
 
 @router.post("/export")
-def export_data(payload: ExcelWebQuery, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+def export_data(payload: ExcelWebQuery, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Response:
     require_permission(db, user, "excel_web.export")
-    result = query_data(payload, db, user)
-    log = DataExportLog(tenant_id=user.tenant_id, user_id=user.id, source=payload.source, filters_json=json.dumps(payload.filters), columns_json=json.dumps(result.columns), row_count=result.total, status="completed")
+    if payload.source not in _allowed_source_codes(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Fuente no autorizada para tu alcance.")
+    if payload.source not in SOURCE_MODELS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fuente no encontrada.")
+    model = SOURCE_MODELS[payload.source]
+    columns = [column for column in (payload.columns or SOURCE_DEFS[payload.source]["columns"]) if column in SOURCE_DEFS[payload.source]["columns"]]
+    count_query = _apply_filters(_apply_role_scope(db, user, payload.source, model, select(func.count(model.id))), model, payload.filters)
+    total = db.scalar(count_query) or 0
+    if total > EXCEL_EXPORT_LIMIT:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"La consulta supera el limite seguro de {EXCEL_EXPORT_LIMIT} filas. Reduce filtros antes de exportar.")
+    query = _apply_filters(_apply_role_scope(db, user, payload.source, model, select(model)), model, payload.filters)
+    items = list(db.scalars(query.order_by(model.id.desc()).limit(EXCEL_EXPORT_LIMIT)))
+    output = StringIO()
+    writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for item in items:
+        writer.writerow({column: _safe_csv_value(getattr(item, column, None)) for column in columns})
+    log = DataExportLog(tenant_id=user.tenant_id, user_id=user.id, source=payload.source, filters_json=json.dumps(payload.filters), columns_json=json.dumps(columns), row_count=len(items), status="completed")
     db.add(log)
     db.flush()
-    record_audit(db, user, "excel_web_export", "create", entity_id=log.id, tenant_id=user.tenant_id, module="excel_web", after={"source": payload.source, "rows": result.total}, request=request)
+    record_audit(db, user, "excel_web_export", "create", entity_id=log.id, tenant_id=user.tenant_id, module="excel_web", after={"source": payload.source, "rows": len(items)}, request=request)
     db.commit()
-    return {"export_id": log.id, "source": payload.source, "row_count": result.total, "message": "Export registrado. La descarga fisica se habilitara con storage seguro."}
+    file_name = f"icodeup360_{payload.source}_{log.id}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename={file_name}"},
+    )
 
 
 def _view_to_out(item: SavedDataView) -> SavedDataViewOut:

@@ -10,7 +10,7 @@ const state = {
   alerts: { items: [], summary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
-  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
+  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   ui: { tablePages: {} },
   selectedCustomer: null,
   selectedActivities: [],
@@ -368,6 +368,28 @@ async function downloadCsv(path, fileName) {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {})
     }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || "No fue posible exportar.");
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function downloadCsvPost(path, fileName, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(body)
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
@@ -2863,12 +2885,84 @@ function excelStatusSummaryHtml(rows) {
   `).join("")}</div>`;
 }
 
+function sheetStatusOptionsHtml(selected = "Pendiente") {
+  return ["Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"]
+    .map((item) => `<option value="${item}" ${String(selected) === item ? "selected" : ""}>${item}</option>`)
+    .join("");
+}
+
+function sheetStatusStats(rows) {
+  const statuses = ["Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"];
+  return statuses.map((status) => ({
+    status,
+    count: countBy(rows, (row) => String(row.status || "").toLowerCase() === status.toLowerCase()),
+    value: sumBy(rows.filter((row) => String(row.status || "").toLowerCase() === status.toLowerCase()), (row) => row.amount || 0),
+  }));
+}
+
+function excelSheetFilterPayloadFromForm(form) {
+  return {
+    q: form.elements.q.value || "",
+    project_id: optionalNumber(form.elements.project_id.value),
+    status: form.elements.status.value || "",
+    user_id: optionalNumber(form.elements.user_id?.value || ""),
+    date_from: form.elements.date_from.value || "",
+    date_to: form.elements.date_to.value || "",
+  };
+}
+
+function editableSheetInput(row, field, type = "text") {
+  const value = row[field] || "";
+  return `<input data-sheet-field="${field}" type="${type}" value="${escapeHtml(type === "date" ? dateOnly(value) : value)}" />`;
+}
+
+function renderSheetRow(row) {
+  const editing = Number(state.ops.excelSheetEditingId) === Number(row.id);
+  if (editing) {
+    return `
+      <tr class="${excelRowClass(row)}" data-excel-sheet-row="${row.id}">
+        <td><strong>${row.id}</strong></td>
+        <td>${escapeHtml(row.user_name || `Usuario ${row.user_id}`)}</td>
+        <td>${editableSheetInput(row, "date", "date")}</td>
+        <td>${editableSheetInput(row, "portfolio")}</td>
+        <td>${editableSheetInput(row, "customer_name")}</td>
+        <td>${editableSheetInput(row, "document")}</td>
+        <td>${editableSheetInput(row, "obligation_number")}</td>
+        <td><textarea data-sheet-field="management_note">${escapeHtml(row.management_note || "")}</textarea></td>
+        <td><textarea data-sheet-field="commitment">${escapeHtml(row.commitment || "")}</textarea></td>
+        <td>${editableSheetInput(row, "amount", "number")}</td>
+        <td><select data-sheet-field="status">${sheetStatusOptionsHtml(row.status)}</select></td>
+        <td>${editableSheetInput(row, "next_action_at", "date")}</td>
+        <td><button class="table-button" data-excel-sheet-save="${row.id}" type="button">Guardar</button><button class="table-button secondary-button" data-excel-sheet-cancel type="button">Cancelar</button></td>
+      </tr>
+    `;
+  }
+  return `
+    <tr class="${excelRowClass(row)}" data-excel-sheet-row="${row.id}">
+      <td><strong>${row.id}</strong></td>
+      <td>${escapeHtml(row.user_name || `Usuario ${row.user_id}`)}</td>
+      <td><strong>${dateOnly(row.date)}</strong></td>
+      <td>${escapeHtml(row.portfolio || "-")}</td>
+      <td><strong>${escapeHtml(row.customer_name || "-")}</strong><small>${escapeHtml(row.document || "-")}</small></td>
+      <td>${escapeHtml(row.document || "-")}</td>
+      <td>${escapeHtml(row.obligation_number || "-")}</td>
+      <td>${escapeHtml(row.management_note || "-")}</td>
+      <td>${escapeHtml(row.commitment || "-")}</td>
+      <td>${money(row.amount)}</td>
+      <td><span class="badge">${escapeHtml(row.status)}</span></td>
+      <td>${dateOnly(row.next_action_at)}</td>
+      <td><button class="table-button" data-excel-sheet-edit="${row.id}" type="button">Editar</button></td>
+    </tr>
+  `;
+}
+
 function renderExcelWeb() {
   const sources = state.ops.excelSources || [];
   const views = state.ops.excelViews || [];
   const result = state.ops.excelResult;
   const sheetResponse = state.ops.excelSheetRows || { items: [], page: 1, total_pages: 0, total: 0, statuses: [] };
   const sheetRows = sheetResponse.items || [];
+  const sheetFilters = state.ops.excelSheetFilters || {};
   const selectedSource = state.ops.excelDraft?.source || result?.source || sources[0]?.code || "customers";
   const source = sources.find((item) => item.code === selectedSource) || sources[0] || { code: selectedSource, columns: [] };
   const selectedColumns = state.ops.excelDraft?.columns?.length ? state.ops.excelDraft.columns : (result?.columns || source.columns || []).slice(0, 8);
@@ -2886,25 +2980,23 @@ function renderExcelWeb() {
     </label>
   `).join("");
   const resultRows = (result?.rows || []).map((row) => `<tr class="${excelRowClass(row)}">${(result.columns || selectedColumns).map((column) => `<td>${excelCell(column, row[column])}</td>`).join("")}</tr>`).join("");
-  const sheetTableRows = sheetRows.map((row) => `
-    <tr class="${excelRowClass(row)}">
-      <td><strong>${dateOnly(row.date)}</strong><small>${dateOnly(row.next_action_at)}</small></td>
-      <td><strong>${escapeHtml(row.customer_name || "-")}</strong><small>${escapeHtml(row.document || "-")}</small></td>
-      <td>${escapeHtml(row.portfolio || "-")}</td>
-      <td>${escapeHtml(row.obligation_number || "-")}</td>
-      <td>${escapeHtml(row.management_note || "-")}</td>
-      <td>${escapeHtml(row.commitment || "-")}</td>
-      <td>${money(row.amount)}</td>
-      <td><span class="badge">${escapeHtml(row.status)}</span></td>
-    </tr>
-  `).join("");
+  const sheetTableRows = sheetRows.map(renderSheetRow).join("");
   const statusRows = [...(result?.rows || []), ...sheetRows];
   const valueTotal = sumBy(result?.rows || [], (row) => row.current_balance || row.balance || row.amount || row.total_amount || 0);
+  const sheetValueTotal = sumBy(sheetRows, (row) => row.amount || 0);
   const pendingCount = countBy(sheetRows, (row) => String(row.status).toLowerCase().includes("pend"));
   const followCount = countBy(sheetRows, (row) => String(row.status).toLowerCase().includes("segu"));
   const doneCount = countBy(sheetRows, (row) => ["gestionado", "pagos", "cerrado"].includes(String(row.status).toLowerCase()));
   const sheetProjectOptions = optionList(state.crm.options.projects || [], "id", "label", "");
-  const sheetStatusOptions = ["Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"].map((item) => `<option value="${item}">${item}</option>`).join("");
+  const sheetFilterProjectOptions = optionList(state.crm.options.projects || [], "id", "label", sheetFilters.project_id || "");
+  const sheetFilterUserOptions = optionList(state.crm.options.users || [], "id", "label", sheetFilters.user_id || "");
+  const sheetStatusCards = sheetStatusStats(sheetRows).map((item) => `
+    <article class="excel-status-card">
+      <span>${escapeHtml(item.status)}</span>
+      <strong>${item.count}</strong>
+      <small>${money(item.value)}</small>
+    </article>
+  `).join("");
   document.querySelector("#excelScopeNote") && (document.querySelector("#excelScopeNote").innerHTML = `
     <strong>${escapeHtml(excelScopeText())}</strong>
     <span>Datos limitados segun tu rol, tenant, modulos activos y permisos.</span>
@@ -2913,7 +3005,7 @@ function renderExcelWeb() {
     { label: "Registros consulta", value: result?.total || 0, detail: source.label || "Fuente operativa", tone: result?.total ? "green" : "yellow", action: "Maximo 20 visibles por pagina." },
     { label: "Valor pagina", value: money(valueTotal), detail: "Suma de saldos o valores visibles.", tone: valueTotal ? "blue" : "yellow", action: "Filtro seguro por alcance." },
     { label: "Seguimientos", value: sheetResponse.total || 0, detail: `${pendingCount} pendientes · ${followCount} en seguimiento`, tone: sheetResponse.total ? "green" : "yellow", action: "Filas guardadas en base de datos." },
-    { label: "Gestionados", value: doneCount, detail: "Cerrados, pagos o gestionados.", tone: doneCount ? "green" : "blue", action: "Hoja operativa persistente." },
+    { label: "Valor hoja", value: money(sheetValueTotal), detail: `${doneCount} filas gestionadas.`, tone: sheetValueTotal ? "blue" : "yellow", action: "Seguimiento financiero visible." },
   ]);
   document.querySelector("#excelStatusSummary") && (document.querySelector("#excelStatusSummary").innerHTML = excelStatusSummaryHtml(statusRows));
   const sourceRows = sources.map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${(item.columns || []).length}</td><td>${escapeHtml((item.columns || []).slice(0, 6).join(", "))}</td><td><button class="table-button" data-excel-source="${escapeHtml(item.code)}" type="button">Usar</button></td></tr>`).join("");
@@ -2957,6 +3049,17 @@ function renderExcelWeb() {
     <div class="table-wrap excel-table-wrap">${table((result?.columns || selectedColumns).map(excelColumnLabel), resultRows, "Aun no hay informacion disponible para esta consulta operativa.", { key: "excel-result", pageSize: 20 })}</div>
   `);
   document.querySelector("#excelSheetPanel") && (document.querySelector("#excelSheetPanel").innerHTML = `
+    <form id="excelSheetFilterForm" class="ops-form form-grid excel-filter-form">
+      <label>Buscar<input name="q" placeholder="cliente, cedula, obligacion, nota o estado" value="${escapeHtml(sheetFilters.q || "")}" /></label>
+      <label>Cartera / proyecto<select name="project_id"><option value="">Todos</option>${sheetFilterProjectOptions}</select></label>
+      <label>Estado<select name="status"><option value="">Todos</option>${sheetStatusOptionsHtml(sheetFilters.status || "")}</select></label>
+      ${canChooseUser ? `<label>Usuario / gestor<select name="user_id"><option value="">Todos</option>${sheetFilterUserOptions}</select></label>` : `<input name="user_id" type="hidden" value="" />`}
+      <label>Fecha desde<input name="date_from" type="date" value="${escapeHtml(sheetFilters.date_from || "")}" /></label>
+      <label>Fecha hasta<input name="date_to" type="date" value="${escapeHtml(sheetFilters.date_to || "")}" /></label>
+      <button type="submit">Filtrar hoja</button>
+      <button class="secondary-button" data-excel-sheet-clear type="button">Limpiar</button>
+    </form>
+    <div class="excel-status-card-grid">${sheetStatusCards}</div>
     <form id="excelSheetRowForm" class="ops-form form-grid excel-sheet-form">
       <label>Fecha compromiso<input name="date" type="date" required /></label>
       <label>Cartera/proyecto<select name="project_id"><option value="">Sin proyecto</option>${sheetProjectOptions}</select></label>
@@ -2964,7 +3067,7 @@ function renderExcelWeb() {
       <label>Cedula/documento<input name="document" placeholder="Documento demo o identificador" /></label>
       <label>Obligacion<input name="obligation_number" placeholder="Numero de obligacion" /></label>
       <label>Valor<input name="amount" type="number" min="0" value="0" /></label>
-      <label>Estado<select name="status">${sheetStatusOptions}</select></label>
+      <label>Estado<select name="status">${sheetStatusOptionsHtml()}</select></label>
       <label>Proxima accion<input name="next_action_at" type="date" /></label>
       <label class="wide">Gestion / Nota<textarea name="management_note" placeholder="Resumen de la gestion realizada o pendiente"></textarea></label>
       <label class="wide">Compromiso<textarea name="commitment" placeholder="Compromiso, acuerdo o siguiente paso"></textarea></label>
@@ -2977,7 +3080,7 @@ function renderExcelWeb() {
         <button data-excel-sheet-page="${(sheetResponse.page || 1) + 1}" type="button" ${!sheetResponse.total || sheetResponse.page >= (sheetResponse.total_pages || 1) ? "disabled" : ""}>Siguiente</button>
       </div>
     </div>
-    <div class="table-wrap excel-table-wrap">${table(["Fecha", "Cliente", "Cartera", "Obligacion", "Gestion", "Compromiso", "Valor", "Estado"], sheetTableRows, "Agrega tu primera fila de seguimiento para trabajar tu cartera como una hoja operativa.", { key: "excel-sheet", pageSize: 20 })}</div>
+    <div class="table-wrap excel-table-wrap excel-operational-table">${table(["ID", "Usuario", "Fecha", "Cartera", "Cliente", "Documento", "Obligacion", "Gestion", "Compromiso", "Valor", "Estado", "Proxima accion", "Acciones"], sheetTableRows, "Agrega tu primera fila de seguimiento para trabajar tu cartera como una hoja operativa.", { key: "excel-sheet", pageSize: 20 })}</div>
   `);
 }
 
@@ -3309,6 +3412,12 @@ function setupEvents() {
       event.preventDefault();
       await saveExcelSheetRow(form);
     }
+    if (form.id === "excelSheetFilterForm") {
+      event.preventDefault();
+      state.ops.excelSheetFilters = excelSheetFilterPayloadFromForm(form);
+      await loadExcelSheetRows(1);
+      renderExcelWeb();
+    }
     if (["typificationTreeForm", "typificationNodeForm", "typificationCombinationForm"].includes(form.id)) {
       event.preventDefault();
       await handleTypificationOpsSubmit(form);
@@ -3427,8 +3536,8 @@ function setupEvents() {
         const form = document.querySelector("#excelQueryForm");
         const payload = state.ops.excelDraft || (form ? excelPayloadFromForm(form) : null);
         if (!payload) throw new Error("Filtra una fuente de informacion antes de exportar.");
-        const result = await api("/api/excel-web/export", { method: "POST", body: JSON.stringify(payload) });
-        showToast("success", result.message || "Exportacion solicitada correctamente.");
+        await downloadCsvPost("/api/excel-web/export", `excel_web_${payload.source}.csv`, payload);
+        showToast("success", "Exportacion CSV generada correctamente.");
       }, "Exportando...");
       return;
     }
@@ -3452,6 +3561,29 @@ function setupEvents() {
     if (excelSheetPage) {
       await loadExcelSheetRows(Math.max(1, Number(excelSheetPage.dataset.excelSheetPage || 1)));
       renderExcelWeb();
+      return;
+    }
+    if (event.target.closest("[data-excel-sheet-clear]")) {
+      state.ops.excelSheetFilters = {};
+      state.ops.excelSheetEditingId = null;
+      await loadExcelSheetRows(1);
+      renderExcelWeb();
+      return;
+    }
+    const excelSheetEdit = event.target.closest("[data-excel-sheet-edit]");
+    if (excelSheetEdit) {
+      state.ops.excelSheetEditingId = Number(excelSheetEdit.dataset.excelSheetEdit);
+      renderExcelWeb();
+      return;
+    }
+    if (event.target.closest("[data-excel-sheet-cancel]")) {
+      state.ops.excelSheetEditingId = null;
+      renderExcelWeb();
+      return;
+    }
+    const excelSheetSave = event.target.closest("[data-excel-sheet-save]");
+    if (excelSheetSave) {
+      await saveExcelSheetEdit(Number(excelSheetSave.dataset.excelSheetSave), excelSheetSave);
       return;
     }
     const refreshRecordings = event.target.closest("[data-refresh-recordings]");
@@ -3982,7 +4114,17 @@ async function saveExcelView(form) {
 }
 
 async function loadExcelSheetRows(page = 1) {
-  state.ops.excelSheetRows = await api(`/api/excel-web/sheet-rows?${queryParams({ page, page_size: 20 })}`);
+  const filters = state.ops.excelSheetFilters || {};
+  state.ops.excelSheetRows = await api(`/api/excel-web/sheet-rows?${queryParams({
+    page,
+    page_size: 20,
+    q: filters.q || "",
+    status: filters.status || "",
+    project_id: filters.project_id || "",
+    user_id: filters.user_id || "",
+    date_from: filters.date_from || "",
+    date_to: filters.date_to || "",
+  })}`);
 }
 
 function excelSheetPayloadFromForm(form) {
@@ -4011,6 +4153,31 @@ async function saveExcelSheetRow(form) {
     showToast("success", "Fila de seguimiento guardada correctamente.");
     renderExcelWeb();
   }, "Guardando fila...");
+}
+
+function excelSheetPatchFromRow(rowId) {
+  const row = document.querySelector(`[data-excel-sheet-row="${rowId}"]`);
+  if (!row) throw new Error("No se encontro la fila para actualizar.");
+  const data = {};
+  row.querySelectorAll("[data-sheet-field]").forEach((field) => {
+    const key = field.dataset.sheetField;
+    let value = field.value;
+    if (key === "amount") value = Number(value || 0);
+    if (key === "next_action_at") value = toDateTime(value);
+    if (key === "date") value = value || null;
+    data[key] = value === "" ? null : value;
+  });
+  return data;
+}
+
+async function saveExcelSheetEdit(rowId, button) {
+  await runAction(button, async () => {
+    await api(`/api/excel-web/sheet-rows/${rowId}`, { method: "PATCH", body: JSON.stringify(excelSheetPatchFromRow(rowId)) });
+    state.ops.excelSheetEditingId = null;
+    await loadExcelSheetRows(state.ops.excelSheetRows?.page || 1);
+    showToast("success", "Fila actualizada correctamente.");
+    renderExcelWeb();
+  }, "Guardando...");
 }
 
 async function handleTypificationOpsSubmit(form) {
