@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -9,10 +9,11 @@ from app.core.roles import AGENT
 from app.db.session import get_db
 from app.models import Customer, CustomerObligation, User
 from app.schemas.crm import CustomerObligationCreate, CustomerObligationOut, CustomerObligationPatch
+from app.schemas.teams import ObligationAssignmentUpdate
 from app.services.access_control import get_profile_role_code, require_permission
 from app.services.audit_service import record_audit
 
-from .access import customer_for_access, customer_query, is_platform, validate_assigned_user
+from .access import customer_for_access, customer_query, is_platform, project_for_access, validate_assigned_user
 from .utils import risk_from_dpd
 
 
@@ -172,6 +173,49 @@ def update_obligation(obligation_id: int, payload: CustomerObligationPatch, db: 
     if "risk" not in updates and ("days_past_due" in updates or "current_balance" in updates):
         item.risk = risk_from_dpd(item.days_past_due, item.current_balance)
     record_audit(db, user, "customer_obligation", "update", item.id, item.tenant_id, module="collections", after=updates)
+    db.commit()
+    db.refresh(item)
+    return obligation_to_out(db, item)
+
+
+@router.patch("/obligations/{obligation_id}/assignment", response_model=CustomerObligationOut)
+def update_obligation_assignment(
+    obligation_id: int,
+    payload: ObligationAssignmentUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> CustomerObligationOut:
+    require_permission(db, user, "crm.assignments.manage")
+    item = obligation_for_access(db, obligation_id, user, write=True)
+    before = {
+        "assigned_user_id": item.assigned_user_id,
+        "assigned_leader_id": item.assigned_leader_id,
+        "project_id": item.project_id,
+    }
+    if payload.project_id is not None:
+        project = project_for_access(db, payload.project_id, user)
+        if project.tenant_id != item.tenant_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El proyecto no pertenece a la empresa de la obligacion.")
+        item.project_id = project.id
+    if payload.assigned_user_id is not None:
+        validate_assigned_user(db, item.tenant_id, payload.assigned_user_id)
+        item.assigned_user_id = payload.assigned_user_id
+    if payload.assigned_leader_id is not None:
+        validate_assigned_user(db, item.tenant_id, payload.assigned_leader_id)
+        item.assigned_leader_id = payload.assigned_leader_id
+    record_audit(
+        db,
+        user,
+        "obligation_assignment",
+        "update",
+        item.id,
+        item.tenant_id,
+        module="collections",
+        before=before,
+        after={"assigned_user_id": item.assigned_user_id, "assigned_leader_id": item.assigned_leader_id, "project_id": item.project_id},
+        request=request,
+    )
     db.commit()
     db.refresh(item)
     return obligation_to_out(db, item)

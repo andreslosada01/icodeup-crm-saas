@@ -283,6 +283,68 @@
           </article>
         </section>
 
+        <section id="teams" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <h2>Equipos y carteras</h2>
+                <p>Administra la estructura operativa por cartera, lider, agente y alcance de gestion sin cruzar empresas.</p>
+              </div>
+            </div>
+            <div id="teamLeaderSummary"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Carteras operativas</h2><p>Proyectos con conteo de lideres, agentes, clientes, obligaciones y saldo visible.</p></div>
+              </div>
+              <div id="teamProjectTable" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Asignar usuario a cartera</h2><p>Relaciona usuarios con proyectos y define su rol operativo en la cartera.</p></div>
+              </div>
+              <form id="projectUserAssignForm" class="ops-form form-grid">
+                <label>Cartera<select name="project_id" required></select></label>
+                <label>Usuario<select name="user_id" required></select></label>
+                <label>Rol en cartera<select name="role_in_project"><option value="leader">Lider</option><option value="agent">Agente</option><option value="quality">Calidad</option><option value="lawyer">Abogado</option><option value="sales">Comercial</option><option value="auditor">Auditor</option></select></label>
+                <button type="submit">Guardar asignacion</button>
+              </form>
+            </article>
+          </div>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Usuarios por cartera</h2><p>Asignaciones activas e historicas sin borrado destructivo.</p></div>
+            </div>
+            <div id="teamProjectUsers" class="table-wrap"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Asignar agente a lider</h2><p>Define el equipo directo del lider y, opcionalmente, refuerza la asignacion por cartera.</p></div>
+              </div>
+              <form id="leaderAgentAssignForm" class="ops-form form-grid">
+                <label>Lider<select name="leader_id" required></select></label>
+                <label>Agente<select name="agent_user_id" required></select></label>
+                <label>Cartera opcional<select name="project_id"></select></label>
+                <button type="submit">Asociar agente</button>
+              </form>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Agentes del lider</h2><p>Equipo directo segun alcance del usuario autenticado.</p></div>
+              </div>
+              <div id="teamLeaderAgents" class="table-wrap"></div>
+            </article>
+          </div>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Ranking del equipo</h2><p>Productividad basica para tomar decisiones de reparto y seguimiento.</p></div>
+            </div>
+            <div id="teamRanking" class="table-wrap"></div>
+          </article>
+        </section>
+
         <section id="configuration" class="section">
           <article class="module-intelligence">
             <div class="panel-head">

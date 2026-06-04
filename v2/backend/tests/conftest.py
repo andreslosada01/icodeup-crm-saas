@@ -20,12 +20,14 @@ BASE_URL = os.getenv("ICODEUP_TEST_BASE_URL", "http://127.0.0.1:8020")
 PLATFORM_EMAIL = os.getenv("ICODEUP_TEST_PLATFORM_EMAIL", "superadmin@demo.icodeup.local")
 PLATFORM_PASSWORD = os.getenv("ICODEUP_TEST_PLATFORM_PASSWORD")
 TENANT_ADMIN_EMAIL = os.getenv("ICODEUP_TEST_TENANT_ADMIN_EMAIL", "admin.andina@demo.icodeup.local")
+LEADER_EMAIL = os.getenv("ICODEUP_TEST_LEADER_EMAIL", "coord.cobranzas.andina@demo.icodeup.local")
 AGENT_EMAIL = os.getenv("ICODEUP_TEST_AGENT_EMAIL", "gestor1.andina@demo.icodeup.local")
 LAWYER_EMAIL = os.getenv("ICODEUP_TEST_LAWYER_EMAIL", "abogado.andina@demo.icodeup.local")
 SALES_EMAIL = os.getenv("ICODEUP_TEST_SALES_EMAIL", "comercial.andina@demo.icodeup.local")
 TENANT_PASSWORD = os.getenv("ICODEUP_TEST_TENANT_PASSWORD")
 LAWYER_PASSWORD = os.getenv("ICODEUP_TEST_LAWYER_PASSWORD", TENANT_PASSWORD)
 SALES_PASSWORD = os.getenv("ICODEUP_TEST_SALES_PASSWORD", TENANT_PASSWORD)
+LEADER_PASSWORD = os.getenv("ICODEUP_TEST_LEADER_PASSWORD", TENANT_PASSWORD)
 CREDENTIALS_CONFIGURED = bool(PLATFORM_PASSWORD and TENANT_PASSWORD)
 
 
@@ -75,6 +77,11 @@ def agent_session(client: Any) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="session")
+def leader_session(client: Any) -> dict[str, Any]:
+    return login(client, LEADER_EMAIL, LEADER_PASSWORD)
+
+
+@pytest.fixture(scope="session")
 def lawyer_session(client: Any) -> dict[str, Any]:
     return login(client, LAWYER_EMAIL, LAWYER_PASSWORD)
 
@@ -97,6 +104,11 @@ def admin_headers(admin_session: dict[str, Any]) -> dict[str, str]:
 @pytest.fixture(scope="session")
 def agent_headers(agent_session: dict[str, Any]) -> dict[str, str]:
     return agent_session["headers"]
+
+
+@pytest.fixture(scope="session")
+def leader_headers(leader_session: dict[str, Any]) -> dict[str, str]:
+    return leader_session["headers"]
 
 
 @pytest.fixture(scope="session")

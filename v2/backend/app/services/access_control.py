@@ -17,9 +17,11 @@ ROLE_PERMISSION_FALLBACKS = {
     TENANT_ADMIN: {
         "tenant.manage", "tenant.settings.view", "tenant.settings.configure",
         "users.manage", "users.view", "users.create", "users.update", "users.assign",
+        "teams.view", "teams.manage", "project_users.view", "project_users.manage",
         "roles.manage", "roles.view", "roles.create", "roles.update", "roles.configure",
         "modules.view", "crm.read", "crm.manage", "crm.dashboard.view",
         "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.export", "crm.clients.import",
+        "crm.assignments.view", "crm.assignments.manage",
         "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update", "parties.export",
         "collections.read", "collections.manage", "collections.queue.view",
@@ -44,6 +46,7 @@ ROLE_PERMISSION_FALLBACKS = {
     },
     COORDINATOR: {
         "crm.manage", "crm.read", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
+        "teams.view", "project_users.view", "crm.assignments.view", "crm.assignments.manage",
         "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update",
         "collections.manage", "collections.read", "collections.queue.view",
@@ -58,6 +61,7 @@ ROLE_PERMISSION_FALLBACKS = {
     },
     QUALITY_SUPERVISOR: {
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
+        "teams.view", "project_users.view", "crm.assignments.view",
         "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
         "crm.activities.view", "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
         "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",

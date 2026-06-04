@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
-from app.models import AuditLog, Customer, Document, Lead, LegalCase, Opportunity, Payment, PaymentPromise, Project, Tenant, TenantModule, TenantSubscription, User
+from app.models import AuditLog, Customer, CustomerObligation, Document, Lead, LegalCase, ManagementActivity, Opportunity, Payment, PaymentAgreement, PaymentPromise, Project, Tenant, TenantModule, TenantSubscription, User
 from app.services.access_control import get_current_tenant, get_profile_role_code, is_company_admin, is_platform_admin
 
 
@@ -80,22 +80,43 @@ def leader_dashboard(db: Session, user: User) -> dict:
     tenant = get_current_tenant(db, user)
     team_ids = [item.id for item in db.scalars(select(User).where(User.tenant_id == tenant.id, User.leader_id == user.id))]
     visible_user_ids = team_ids or [user.id]
-    assigned = db.scalar(select(func.count(Customer.id)).where(Customer.tenant_id == tenant.id, Customer.assigned_user_id.in_(visible_user_ids))) or 0
-    promises = db.scalar(select(func.count(PaymentPromise.id)).where(PaymentPromise.tenant_id == tenant.id, PaymentPromise.user_id.in_(visible_user_ids))) or 0
-    payments = db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.tenant_id == tenant.id, Payment.user_id.in_(visible_user_ids))) or 0
+    today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
+    month_start = datetime(datetime.now(timezone.utc).year, datetime.now(timezone.utc).month, 1, tzinfo=timezone.utc)
+    customer_ids = select(Customer.id).where(Customer.tenant_id == tenant.id, Customer.assigned_user_id.in_(visible_user_ids))
+    assigned = db.scalar(select(func.count(Customer.id)).where(Customer.id.in_(customer_ids))) or 0
+    obligation_query = select(CustomerObligation).where(
+        CustomerObligation.tenant_id == tenant.id,
+        (
+            CustomerObligation.assigned_user_id.in_(visible_user_ids)
+            | (CustomerObligation.assigned_leader_id == user.id)
+            | CustomerObligation.customer_id.in_(customer_ids)
+        ),
+    )
+    obligation_scope = obligation_query.subquery()
+    obligations = db.scalar(select(func.count()).select_from(obligation_scope)) or 0
+    balance = db.scalar(select(func.coalesce(func.sum(obligation_scope.c.current_balance), 0))) or 0
+    activities_today = db.scalar(select(func.count(ManagementActivity.id)).where(ManagementActivity.tenant_id == tenant.id, ManagementActivity.user_id.in_(visible_user_ids), ManagementActivity.created_at >= today_start)) or 0
+    promises = db.scalar(select(func.count(PaymentPromise.id)).where(PaymentPromise.tenant_id == tenant.id, PaymentPromise.user_id.in_(visible_user_ids), PaymentPromise.status == "Vigente")) or 0
+    overdue_promises = db.scalar(select(func.count(PaymentPromise.id)).where(PaymentPromise.tenant_id == tenant.id, PaymentPromise.user_id.in_(visible_user_ids), PaymentPromise.status == "Vencida")) or 0
+    payments = db.scalar(select(func.coalesce(func.sum(Payment.amount), 0)).where(Payment.tenant_id == tenant.id, Payment.user_id.in_(visible_user_ids), Payment.paid_at >= month_start)) or 0
+    agreements = db.scalar(select(func.count(PaymentAgreement.id)).where(PaymentAgreement.tenant_id == tenant.id, PaymentAgreement.user_id.in_(visible_user_ids), PaymentAgreement.status.in_(["active", "vigente", "al dia"]))) or 0
     legal = db.scalar(select(func.count(LegalCase.id)).where(LegalCase.tenant_id == tenant.id)) or 0
     return {
         "audience": "operational_leader",
-        "title": "Panel lider operativo",
+        "title": "Panel de equipo",
         "generated_at": datetime.now(timezone.utc),
         "cards": [
             _card("Equipo directo", len(team_ids), "Usuarios bajo liderazgo directo.", "blue"),
-            _card("Casos asignados", assigned, "Clientes bajo gestion del equipo.", "green"),
-            _card("Promesas", promises, "Compromisos creados por el equipo.", "yellow"),
-            _card("Recuperado", int(payments), "Pagos registrados por el equipo.", "green"),
+            _card("Clientes equipo", assigned, "Clientes bajo gestion del equipo.", "green"),
+            _card("Obligaciones equipo", obligations, f"Saldo visible {int(balance):,}".replace(",", "."), "blue"),
+            _card("Gestiones hoy", activities_today, "Contactos y seguimientos registrados hoy.", "neutral"),
+            _card("Promesas vigentes", promises, f"{overdue_promises} promesas vencidas requieren seguimiento.", "yellow"),
+            _card("Pagos mes", int(payments), "Recaudo registrado por el equipo en el mes.", "green"),
+            _card("Acuerdos activos", agreements, "Compromisos estructurados del equipo.", "blue"),
         ],
         "alerts": [
             {"title": "Casos juridicos", "body": f"{legal} expedientes juridicos visibles en tu empresa.", "tone": "neutral"},
+            {"title": "Alcance de liderazgo", "body": "El panel se limita a tus agentes directos, obligaciones asignadas y carteras autorizadas.", "tone": "green"},
         ],
     }
 

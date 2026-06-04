@@ -99,6 +99,10 @@ PERMISSION_DEFS = [
     ("users.create", "Crear usuarios", "administration"),
     ("users.update", "Actualizar usuarios", "administration"),
     ("users.assign", "Asignar usuarios", "administration"),
+    ("teams.view", "Ver equipos y carteras", "administration"),
+    ("teams.manage", "Administrar equipos y carteras", "administration"),
+    ("project_users.view", "Ver usuarios por cartera", "administration"),
+    ("project_users.manage", "Asignar usuarios a carteras", "administration"),
     ("roles.manage", "Administrar roles y permisos", "administration"),
     ("roles.view", "Ver roles y permisos", "administration"),
     ("roles.create", "Crear roles", "administration"),
@@ -127,6 +131,8 @@ PERMISSION_DEFS = [
     ("crm.clients.delete", "Eliminar clientes", "crm"),
     ("crm.clients.export", "Exportar clientes", "crm"),
     ("crm.clients.import", "Importar clientes", "crm"),
+    ("crm.assignments.view", "Ver asignaciones operativas", "crm"),
+    ("crm.assignments.manage", "Administrar asignaciones operativas", "crm"),
     ("crm.activities.view", "Ver gestiones", "crm"),
     ("crm.activities.create", "Registrar gestiones", "crm"),
     ("parties.view", "Ver terceros maestros", "crm"),
@@ -212,9 +218,11 @@ ROLE_PERMISSION_MAP = {
     TENANT_ADMIN: [
         "tenant.manage", "tenant.settings.view", "tenant.settings.configure",
         "users.manage", "users.view", "users.create", "users.update", "users.assign",
+        "teams.view", "teams.manage", "project_users.view", "project_users.manage",
         "roles.manage", "roles.view", "roles.create", "roles.update", "roles.configure",
         "modules.view", "crm.read", "crm.manage", "crm.dashboard.view",
         "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.export", "crm.clients.import",
+        "crm.assignments.view", "crm.assignments.manage",
         "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update", "parties.export",
         "collections.read", "collections.manage", "collections.queue.view",
@@ -237,6 +245,7 @@ ROLE_PERMISSION_MAP = {
     ],
     COORDINATOR: [
         "crm.read", "crm.manage", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
+        "teams.view", "project_users.view", "crm.assignments.view", "crm.assignments.manage",
         "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update",
         "collections.read", "collections.manage", "collections.queue.view",
@@ -251,6 +260,7 @@ ROLE_PERMISSION_MAP = {
     ],
     QUALITY_SUPERVISOR: [
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
+        "teams.view", "project_users.view", "crm.assignments.view",
         "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
         "crm.activities.view", "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
         "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
@@ -348,6 +358,7 @@ MENU_DEFS = [
     ("Roles y permisos", "roles-permissions", "administration", "roles.view", "company_admin", 15),
     ("Modulos contratados", "tenant-modules", "administration", "modules.view", "company_admin", 20),
     ("Branding", "branding", "administration", "tenant.settings.configure", "company_admin", 25),
+    ("Equipos y carteras", "teams", "administration", "teams.view", "company_admin", 28),
     ("Clientes / terceros", "customers", "crm", "crm.clients.view", "company_admin", 30),
     ("Tercero maestro", "parties", "crm", "parties.view", "company_admin", 35),
     ("Cola de gestion", "queue", "collections", "collections.queue.view", "company_admin", 40),
@@ -374,6 +385,7 @@ MENU_DEFS = [
     ("Promesas", "promises", "collections", "collections.promises.view", "operational_leader", 30),
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_leader", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_leader", 50),
+    ("Equipos y carteras", "teams", "administration", "teams.view", "operational_leader", 51),
     ("Grabaciones", "recordings", "collections", "recordings.view", "operational_leader", 52),
     ("Cargas y repartos", "uploads", "collections", "uploads.view", "operational_leader", 54),
     ("Juridico", "legal", "legal", "legal.cases.view", "operational_leader", 60),
@@ -870,7 +882,7 @@ def _get_or_create_demo_user(
     return user
 
 
-def _ensure_assignment(db: Session, user: User, project: Project) -> None:
+def _ensure_assignment(db: Session, user: User, project: Project, role_in_project: str = "agent", is_active: bool = True) -> None:
     existing = db.scalar(
         select(UserProjectAssignment).where(
             UserProjectAssignment.user_id == user.id,
@@ -878,7 +890,11 @@ def _ensure_assignment(db: Session, user: User, project: Project) -> None:
         )
     )
     if existing is None:
-        db.add(UserProjectAssignment(user_id=user.id, project_id=project.id))
+        existing = UserProjectAssignment(user_id=user.id, project_id=project.id)
+        db.add(existing)
+    existing.tenant_id = project.tenant_id
+    existing.role_in_project = role_in_project
+    existing.is_active = is_active
 
 
 def _ensure_subscription(db: Session, tenant: Tenant, plan_code: str) -> None:
@@ -1540,7 +1556,7 @@ def _seed_secondary_demo_tenants(db: Session, tenants: dict[str, Tenant], module
         admin = _get_or_create_demo_user(db, tenant, f"admin.{tenant.slug}@demo.icodeup.local", f"Admin {tenant.name}", TENANT_ADMIN, "Administrador demo")
         for code, name, description in SECONDARY_PROJECTS.get(tenant.slug, []):
             project = _get_or_create_project(db, tenant, code, name, description)
-            _ensure_assignment(db, admin, project)
+            _ensure_assignment(db, admin, project, "leader")
         _seed_tenant_configuration(db, tenant)
         _seed_functional_configuration(db, tenant)
 
@@ -1573,8 +1589,17 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
         for code, name, description, _count in ANDINA_PROJECTS
     ]
     for project in projects:
-        for user in users.values():
-            _ensure_assignment(db, user, project)
+        for email, user in users.items():
+            role_in_project = "leader"
+            if email.startswith("gestor"):
+                role_in_project = "agent"
+            elif email.startswith("calidad"):
+                role_in_project = "quality"
+            elif email.startswith("abogado"):
+                role_in_project = "lawyer"
+            elif email.startswith("comercial"):
+                role_in_project = "sales"
+            _ensure_assignment(db, user, project, role_in_project)
     _ensure_channels(db, andina, projects[0])
     typifications = _ensure_typifications(db, andina)
 

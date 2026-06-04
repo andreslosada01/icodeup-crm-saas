@@ -10,6 +10,7 @@ const state = {
   alerts: { items: [], summary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
+  teams: { projects: [], leaders: [], agents: [], projectUsers: [], leaderAgents: [], leaderSummary: null, selectedProjectId: null, selectedLeaderId: null },
   ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, excelSheetChanges: {}, excelSheetNewRow: {}, excelSheetActiveCell: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   ui: { tablePages: {} },
   selectedCustomer: null,
@@ -50,6 +51,7 @@ const titles = {
   "company-users": "Usuarios de empresa",
   "roles-permissions": "Roles y permisos",
   "tenant-modules": "Modulos contratados",
+  teams: "Equipos y carteras",
   branding: "Branding",
   audit: "Auditoria",
   "system-health": "Salud del sistema",
@@ -90,6 +92,7 @@ const sectionCategories = {
   "company-users": "Administracion",
   "roles-permissions": "Administracion",
   "tenant-modules": "Administracion",
+  teams: "Administracion",
   branding: "Administracion",
   audit: "Administracion",
   configuration: "Administracion",
@@ -129,6 +132,7 @@ const sectionModules = {
   "company-users": "administration",
   "roles-permissions": "administration",
   "tenant-modules": "administration",
+  teams: "administration",
   branding: "administration",
   audit: "administration",
   "system-health": "administration",
@@ -488,6 +492,7 @@ function iconForSection(section) {
     governance: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>',
     tenants: '<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-7h6v7"/>',
     users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M16 11h6"/>',
+    teams: '<path d="M7 17v-1a3 3 0 0 1 3-3h4a3 3 0 0 1 3 3v1"/><circle cx="12" cy="8" r="3"/><path d="M4 20h16"/><path d="M5 11h2"/><path d="M17 11h2"/>',
     audit: '<path d="M4 4h16v16H4z"/><path d="M8 8h8"/><path d="M8 12h8"/><path d="M8 16h5"/>'
   };
   const path = paths[section] || paths.dashboard;
@@ -757,6 +762,23 @@ async function loadCoreData() {
   renderShellContext();
 }
 
+async function loadTeamsData() {
+  if (!menuHasSection("teams")) return;
+  const [projects, leaders, agents] = await Promise.all([
+    apiMaybe("/api/teams/projects", []),
+    apiMaybe("/api/teams/leaders", []),
+    apiMaybe("/api/teams/agents", [])
+  ]);
+  const selectedProjectId = state.teams.selectedProjectId || projects[0]?.id || null;
+  const selectedLeaderId = state.teams.selectedLeaderId || leaders[0]?.id || null;
+  const [projectUsers, leaderAgents, leaderSummary] = await Promise.all([
+    selectedProjectId ? apiMaybe(`/api/teams/projects/${selectedProjectId}/users`, []) : [],
+    selectedLeaderId ? apiMaybe(`/api/teams/leaders/${selectedLeaderId}/agents`, []) : [],
+    selectedLeaderId ? apiMaybe(`/api/teams/leaders/${selectedLeaderId}/summary`, null) : null
+  ]);
+  state.teams = { projects, leaders, agents, projectUsers, leaderAgents, leaderSummary, selectedProjectId, selectedLeaderId };
+}
+
 async function loadTypifications() {
   if (!isPlatform()) return;
   const tenantId = document.querySelector('#typificationForm select[name="tenant_id"]')?.value || state.admin.tenants[0]?.id;
@@ -869,6 +891,9 @@ async function refreshAll() {
   renderDynamicMenu();
   await loadAdminData();
   await loadGovernanceData();
+  if (menuHasSection("teams")) {
+    await optionalLoad("Equipos y carteras", loadTeamsData);
+  }
   await loadTypifications();
   if (menuHasSection("queue", "customers", "promises", "payments", "agreements", "channels", "reports")) {
     await optionalLoad("Datos CRM", loadCrmData);
@@ -3235,6 +3260,155 @@ function renderIntegrations() {
   document.querySelector("#integrationEventTable") && (document.querySelector("#integrationEventTable").innerHTML = table(["Evento", "Estado", "Entidad", "Fecha"], eventRows, "Sin eventos de canal."));
 }
 
+function teamRoleLabel(value) {
+  const labels = {
+    leader: "Lider",
+    agent: "Agente",
+    quality: "Calidad",
+    lawyer: "Abogado",
+    sales: "Comercial",
+    auditor: "Auditor"
+  };
+  return labels[value] || value || "-";
+}
+
+function uniqueUsersForTeams() {
+  const map = new Map();
+  [...(state.teams.leaders || []), ...(state.teams.agents || [])].forEach((item) => {
+    if (!map.has(item.id)) map.set(item.id, item);
+  });
+  return Array.from(map.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
+
+function renderTeams() {
+  if (!document.querySelector("#teams")) return;
+  const projects = state.teams.projects || [];
+  const leaders = state.teams.leaders || [];
+  const agents = state.teams.agents || [];
+  const selectedProjectId = state.teams.selectedProjectId || projects[0]?.id || "";
+  const selectedLeaderId = state.teams.selectedLeaderId || leaders[0]?.id || "";
+  const userOptions = optionList(uniqueUsersForTeams());
+  const leaderOptions = optionList(leaders);
+  const agentOptions = optionList(agents);
+  const projectOptions = optionList(projects);
+  const projectRows = projects
+    .map(
+      (project) => `
+        <tr class="${String(project.id) === String(selectedProjectId) ? "selected-row" : ""}">
+          <td><strong>${escapeHtml(project.name)}</strong><small>${escapeHtml(project.code)}</small></td>
+          <td>${escapeHtml(project.status)}</td>
+          <td>${project.leader_count}</td>
+          <td>${project.agent_count}</td>
+          <td>${project.customer_count}</td>
+          <td>${project.obligation_count}</td>
+          <td>${money(project.balance_total)}</td>
+          <td><button class="table-button" data-team-project="${project.id}" type="button">Ver usuarios</button></td>
+        </tr>
+      `
+    )
+    .join("");
+  document.querySelector("#teamProjectTable").innerHTML = table(["Cartera", "Estado", "Lideres", "Agentes", "Clientes", "Obligaciones", "Saldo", ""], projectRows, "No hay carteras disponibles para tu alcance.", { key: "teams-projects", pageSize: 20 });
+
+  const assignmentRows = (state.teams.projectUsers || [])
+    .map(
+      (assignment) => `
+        <tr>
+          <td><strong>${escapeHtml(assignment.user_name || "-")}</strong><small>${escapeHtml(assignment.user_email || "")}</small></td>
+          <td>${escapeHtml(teamRoleLabel(assignment.role_in_project))}</td>
+          <td>${escapeHtml(roleLabel(assignment.profile_role || assignment.user_role))}</td>
+          <td><span class="status-pill ${assignment.is_active ? "status-pill-ok" : "status-pill-warn"}">${assignment.is_active ? "Activo" : "Inactivo"}</span></td>
+          <td>${dateOnly(assignment.created_at)}</td>
+          <td>
+            <button class="table-button" data-toggle-project-user="${assignment.id}" data-active="${assignment.is_active}" type="button">${assignment.is_active ? "Desactivar" : "Activar"}</button>
+          </td>
+        </tr>
+      `
+    )
+    .join("");
+  document.querySelector("#teamProjectUsers").innerHTML = table(["Usuario", "Rol cartera", "Perfil", "Estado", "Asignado", ""], assignmentRows, "Selecciona una cartera o asigna usuarios para ver el equipo.", { key: "teams-project-users", pageSize: 20 });
+
+  const summary = state.teams.leaderSummary;
+  document.querySelector("#teamLeaderSummary").innerHTML = summary
+    ? `
+      <div class="metrics-grid compact-metrics">
+        <article class="metric-card"><span>Agentes</span><strong>${summary.total_agents}</strong></article>
+        <article class="metric-card"><span>Clientes equipo</span><strong>${summary.customers}</strong></article>
+        <article class="metric-card"><span>Obligaciones</span><strong>${summary.obligations}</strong></article>
+        <article class="metric-card"><span>Saldo equipo</span><strong>${money(summary.balance_total)}</strong></article>
+        <article class="metric-card"><span>Gestiones hoy</span><strong>${summary.activities_today}</strong></article>
+        <article class="metric-card"><span>Promesas vigentes</span><strong>${summary.active_promises}</strong></article>
+        <article class="metric-card"><span>Promesas vencidas</span><strong>${summary.overdue_promises}</strong></article>
+        <article class="metric-card"><span>Pagos mes</span><strong>${money(summary.payments_month)}</strong></article>
+      </div>
+    `
+    : `<p class="empty">Selecciona un lider para ver indicadores del equipo.</p>`;
+  const leaderAgentRows = (state.teams.leaderAgents || [])
+    .map((agent) => `<tr><td><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.email)}</small></td><td>${escapeHtml(roleLabel(agent.profile_role || agent.role))}</td><td>${escapeHtml(agent.project_names?.join(", ") || "-")}</td><td>${escapeHtml(agent.status)}</td></tr>`)
+    .join("");
+  document.querySelector("#teamLeaderAgents").innerHTML = table(["Agente", "Perfil", "Carteras", "Estado"], leaderAgentRows, "Este lider no tiene agentes activos asignados.", { key: "teams-leader-agents", pageSize: 20 });
+  const rankingRows = (summary?.ranking || [])
+    .map((row) => `<tr><td><strong>${escapeHtml(row.name)}</strong></td><td>${row.customers}</td><td>${row.activities_today}</td><td>${money(row.payments_month)}</td></tr>`)
+    .join("");
+  document.querySelector("#teamRanking").innerHTML = table(["Agente", "Clientes", "Gestiones hoy", "Pagos mes"], rankingRows, "Sin ranking disponible para este equipo.", { key: "teams-ranking", pageSize: 20 });
+
+  const projectForm = document.querySelector("#projectUserAssignForm");
+  if (projectForm) {
+    projectForm.elements.project_id.innerHTML = `<option value="">Selecciona cartera</option>${projectOptions}`;
+    projectForm.elements.user_id.innerHTML = `<option value="">Selecciona usuario</option>${userOptions}`;
+    if (selectedProjectId) projectForm.elements.project_id.value = selectedProjectId;
+  }
+  const leaderForm = document.querySelector("#leaderAgentAssignForm");
+  if (leaderForm) {
+    leaderForm.elements.leader_id.innerHTML = `<option value="">Selecciona lider</option>${leaderOptions}`;
+    leaderForm.elements.agent_user_id.innerHTML = `<option value="">Selecciona agente</option>${agentOptions}`;
+    leaderForm.elements.project_id.innerHTML = `<option value="">Sin cartera especifica</option>${projectOptions}`;
+    if (selectedLeaderId) leaderForm.elements.leader_id.value = selectedLeaderId;
+  }
+}
+
+async function handleProjectUserAssignment(form) {
+  const projectId = Number(form.elements.project_id.value);
+  if (!projectId || !form.elements.user_id.value) {
+    showToast("warning", "Selecciona cartera y usuario para asignar.");
+    return;
+  }
+  await runAction(form.querySelector("button[type='submit']"), async () => {
+    await api(`/api/teams/projects/${projectId}/users`, {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: Number(form.elements.user_id.value),
+        role_in_project: form.elements.role_in_project.value,
+        is_active: true
+      })
+    });
+    state.teams.selectedProjectId = projectId;
+    await loadTeamsData();
+    renderTeams();
+    showToast("success", "Usuario asignado a la cartera.");
+  }, "Asignando...");
+}
+
+async function handleLeaderAgentAssignment(form) {
+  const leaderId = Number(form.elements.leader_id.value);
+  if (!leaderId || !form.elements.agent_user_id.value) {
+    showToast("warning", "Selecciona lider y agente.");
+    return;
+  }
+  await runAction(form.querySelector("button[type='submit']"), async () => {
+    await api(`/api/teams/leaders/${leaderId}/agents`, {
+      method: "POST",
+      body: JSON.stringify({
+        agent_user_id: Number(form.elements.agent_user_id.value),
+        project_id: optionalNumber(form.elements.project_id.value)
+      })
+    });
+    state.teams.selectedLeaderId = leaderId;
+    await loadTeamsData();
+    renderTeams();
+    showToast("success", "Agente asociado al lider.");
+  }, "Asociando...");
+}
+
 function renderAll() {
   fillSelects();
   renderRoleDashboard();
@@ -3257,6 +3431,7 @@ function renderAll() {
   renderUploads();
   renderExcelWeb();
   renderIntegrations();
+  renderTeams();
 }
 
 function formPayload(form) {
@@ -3492,6 +3667,14 @@ function setupEvents() {
       event.preventDefault();
       await handleTypificationOpsSubmit(form);
     }
+    if (form.id === "projectUserAssignForm") {
+      event.preventDefault();
+      await handleProjectUserAssignment(form);
+    }
+    if (form.id === "leaderAgentAssignForm") {
+      event.preventDefault();
+      await handleLeaderAgentAssignment(form);
+    }
   });
   document.addEventListener("click", async (event) => {
     const tablePage = event.target.closest("[data-table-page]");
@@ -3503,6 +3686,27 @@ function setupEvents() {
     const open = event.target.closest("[data-open-customer]");
     if (open) {
       await openCustomerDrawer(open.dataset.openCustomer);
+      return;
+    }
+    const teamProject = event.target.closest("[data-team-project]");
+    if (teamProject) {
+      state.teams.selectedProjectId = Number(teamProject.dataset.teamProject);
+      state.teams.projectUsers = await apiMaybe(`/api/teams/projects/${state.teams.selectedProjectId}/users`, []);
+      renderTeams();
+      return;
+    }
+    const toggleProjectUser = event.target.closest("[data-toggle-project-user]");
+    if (toggleProjectUser) {
+      await runAction(toggleProjectUser, async () => {
+        const isActive = toggleProjectUser.dataset.active === "true";
+        await api(`/api/teams/project-users/${toggleProjectUser.dataset.toggleProjectUser}`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_active: !isActive })
+        });
+        await loadTeamsData();
+        renderTeams();
+        showToast("success", isActive ? "Asignacion desactivada." : "Asignacion activada.");
+      }, "Actualizando...");
       return;
     }
     if (event.target.closest("[data-close-drawer]")) {
@@ -3776,6 +3980,19 @@ function setupEvents() {
       });
       await loadGovernanceData();
       renderAll();
+    }
+    const leaderSelect = event.target.closest('#leaderAgentAssignForm select[name="leader_id"]');
+    if (leaderSelect && leaderSelect.value) {
+      state.teams.selectedLeaderId = Number(leaderSelect.value);
+      state.teams.leaderAgents = await apiMaybe(`/api/teams/leaders/${state.teams.selectedLeaderId}/agents`, []);
+      state.teams.leaderSummary = await apiMaybe(`/api/teams/leaders/${state.teams.selectedLeaderId}/summary`, null);
+      renderTeams();
+    }
+    const teamProjectSelect = event.target.closest('#projectUserAssignForm select[name="project_id"]');
+    if (teamProjectSelect && teamProjectSelect.value) {
+      state.teams.selectedProjectId = Number(teamProjectSelect.value);
+      state.teams.projectUsers = await apiMaybe(`/api/teams/projects/${state.teams.selectedProjectId}/users`, []);
+      renderTeams();
     }
   });
   document.querySelector("#queueSearch").addEventListener("input", async () => {

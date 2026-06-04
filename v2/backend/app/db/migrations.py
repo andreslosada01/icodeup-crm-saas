@@ -124,6 +124,19 @@ def apply_compatibility_migrations(engine: Engine) -> None:
         "CREATE INDEX IF NOT EXISTS ix_payment_promises_obligation_id ON payment_promises (obligation_id)",
         "CREATE INDEX IF NOT EXISTS ix_payment_agreements_obligation_id ON payment_agreements (obligation_id)",
         "CREATE INDEX IF NOT EXISTS ix_payments_customer_id ON payments (customer_id)",
+        "ALTER TABLE IF EXISTS user_project_assignments ADD COLUMN IF NOT EXISTS tenant_id INTEGER REFERENCES tenants(id)",
+        "ALTER TABLE IF EXISTS user_project_assignments ADD COLUMN IF NOT EXISTS role_in_project VARCHAR(40) DEFAULT 'agent' NOT NULL",
+        "ALTER TABLE IF EXISTS user_project_assignments ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true NOT NULL",
+        "ALTER TABLE IF EXISTS user_project_assignments ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL",
+        """
+        UPDATE user_project_assignments upa
+        SET tenant_id = projects.tenant_id
+        FROM projects
+        WHERE upa.project_id = projects.id AND upa.tenant_id IS NULL
+        """,
+        "UPDATE user_project_assignments SET role_in_project = 'agent' WHERE role_in_project IS NULL",
+        "UPDATE user_project_assignments SET is_active = true WHERE is_active IS NULL",
+        "CREATE INDEX IF NOT EXISTS ix_user_project_assignments_tenant_id ON user_project_assignments (tenant_id)",
         "CREATE INDEX IF NOT EXISTS ix_user_project_assignments_user_id ON user_project_assignments (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_user_project_assignments_project_id ON user_project_assignments (project_id)",
         "ALTER TABLE IF EXISTS audit_logs ADD COLUMN IF NOT EXISTS module VARCHAR(80)",
