@@ -792,9 +792,9 @@ def batch_result(batch_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/demographics", response_model=list[CustomerDemographicOut])
-def list_demographics(customer_id: int | None = None, page: int = 1, page_size: int = 50, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerDemographicOut]:
+def list_demographics(customer_id: int | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerDemographicOut]:
     require_permission(db, user, "demographics.view")
-    page_size = min(max(page_size, 1), 100)
+    page_size = min(max(page_size, 1), 20)
     query = select(CustomerDemographic).order_by(CustomerDemographic.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     if not is_platform_admin(db, user):
         query = query.where(CustomerDemographic.tenant_id == user.tenant_id)

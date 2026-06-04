@@ -96,7 +96,7 @@ def list_obligations(
     project_id: int | None = None,
     assigned_user_id: int | None = None,
     q: str | None = None,
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int = Query(default=20, ge=1, le=20),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[CustomerObligationOut]:

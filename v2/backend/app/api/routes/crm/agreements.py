@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -61,15 +61,15 @@ def agreement_to_out(db: Session, agreement: PaymentAgreement) -> PaymentAgreeme
 
 
 @router.get("/agreements", response_model=list[PaymentAgreementOut])
-def list_agreements(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentAgreementOut]:
+def list_agreements(limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentAgreementOut]:
     require_permission(db, user, "collections.agreements.view")
     ensure_read_access(user)
     if is_platform(user):
-        agreements = list(db.scalars(select(PaymentAgreement).order_by(PaymentAgreement.created_at.desc())))
+        agreements = list(db.scalars(select(PaymentAgreement).order_by(PaymentAgreement.created_at.desc()).limit(limit)))
     else:
         customers = list(db.scalars(customer_query(db, user)))
         customer_ids = [customer.id for customer in customers]
-        agreements = list(db.scalars(select(PaymentAgreement).where(PaymentAgreement.customer_id.in_(customer_ids)).order_by(PaymentAgreement.created_at.desc()))) if customer_ids else []
+        agreements = list(db.scalars(select(PaymentAgreement).where(PaymentAgreement.customer_id.in_(customer_ids)).order_by(PaymentAgreement.created_at.desc()).limit(limit))) if customer_ids else []
     return [agreement_to_out(db, agreement) for agreement in agreements]
 
 

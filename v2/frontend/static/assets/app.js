@@ -884,7 +884,7 @@ async function loadPhase8BData() {
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/combinations", []) : [],
     allowed("recordings") ? apiMaybe("/api/recordings", []) : [],
     allowed("uploads") ? apiMaybe("/api/uploads/batches", []) : [],
-    allowed("uploads", "queue", "customers") ? apiMaybe("/api/uploads/demographics?page_size=50", []) : [],
+    allowed("uploads", "queue", "customers") ? apiMaybe("/api/uploads/demographics?page_size=20", []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/sources", []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/views", []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/query", null, { method: "POST", body: JSON.stringify({ source: "customers", page: 1, page_size: 20, filters: {}, columns: [] }) }) : null,
@@ -2544,7 +2544,7 @@ function renderConfigurationCenter() {
     { label: "Workflows", value: workflows.length, detail: "Flujos de etapas por modulo.", tone: workflows.length ? "blue" : "yellow", action: "Juridico y ventas ya usan esta base." },
   ]);
   const tenantField = isPlatform() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Opcional para alcance global" /></label>` : "";
-  const catalogRows = catalogs.slice(0, 40).map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.catalog_type)}</td><td><span class="workflow-dot" style="background:${escapeHtml(item.color || "#94a3b8")}"></span>${item.is_active ? "Activo" : "Inactivo"}</td><td>${item.tenant_id ? "Tenant" : "Global"}</td><td><button class="table-button" data-config-edit="catalog" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  const catalogRows = catalogs.slice(0, 20).map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.catalog_type)}</td><td><span class="workflow-dot" style="background:${escapeHtml(item.color || "#94a3b8")}"></span>${item.is_active ? "Activo" : "Inactivo"}</td><td>${item.tenant_id ? "Tenant" : "Global"}</td><td><button class="table-button" data-config-edit="catalog" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
   document.querySelector("#configurationCatalogs") && (document.querySelector("#configurationCatalogs").innerHTML = `
     <form id="catalogConfigForm" class="ops-form form-grid">
       <input name="id" type="hidden" />
@@ -2562,7 +2562,7 @@ function renderConfigurationCenter() {
     </form>
     ${table(["Catalogo", "Modulo", "Tipo", "Estado", "Alcance", ""], catalogRows, "Sin catalogos configurados. Crea el primer catalogo para estandarizar la operacion.")}
   `);
-  const ruleRows = rules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.rule_type)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${item.is_active ? "Activa" : "Inactiva"}</td><td><button class="table-button" data-config-edit="rule" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  const ruleRows = rules.slice(0, 20).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.rule_type)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${item.is_active ? "Activa" : "Inactiva"}</td><td><button class="table-button" data-config-edit="rule" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
   document.querySelector("#configurationRules") && (document.querySelector("#configurationRules").innerHTML = `
     <form id="businessRuleForm" class="ops-form form-grid">
       <input name="id" type="hidden" />
@@ -2581,7 +2581,7 @@ function renderConfigurationCenter() {
     </form>
     ${table(["Regla", "Modulo", "Tipo", "Severidad", "Estado", ""], ruleRows, "Sin reglas configuradas. Define reglas para controlar SLAs, riesgos o escalamiento.")}
   `);
-  const alertRows = alertRules.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.condition_type)}</td><td>${item.threshold_days} dias</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.target_role || "-")}</td><td><button class="table-button" data-config-edit="alert" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
+  const alertRows = alertRules.slice(0, 20).map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.condition_type)}</td><td>${item.threshold_days} dias</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${escapeHtml(item.target_role || "-")}</td><td><button class="table-button" data-config-edit="alert" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
   document.querySelector("#configurationAlertRules") && (document.querySelector("#configurationAlertRules").innerHTML = `
     <form id="alertRuleForm" class="ops-form form-grid">
       <input name="id" type="hidden" />
@@ -2777,7 +2777,7 @@ function renderRecordings() {
     { label: "Disponibles", value: recordings.filter((item) => item.playback_available).length, detail: "Con placeholder o storage seguro.", tone: "green", action: "Playback auditable por permiso." },
     { label: "Proveedor", value: new Set(recordings.map((item) => item.provider_code).filter(Boolean)).size, detail: "Troncales o fuentes metadata.", tone: "blue", action: "Integrar PBX/API en fase posterior." },
   ]);
-  const rows = recordings.slice(0, 50).map((item) => `<tr><td><strong>${escapeHtml(item.call_id)}</strong><small>${escapeHtml(item.phone_number || "-")}</small></td><td>${escapeHtml(item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${escapeHtml(item.provider_code || "-")}</td><td>${escapeHtml(item.status)}</td><td><button class="table-button" data-recording-detail="${item.id}" type="button">Detalle</button><button class="table-button" data-recording-playback="${item.id}" type="button">Playback</button><button class="table-button" data-recording-download="${item.id}" type="button">Descargar</button></td></tr>`).join("");
+  const rows = recordings.slice(0, 20).map((item) => `<tr><td><strong>${escapeHtml(item.call_id)}</strong><small>${escapeHtml(item.phone_number || "-")}</small></td><td>${escapeHtml(item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${escapeHtml(item.provider_code || "-")}</td><td>${escapeHtml(item.status)}</td><td><button class="table-button" data-recording-detail="${item.id}" type="button">Detalle</button><button class="table-button" data-recording-playback="${item.id}" type="button">Playback</button><button class="table-button" data-recording-download="${item.id}" type="button">Descargar</button></td></tr>`).join("");
   document.querySelector("#recordingTable") && (document.querySelector("#recordingTable").innerHTML = `
     <div class="inline-filters">
       <label>Buscar<input id="recordingSearch" value="${escapeHtml(filters.text || "")}" placeholder="cliente, telefono, proveedor, estado" /></label>
@@ -2811,7 +2811,7 @@ function renderUploads() {
   const mappingRows = preview
     ? Object.entries(preview.suggested_mapping || {})
         .filter(([field]) => (preview.required_fields || []).includes(field) || (preview.optional_fields || []).includes(field))
-        .slice(0, 24)
+        .slice(0, 20)
         .map(([field, source]) => `<tr><td>${escapeHtml(field)}</td><td>${escapeHtml(source)}</td><td>${(preview.required_fields || []).includes(field) ? '<span class="status-pill status-pill-warn">Requerido</span>' : '<span class="status-pill">Opcional</span>'}</td></tr>`)
         .join("")
     : "";
@@ -2865,7 +2865,7 @@ function renderUploads() {
       ${table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha", ""], batchRows, "Sin lotes de carga. Previsualiza y confirma el primer reparto.")}
     </article>
   `);
-  const demographicRows = demographics.slice(0, 30).map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.employer || "-")}</td><td>${item.score}</td></tr>`).join("");
+  const demographicRows = demographics.slice(0, 20).map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.employer || "-")}</td><td>${item.score}</td></tr>`).join("");
   document.querySelector("#demographicTable") && (document.querySelector("#demographicTable").innerHTML = table(["Cliente", "Telefono", "Email", "Ciudad", "Empleador", "Score"], demographicRows, "Sin demograficos cargados."));
 }
 
@@ -3310,7 +3310,7 @@ function renderIntegrations() {
     </form>
     ${table(["Webhook", "URL", "Estado", "Secreto", ""], webhookRows, "Sin webhooks. Crea un endpoint y registra prueba simulada.")}
   `);
-  const eventRows = events.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.event_type)}</strong><small>${escapeHtml(item.channel_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.entity_type || "-")}</td><td>${dateOnly(item.created_at)}</td></tr>`).join("");
+  const eventRows = events.slice(0, 20).map((item) => `<tr><td><strong>${escapeHtml(item.event_type)}</strong><small>${escapeHtml(item.channel_type)}</small></td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.entity_type || "-")}</td><td>${dateOnly(item.created_at)}</td></tr>`).join("");
   document.querySelector("#integrationEventTable") && (document.querySelector("#integrationEventTable").innerHTML = table(["Evento", "Estado", "Entidad", "Fecha"], eventRows, "Sin eventos de canal."));
 }
 

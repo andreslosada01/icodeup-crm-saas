@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -112,8 +112,8 @@ def opportunity_for_access(db: Session, opportunity_id: int, user: User, write: 
 def sales_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "sales.leads.view")
     ensure_sales_read(db, user)
-    leads = list_leads(db, user)
-    opportunities = list_opportunities(db, user) if user_has_permission(db, user, "sales.opportunities.view") else []
+    leads = list_leads(db, user, limit=20)
+    opportunities = list_opportunities(db, user, limit=20) if user_has_permission(db, user, "sales.opportunities.view") else []
     open_opportunities = [item for item in opportunities if item.status in {"open", "active"}]
     won = [item for item in opportunities if item.status in {"won", "closed_won"} or item.stage in {"closed_won", "won"}]
     lost = [item for item in opportunities if item.status in {"lost", "closed_lost"} or item.stage in {"closed_lost", "lost"}]
@@ -147,7 +147,7 @@ def sales_dashboard(db: Session = Depends(get_db), user: User = Depends(current_
 def sales_pipeline(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(db, user)
-    opportunities = list_opportunities(db, user)
+    opportunities = list_opportunities(db, user, limit=20)
     stages = sales_stages(db, user.tenant_id if not is_platform_admin(db, user) else None)
     rows = []
     for stage in stages:
@@ -170,7 +170,7 @@ def sales_pipeline(db: Session = Depends(get_db), user: User = Depends(current_u
 def sales_kanban(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(db, user)
-    opportunities = list_opportunities(db, user)
+    opportunities = list_opportunities(db, user, limit=20)
     stages = sales_stages(db, user.tenant_id if not is_platform_admin(db, user) else None)
     columns = []
     for stage in stages:
@@ -194,7 +194,7 @@ def sales_kanban(db: Session = Depends(get_db), user: User = Depends(current_use
 
 
 @router.get("/leads", response_model=list[LeadOut])
-def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Lead]:
+def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[Lead]:
     require_permission(db, user, "sales.leads.view")
     ensure_sales_read(db, user)
     query = select(Lead).order_by(Lead.created_at.desc())
@@ -202,7 +202,7 @@ def list_leads(db: Session = Depends(get_db), user: User = Depends(current_user)
         query = query.where(Lead.tenant_id == user.tenant_id)
     if sales_assigned_only(db, user):
         query = query.where(Lead.assigned_user_id == user.id)
-    return list(db.scalars(query))
+    return list(db.scalars(query.limit(limit)))
 
 
 @router.post("/leads", response_model=LeadOut, status_code=status.HTTP_201_CREATED)
@@ -237,7 +237,7 @@ def update_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db),
 
 
 @router.get("/opportunities", response_model=list[OpportunityOut])
-def list_opportunities(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Opportunity]:
+def list_opportunities(db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[Opportunity]:
     require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(db, user)
     query = select(Opportunity).order_by(Opportunity.created_at.desc())
@@ -245,7 +245,7 @@ def list_opportunities(db: Session = Depends(get_db), user: User = Depends(curre
         query = query.where(Opportunity.tenant_id == user.tenant_id)
     if sales_assigned_only(db, user):
         query = query.where(Opportunity.assigned_user_id == user.id)
-    return list(db.scalars(query))
+    return list(db.scalars(query.limit(limit)))
 
 
 @router.post("/opportunities", response_model=OpportunityOut, status_code=status.HTTP_201_CREATED)

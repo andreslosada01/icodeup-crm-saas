@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -137,10 +137,10 @@ def customer_for_legal_create(db: Session, customer_id: int, user: User) -> Cust
 def legal_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
-    cases = list_cases(db, user)
+    cases = list_cases(db, user, limit=20)
     case_ids = [item.id for item in cases]
-    deadlines = list(db.scalars(select(LegalDeadline).where(LegalDeadline.legal_case_id.in_(case_ids)).order_by(LegalDeadline.due_at.asc()).limit(100))) if case_ids else []
-    hearings = list(db.scalars(select(LegalHearing).where(LegalHearing.legal_case_id.in_(case_ids)).order_by(LegalHearing.scheduled_at.asc()).limit(100))) if case_ids else []
+    deadlines = list(db.scalars(select(LegalDeadline).where(LegalDeadline.legal_case_id.in_(case_ids)).order_by(LegalDeadline.due_at.asc()).limit(20))) if case_ids else []
+    hearings = list(db.scalars(select(LegalHearing).where(LegalHearing.legal_case_id.in_(case_ids)).order_by(LegalHearing.scheduled_at.asc()).limit(20))) if case_ids else []
     now = datetime.now(timezone.utc)
     by_stage: dict[str, int] = {}
     by_risk: dict[str, int] = {}
@@ -177,7 +177,7 @@ def legal_dashboard(db: Session = Depends(get_db), user: User = Depends(current_
 def legal_kanban(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
-    cases = list_cases(db, user)
+    cases = list_cases(db, user, limit=20)
     stages = legal_stages(db, user.tenant_id if not is_platform_admin(db, user) else None)
     columns = []
     for stage in stages:
@@ -217,7 +217,7 @@ def legal_kanban(db: Session = Depends(get_db), user: User = Depends(current_use
 
 
 @router.get("/cases", response_model=list[LegalCaseOut])
-def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalCase]:
+def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[LegalCase]:
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
     profile_role = get_profile_role_code(db, user)
@@ -231,7 +231,7 @@ def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user)
         visible_customers = list(db.scalars(customer_query(db, user)))
         customer_ids = [customer.id for customer in visible_customers]
         query = select(LegalCase).where(LegalCase.customer_id.in_(customer_ids)).order_by(LegalCase.created_at.desc()) if customer_ids else select(LegalCase).where(False)
-    return list(db.scalars(query))
+    return list(db.scalars(query.limit(limit)))
 
 
 @router.post("/cases", response_model=LegalCaseOut, status_code=status.HTTP_201_CREATED)
@@ -321,16 +321,16 @@ def create_action(case_id: int, payload: LegalActionCreate, db: Session = Depend
 
 
 @router.get("/deadlines", response_model=list[LegalDeadlineOut])
-def list_deadlines(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[LegalDeadline]:
+def list_deadlines(db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[LegalDeadline]:
     require_permission(db, user, "legal.deadlines.view")
     ensure_legal_read(db, user)
     if is_platform_admin(db, user):
         query = select(LegalDeadline).order_by(LegalDeadline.due_at.asc())
     else:
-        cases = list_cases(db, user)
+        cases = list_cases(db, user, limit=20)
         case_ids = [item.id for item in cases]
         query = select(LegalDeadline).where(LegalDeadline.legal_case_id.in_(case_ids)).order_by(LegalDeadline.due_at.asc()) if case_ids else select(LegalDeadline).where(False)
-    return list(db.scalars(query))
+    return list(db.scalars(query.limit(limit)))
 
 
 @router.post("/cases/{case_id}/hearings", response_model=LegalHearingOut, status_code=status.HTTP_201_CREATED)

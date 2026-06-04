@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -74,12 +74,13 @@ def list_recordings(
     project_id: int | None = None,
     phone: str | None = None,
     status_filter: str | None = None,
+    limit: int = Query(default=20, ge=1, le=20),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[CallRecordingOut]:
     _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.view")
-    query = select(CallRecording).order_by(CallRecording.started_at.desc().nullslast(), CallRecording.created_at.desc()).limit(100)
+    query = select(CallRecording).order_by(CallRecording.started_at.desc().nullslast(), CallRecording.created_at.desc()).limit(limit)
     if is_platform_admin(db, user):
         if tenant_id:
             query = query.where(CallRecording.tenant_id == tenant_id)
@@ -117,10 +118,10 @@ def create_recording(payload: CallRecordingCreate, request: Request, db: Session
 
 
 @router.get("/access-logs")
-def access_logs(recording_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+def access_logs(recording_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
     _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.audit.view")
-    query = select(RecordingAccessLog).order_by(RecordingAccessLog.created_at.desc()).limit(100)
+    query = select(RecordingAccessLog).order_by(RecordingAccessLog.created_at.desc()).limit(limit)
     if not is_platform_admin(db, user):
         query = query.where(RecordingAccessLog.tenant_id == user.tenant_id)
     if recording_id:

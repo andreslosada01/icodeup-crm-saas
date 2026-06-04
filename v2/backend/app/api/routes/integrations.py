@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -243,9 +243,9 @@ def test_webhook(webhook_id: int, db: Session = Depends(get_db), user: User = De
 
 
 @router.get("/events", response_model=list[ChannelEventOut])
-def list_events(channel_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelEventOut]:
+def list_events(channel_type: str | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelEventOut]:
     require_permission(db, user, "integrations.events.view")
-    query = select(ChannelEventLog).order_by(ChannelEventLog.created_at.desc()).limit(100)
+    query = select(ChannelEventLog).order_by(ChannelEventLog.created_at.desc()).limit(limit)
     if not is_platform_admin(db, user):
         query = query.where(ChannelEventLog.tenant_id == user.tenant_id)
     if channel_type:

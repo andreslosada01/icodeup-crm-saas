@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from io import StringIO
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,12 +22,12 @@ router = APIRouter()
 
 
 @router.get("/payments", response_model=list[PaymentOut])
-def list_payments(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentOut]:
+def list_payments(limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentOut]:
     require_permission(db, user, "collections.payments.view")
     ensure_read_access(user)
     customers = list(db.scalars(customer_query(db, user)))
     customer_map = {customer.id: customer for customer in customers}
-    payments = list(db.scalars(select(Payment).where(Payment.customer_id.in_(customer_map.keys())).order_by(Payment.paid_at.desc()))) if customer_map else []
+    payments = list(db.scalars(select(Payment).where(Payment.customer_id.in_(customer_map.keys())).order_by(Payment.paid_at.desc()).limit(limit))) if customer_map else []
     return [
         PaymentOut(id=item.id, customer_id=item.customer_id, customer_name=customer_map[item.customer_id].name if item.customer_id in customer_map else None, amount=item.amount, paid_at=item.paid_at, method=item.method, reference=item.reference, created_at=item.created_at)
         for item in payments
