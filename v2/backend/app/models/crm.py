@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -37,6 +37,36 @@ class Customer(Base):
     promises = relationship("PaymentPromise", back_populates="customer", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="customer", cascade="all, delete-orphan")
     agreements = relationship("PaymentAgreement", back_populates="customer", cascade="all, delete-orphan")
+    obligations = relationship("CustomerObligation", back_populates="customer", cascade="all, delete-orphan")
+
+
+class CustomerObligation(Base):
+    __tablename__ = "customer_obligations"
+    __table_args__ = (UniqueConstraint("tenant_id", "obligation_number", name="uq_customer_obligation_tenant_number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True, nullable=False)
+    obligation_number: Mapped[str] = mapped_column(String(160), index=True, nullable=False)
+    product_type: Mapped[str | None] = mapped_column(String(120))
+    portfolio_name: Mapped[str | None] = mapped_column(String(160))
+    purchase_number: Mapped[str | None] = mapped_column(String(120))
+    original_amount: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    current_balance: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    capital_amount: Mapped[int | None] = mapped_column(Integer)
+    interest_amount: Mapped[int | None] = mapped_column(Integer)
+    fees_amount: Mapped[int | None] = mapped_column(Integer)
+    days_past_due: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(60), default="active", nullable=False)
+    risk: Mapped[str] = mapped_column(String(40), default="Medio", nullable=False)
+    assigned_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    assigned_leader_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True)
+    metadata_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    customer = relationship("Customer", back_populates="obligations")
 
 
 class TypificationNode(Base):
@@ -63,6 +93,7 @@ class ManagementActivity(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, nullable=False)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True, nullable=False)
+    obligation_id: Mapped[int | None] = mapped_column(ForeignKey("customer_obligations.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     typification_id: Mapped[int | None] = mapped_column(ForeignKey("typification_nodes.id"), index=True)
     channel: Mapped[str] = mapped_column(String(60), default="manual", nullable=False)
@@ -81,6 +112,7 @@ class PaymentPromise(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, nullable=False)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True, nullable=False)
+    obligation_id: Mapped[int | None] = mapped_column(ForeignKey("customer_obligations.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     due_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -146,6 +178,7 @@ class PaymentAgreement(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, nullable=False)
     project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True, nullable=False)
+    obligation_id: Mapped[int | None] = mapped_column(ForeignKey("customer_obligations.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     total_amount: Mapped[int] = mapped_column(Integer, nullable=False)
     installment_count: Mapped[int] = mapped_column(Integer, nullable=False)

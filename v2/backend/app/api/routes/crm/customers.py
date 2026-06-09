@@ -4,7 +4,7 @@ import math
 import csv
 from io import StringIO
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -14,11 +14,12 @@ from app.core.roles import AGENT
 from app.db.session import get_db
 from app.models import Customer, User
 from app.schemas.crm import CustomerCreate, CustomerListResponse, CustomerOut
+from app.schemas.teams import CustomerAssignmentUpdate
 from app.services.audit_service import record_audit
 from app.services.access_control import require_permission
 from app.services.plan_limits import check_customer_limit
 
-from .access import customer_query, customer_to_out, ensure_manage_access, ensure_read_access, is_platform, project_for_access, validate_assigned_user
+from .access import customer_for_access, customer_query, customer_to_out, ensure_manage_access, ensure_read_access, is_platform, project_for_access, validate_assigned_user
 from .utils import next_action_for, priority_score, risk_from_dpd
 
 
@@ -125,6 +126,42 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db), user
     db.add(customer)
     db.flush()
     record_audit(db, user, "customer", "create", customer.id, customer.tenant_id, after={"name": customer.name, "document": customer.document})
+    db.commit()
+    db.refresh(customer)
+    return customer_to_out(db, customer)
+
+
+@router.patch("/customers/{customer_id}/assignment", response_model=CustomerOut)
+def update_customer_assignment(
+    customer_id: int,
+    payload: CustomerAssignmentUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> CustomerOut:
+    require_permission(db, user, "crm.assignments.manage")
+    customer = customer_for_access(db, customer_id, user, write=True)
+    before = {"assigned_user_id": customer.assigned_user_id, "project_id": customer.project_id}
+    if payload.project_id is not None:
+        project = project_for_access(db, payload.project_id, user)
+        if project.tenant_id != customer.tenant_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El proyecto no pertenece a la empresa del cliente.")
+        customer.project_id = project.id
+    if payload.assigned_user_id is not None:
+        validate_assigned_user(db, customer.tenant_id, payload.assigned_user_id)
+        customer.assigned_user_id = payload.assigned_user_id
+    record_audit(
+        db,
+        user,
+        "customer_assignment",
+        "update",
+        customer.id,
+        customer.tenant_id,
+        module="collections",
+        before=before,
+        after={"assigned_user_id": customer.assigned_user_id, "project_id": customer.project_id},
+        request=request,
+    )
     db.commit()
     db.refresh(customer)
     return customer_to_out(db, customer)

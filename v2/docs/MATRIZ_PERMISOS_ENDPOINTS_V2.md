@@ -61,3 +61,43 @@
 - Los helpers legacy `ensure_read_access` y `ensure_manage_access` siguen como segunda barrera de compatibilidad.
 - La siguiente fase debe mover mas ownership hacia permisos explicitos y reducir checks directos por `User.role`.
 - Los exportes reforzados son clientes y pagos; otros exportes futuros deben seguir el mismo patron.
+## Actualizacion Fase 8 - Configuracion, alertas, juridico y ventas
+
+| Modulo | Endpoint | Permiso requerido | Modulo requerido | Roles legacy compatibles | Restricciones tenant | Observaciones |
+|---|---|---|---|---|---|---|
+| configuration | `GET /api/configuration/catalogs` | `configuration.view` | administration | platform_admin, tenant_admin | Global + tenant propio; platform puede filtrar tenant | Lista catalogos funcionales globales y tenant. |
+| configuration | `POST /api/configuration/catalogs` | `configuration.catalogs.manage` | administration | platform_admin, tenant_admin | Admin Empresa solo crea en su tenant | No permite modificar plantillas globales desde tenant. |
+| configuration | `GET /api/configuration/rules` | `configuration.view` | administration | platform_admin, tenant_admin | Global + tenant propio | Reglas de negocio parametrizables. |
+| configuration | `POST /api/configuration/rules` | `configuration.rules.manage` | administration | platform_admin, tenant_admin | Admin Empresa solo crea en su tenant | Preparado para SLAs y escalamiento. |
+| configuration | `GET /api/configuration/alert-rules` | `configuration.view` | administration | platform_admin, tenant_admin | Global + tenant propio | Reglas fuente del motor de alertas. |
+| configuration | `POST /api/configuration/alert-rules` | `configuration.alerts.manage` | administration | platform_admin, tenant_admin | Admin Empresa solo crea en su tenant | Parametriza severidad y rol objetivo. |
+| configuration | `GET /api/configuration/workflows` | `configuration.view` | administration | platform_admin, tenant_admin | Global + tenant propio | Workflows juridico/comercial. |
+| configuration | `POST /api/configuration/workflows` | `configuration.workflows.manage` | administration | platform_admin, tenant_admin | Admin Empresa solo crea en su tenant | Define flujo funcional. |
+| alerts | `GET /api/alerts` | `alerts.view` | bi | platform_admin, tenant_admin, coordinator, agent | Platform global; tenant/usuarios por alcance asignado | Alertas calculadas dinamicamente. |
+| alerts | `GET /api/alerts/summary` | `alerts.view` | bi | platform_admin, tenant_admin, coordinator, agent | Respeta tenant y permisos | Resumen por severidad y modulo. |
+| legal | `GET /api/legal/dashboard` | `legal.cases.view` | legal | platform_admin, tenant_admin, coordinator, agent con permiso | Abogado solo casos asignados | KPIs juridicos. |
+| legal | `GET /api/legal/kanban` | `legal.cases.view` | legal | platform_admin, tenant_admin, coordinator, agent con permiso | Abogado solo casos asignados | Usa workflow juridico si existe. |
+| legal | `GET /api/legal/cases/{id}/progress` | `legal.cases.view` | legal | platform_admin, tenant_admin, coordinator, agent con permiso | Valida caso del tenant/asignacion | Avance procesal. |
+| legal | `GET /api/legal/cases/{id}/timeline` | `legal.cases.view` | legal | platform_admin, tenant_admin, coordinator, agent con permiso | Valida caso del tenant/asignacion | Timeline de expediente. |
+| sales | `GET /api/sales/dashboard` | `sales.leads.view` | sales | platform_admin, tenant_admin, coordinator, agent con permiso | Asesor comercial solo asignado | KPIs comerciales. |
+| sales | `GET /api/sales/pipeline` | `sales.opportunities.view` | sales | platform_admin, tenant_admin, coordinator, agent con permiso | Asesor comercial solo asignado | Valor por etapa. |
+| sales | `GET /api/sales/kanban` | `sales.opportunities.view` | sales | platform_admin, tenant_admin, coordinator, agent con permiso | Asesor comercial solo asignado | Kanban comercial. |
+
+## Actualizacion Fase 8B - Collection CRM operativo
+
+| Modulo | Endpoint | Permiso requerido | Modulo requerido | Roles compatibles | Restricciones |
+|---|---|---|---|---|---|
+| crm | `POST /api/crm/customers/{id}/activities` | `crm.activities.create` fallback `crm.clients.update` | crm/collections | agent, coordinator, tenant_admin | cliente asignado para gestor |
+| typifications | `GET /api/typifications/trees` | `typifications.view` | collections | tenant_admin, coordinator | filtra tenant |
+| typifications | `POST /api/typifications/trees` | `typifications.trees.manage` | collections | tenant_admin | tenant/proyecto validado |
+| typifications | `POST /api/typifications/combinations` | `typifications.combinations.manage` | collections | tenant_admin | path y arbol del mismo tenant |
+| recordings | `GET /api/recordings` | `recordings.view` | collections | tenant_admin, coordinator, agent, auditor | filtra tenant y usuario si aplica |
+| recordings | `GET /api/recordings/{id}/playback` | `recordings.playback` | collections | tenant_admin, coordinator, agent, auditor | audita acceso |
+| recordings | `GET /api/recordings/{id}/download` | `recordings.download` | collections | tenant_admin | audita descarga |
+| uploads | `POST /api/uploads/preview` | `uploads.view` | collections | tenant_admin, coordinator | no persiste archivo real |
+| uploads | `POST /api/uploads/confirm` | `uploads.manage` / especifico | collections | tenant_admin, coordinator | registra lote y auditoria |
+| uploads | `GET /api/uploads/demographics` | `demographics.view` | collections | tenant_admin, coordinator, agent | filtra tenant |
+| excel_web | `POST /api/excel-web/query` | `excel_web.query` | bi | tenant_admin, coordinator, agent | fuentes seguras, sin SQL libre |
+| excel_web | `POST /api/excel-web/export` | `excel_web.export` | bi | tenant_admin | registra export log |
+| integrations | `GET /api/integrations/providers` | `integrations.providers.view` | integrations | tenant_admin | secretos enmascarados |
+| integrations | `POST /api/integrations/channels/{id}/test` | `integrations.channels.update` | integrations | tenant_admin | prueba simulada |

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Example deploy script for a TEST server. Do not store secrets here.
+# Required env vars:
+#   APP_DIR=/opt/icodeup360/app
+#   SERVICE_NAME=icodeup360
+
+APP_DIR="${APP_DIR:-/opt/icodeup360/app}"
+SERVICE_NAME="${SERVICE_NAME:-icodeup360}"
+BRANCH="${BRANCH:-main}"
+
+cd "$APP_DIR"
+git fetch origin
+git checkout "$BRANCH"
+git pull origin "$BRANCH"
+
+cd "$APP_DIR/v2/backend"
+. .venv/bin/activate
+pip install -e .
+alembic upgrade head
+
+sudo systemctl restart "$SERVICE_NAME"
+sleep 3
+curl -fsS http://127.0.0.1:8020/api/health
+
+echo "Test deploy completed."

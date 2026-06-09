@@ -146,3 +146,31 @@
 - Exportes de clientes y pagos requieren permiso.
 - Auditoria registra login, exportes y cambios criticos.
 - No versionar `.env`, bases locales, logs, media real ni secretos.
+## Checklist adicional Fase 8
+
+- Validar que `GET /api/configuration/catalogs` responda solo a perfiles con `configuration.view`.
+- Validar que Admin Empresa no cree ni modifique configuraciones de otro tenant.
+- Validar que Admin Empresa no pueda modificar plantillas globales `tenant_id = null`.
+- Validar que `GET /api/alerts` no exponga alertas de otro tenant.
+- Validar que agente vea solo alertas asignadas o de su operacion.
+- Validar que abogado vea alertas/casos juridicos asignados o permitidos.
+- Validar que comercial vea pipeline propio o tenant segun permisos.
+- Validar que `GET /api/legal/cases/{id}/timeline` bloquee casos de otro tenant.
+- Validar que `GET /api/legal/kanban` use solo casos visibles.
+- Validar que `GET /api/sales/pipeline` y `GET /api/sales/kanban` respeten asignacion y tenant.
+- Validar que Centro de Configuracion no aparezca en menu de usuarios operativos sin permiso.
+- Validar que Alertas aparezca solo con `alerts.view`.
+- Validar que el badge de alertas no bloquee navegacion ni rompa responsive.
+
+## Checklist adicional Fase 8B
+
+- Validar que el gestor solo registre gestiones sobre clientes asignados.
+- Validar que `crm.activities.create` no habilite edicion global de clientes.
+- Validar que arboles y combinaciones de tipificacion no crucen tenant/proyecto.
+- Validar que grabaciones no expongan `recording_url` sin permiso de playback/download.
+- Validar que cada playback/download de grabacion registre log.
+- Validar que cargas no persistan archivos reales ni CSV completo en auditoria.
+- Validar que demograficos no dupliquen datos identicos por cliente/fuente.
+- Validar que Mi Excel Web no permita SQL libre.
+- Validar que exportes de Mi Excel Web requieran `excel_web.export`.
+- Validar que integraciones enmascaren secretos y usen pruebas simuladas.

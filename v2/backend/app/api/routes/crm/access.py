@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
-from app.models import Customer, LegalCase, ManagementActivity, Project, Tenant, TypificationNode, User
+from app.models import Customer, CustomerObligation, LegalCase, ManagementActivity, Project, Tenant, TypificationNode, User
 from app.schemas.crm import ActivityOut, CustomerOut
 from app.services.access_control import get_profile_role_code
 
@@ -122,9 +122,12 @@ def customer_to_out(db: Session, customer: Customer) -> CustomerOut:
 def activity_to_out(db: Session, activity: ManagementActivity) -> ActivityOut:
     user = db.get(User, activity.user_id)
     typification = db.get(TypificationNode, activity.typification_id) if activity.typification_id else None
+    obligation = db.get(CustomerObligation, activity.obligation_id) if activity.obligation_id else None
     return ActivityOut(
         id=activity.id,
         customer_id=activity.customer_id,
+        obligation_id=activity.obligation_id,
+        obligation_number=obligation.obligation_number if obligation else None,
         user_id=activity.user_id,
         user_name=user.name if user else None,
         typification_id=activity.typification_id,

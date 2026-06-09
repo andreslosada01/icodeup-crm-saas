@@ -47,6 +47,90 @@ button:disabled {
   display: none !important;
 }
 
+.configuration-grid,
+.kanban-board {
+  display: grid;
+  gap: 12px;
+}
+
+.configuration-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.configuration-card,
+.kanban-column,
+.kanban-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.configuration-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.configuration-card span,
+.configuration-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.kanban-board {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: stretch;
+}
+
+.kanban-column {
+  min-height: 220px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  padding: 12px;
+  background: #f8fbfb;
+}
+
+.kanban-column header,
+.kanban-column footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kanban-column header small,
+.kanban-column footer {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.kanban-card {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 10px;
+  box-shadow: 0 8px 18px rgba(16, 25, 31, 0.06);
+}
+
+.kanban-card p,
+.kanban-card small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workflow-dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 999px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 .menu-disabled {
   display: none !important;
 }
@@ -323,6 +407,8 @@ nav {
   gap: 14px;
   overflow: auto;
   padding-right: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
 }
 
 .nav-group {
@@ -339,13 +425,18 @@ nav {
 }
 
 .nav-item {
-  min-height: 40px;
+  min-height: 38px;
+  max-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border-radius: 8px;
-  padding: 0 14px;
+  padding: 9px 12px;
   color: #d9eeea;
   background: transparent;
   text-align: left;
   font-weight: 800;
+  overflow: hidden;
 }
 
 .nav-item:hover,
@@ -354,11 +445,27 @@ nav {
   background: rgba(21, 149, 111, 0.28);
 }
 
-.nav-item span {
-  display: block;
+.nav-label {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+}
+
+.nav-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .sidebar-status {
@@ -533,6 +640,24 @@ nav {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.compact-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-top: 12px;
+}
+
+.compact-metrics .metric-card {
+  min-height: 90px;
+  padding: 14px;
+}
+
+.compact-metrics .metric-card strong {
+  font-size: 22px;
+}
+
+.selected-row {
+  background: rgba(21, 149, 111, 0.08);
 }
 
 .module-intelligence {
@@ -1360,6 +1485,10 @@ nav {
   border-radius: 8px;
 }
 
+.data-table-shell {
+  min-width: 100%;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -1392,6 +1521,34 @@ tbody tr:hover {
   background: #f8fbfb;
 }
 
+.table-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  background: #fbfdfc;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.table-pager button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #253940;
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.table-pager button:disabled {
+  color: #8ca0a9;
+  background: #eef3f5;
+}
+
 .table-button {
   min-height: 34px;
   border-radius: 8px;
@@ -1399,6 +1556,560 @@ tbody tr:hover {
   color: var(--primary-dark);
   background: rgba(21, 149, 111, 0.12);
   font-weight: 900;
+}
+
+.table-button + .table-button {
+  margin-left: 6px;
+}
+
+.secondary-button {
+  color: #253940 !important;
+  background: #edf4f3 !important;
+}
+
+.ops-form {
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfc;
+}
+
+.scope-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(21, 149, 111, 0.2);
+  border-radius: 8px;
+  color: #17363b;
+  background: linear-gradient(90deg, rgba(21, 149, 111, 0.1), rgba(37, 99, 235, 0.08));
+}
+
+.scope-banner strong {
+  font-size: 13px;
+}
+
+.scope-banner span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.excel-status-summary {
+  min-height: 96px;
+}
+
+.excel-status-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.excel-status-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 10px;
+}
+
+.excel-status-row span,
+.excel-status-row strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.excel-status-row div {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5eef0;
+}
+
+.excel-status-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--blue));
+}
+
+.excel-status-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.excel-status-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.excel-status-card span,
+.excel-status-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.excel-status-card strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 950;
+}
+
+.excel-query-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.excel-query-head .pager {
+  padding-top: 0;
+}
+
+.excel-table-wrap {
+  max-height: 620px;
+}
+
+.sheet-edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbfb;
+}
+
+.sheet-edit-toolbar strong,
+.sheet-edit-toolbar span {
+  display: block;
+}
+
+.sheet-edit-toolbar strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.sheet-edit-toolbar span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sheet-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet-edit-actions button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  color: #ffffff;
+  background: var(--primary);
+  font-weight: 850;
+}
+
+.excel-operational-table table {
+  min-width: 1460px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.excel-operational-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid #b8cacd;
+  background: #eef5f4;
+}
+
+.excel-operational-table td {
+  position: relative;
+  padding: 0;
+  border-right: 1px solid #dce8ea;
+  border-bottom: 1px solid #dce8ea;
+  vertical-align: top;
+}
+
+.excel-operational-table td:first-child,
+.excel-operational-table td:nth-child(2),
+.excel-operational-table td:last-child {
+  padding: 9px 10px;
+  background: #fbfdfc;
+}
+
+.excel-operational-table input,
+.excel-operational-table select,
+.excel-operational-table textarea {
+  width: 100%;
+  min-width: 112px;
+  min-height: 36px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.excel-operational-table textarea {
+  min-width: 180px;
+  min-height: 50px;
+  resize: vertical;
+}
+
+.excel-operational-table input:focus,
+.excel-operational-table select:focus,
+.excel-operational-table textarea:focus {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--primary);
+  background: #ffffff;
+}
+
+.excel-operational-table .table-button {
+  min-height: 30px;
+  padding: 6px 10px;
+}
+
+.sheet-editable-cell {
+  background: #ffffff;
+}
+
+.sheet-cell-active {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.sheet-cell-dirty {
+  background: #fff7df;
+}
+
+.sheet-row-dirty td:first-child {
+  border-left: 4px solid var(--warning);
+}
+
+.sheet-new-row td {
+  background: #f7fbff;
+}
+
+.sheet-state {
+  display: inline-flex;
+  min-width: 78px;
+  justify-content: center;
+  padding: 5px 8px;
+  border: 1px solid #cbdadd;
+  border-radius: 999px;
+  color: var(--muted);
+  background: #f6faf9;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.sheet-state-pending {
+  border-color: rgba(185, 112, 20, 0.35);
+  color: #8a5a00;
+  background: #fff4cf;
+}
+
+.excel-row-ok td {
+  background: rgba(21, 149, 111, 0.055);
+}
+
+.excel-row-watch td {
+  background: rgba(243, 165, 31, 0.075);
+}
+
+.excel-row-risk td {
+  background: rgba(194, 65, 45, 0.065);
+}
+
+.compact-form {
+  margin-top: 12px;
+}
+
+.form-message {
+  min-height: 18px;
+  margin: 0;
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.preview-panel {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.preview-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preview-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.upload-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.upload-flow article,
+.compact-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
+.upload-flow strong,
+.compact-card h3 {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.upload-flow span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.upload-actions {
+  margin: 12px 0;
+}
+
+.toast-container {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 80;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+}
+
+.toast {
+  display: grid;
+  gap: 4px;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(16, 25, 31, 0.14);
+  animation: toastIn 0.18s ease-out;
+}
+
+.toast strong {
+  font-size: 13px;
+}
+
+.toast span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.toast-success {
+  border-left-color: var(--primary);
+}
+
+.toast-error {
+  border-left-color: var(--danger);
+}
+
+.toast-warning {
+  border-left-color: var(--warning);
+}
+
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: 0.2s ease;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.management-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 18, 24, 0.34);
+}
+
+.drawer-panel {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(980px, 100vw);
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 14px;
+  overflow: auto;
+  padding: 22px;
+  background: #f5f8f8;
+  box-shadow: -24px 0 60px rgba(16, 25, 31, 0.22);
+}
+
+.drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.drawer-header h2 {
+  margin-bottom: 4px;
+  font-size: 26px;
+}
+
+.drawer-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.drawer-close {
+  min-height: 36px;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #22343b;
+  background: #e6eeee;
+  font-weight: 900;
+}
+
+.drawer-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.drawer-summary article,
+.drawer-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.drawer-summary article {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.drawer-summary span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.drawer-actions a,
+.drawer-actions button {
+  min-height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(21, 149, 111, 0.22);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--primary-dark);
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.drawer-content-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.15fr) minmax(300px, 0.85fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.drawer-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.drawer-card h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.activity-matrix.compact {
+  grid-auto-columns: minmax(210px, 1fr);
+  grid-auto-flow: row;
+  overflow-x: visible;
+}
+
+.mini-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mini-list p {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfdfc;
+}
+
+.mini-list span {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .danger-button {
@@ -1660,6 +2371,32 @@ tbody tr:hover {
   min-height: 18px;
 }
 
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.checkbox-chip {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #f8fbfb;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.checkbox-chip input {
+  width: 16px;
+  min-height: 16px;
+}
+
 @media (max-width: 1020px) {
   .login-stage,
   .app-shell,
@@ -1685,6 +2422,7 @@ tbody tr:hover {
   .module-insight-grid,
   .effective-access-grid,
   .access-columns,
+  .upload-flow,
   .semaphore-grid,
   .insight-grid {
     grid-template-columns: 1fr;
@@ -1693,6 +2431,15 @@ tbody tr:hover {
   .sidebar {
     position: static;
     height: auto;
+  }
+
+  .drawer-panel {
+    width: 100vw;
+  }
+
+  .drawer-summary,
+  .drawer-content-grid {
+    grid-template-columns: 1fr;
   }
 
   .capability-grid {
@@ -1732,6 +2479,16 @@ tbody tr:hover {
 
   .sidebar-brand {
     grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .drawer-panel {
+    padding: 16px;
+  }
+
+  .drawer-header,
+  .preview-panel header {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .bar-row {

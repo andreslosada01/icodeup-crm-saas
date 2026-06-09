@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -10,9 +11,19 @@ from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISO
 from app.core.security import hash_password
 from app.models import (
     CommunicationChannel,
+    CallRecording,
+    ChannelConfiguration,
+    ChannelEventLog,
+    CommunicationTemplate,
     Customer,
+    CustomerDemographic,
+    CustomerObligation,
     Document,
+    AlertRule,
+    BusinessRule,
+    FunctionalCatalog,
     Lead,
+    IntegrationProvider,
     LegalAction,
     LegalCase,
     LegalDeadline,
@@ -21,6 +32,7 @@ from app.models import (
     MenuItem,
     Module,
     Opportunity,
+    OperationalSheetRow,
     Party,
     Payment,
     PaymentAgreement,
@@ -28,6 +40,7 @@ from app.models import (
     PaymentPromise,
     Permission,
     Project,
+    SavedDataView,
     Role,
     RolePermission,
     SaasPlan,
@@ -35,10 +48,17 @@ from app.models import (
     TenantConfiguration,
     TenantModule,
     TenantSubscription,
+    TypificationCombinationRule,
     TypificationNode,
+    TypificationTree,
+    TypificationTreeNode,
+    UploadBatch,
     User,
     UserProjectAssignment,
     UserProfile,
+    WorkflowDefinition,
+    WorkflowStage,
+    WebhookConfiguration,
 )
 from app.services.access_control import sync_user_profile
 
@@ -79,6 +99,10 @@ PERMISSION_DEFS = [
     ("users.create", "Crear usuarios", "administration"),
     ("users.update", "Actualizar usuarios", "administration"),
     ("users.assign", "Asignar usuarios", "administration"),
+    ("teams.view", "Ver equipos y carteras", "administration"),
+    ("teams.manage", "Administrar equipos y carteras", "administration"),
+    ("project_users.view", "Ver usuarios por cartera", "administration"),
+    ("project_users.manage", "Asignar usuarios a carteras", "administration"),
     ("roles.manage", "Administrar roles y permisos", "administration"),
     ("roles.view", "Ver roles y permisos", "administration"),
     ("roles.create", "Crear roles", "administration"),
@@ -89,6 +113,14 @@ PERMISSION_DEFS = [
     ("modules.configure", "Activar modulos por empresa", "administration"),
     ("audit.logs.view", "Ver auditoria", "administration"),
     ("audit.logs.export", "Exportar auditoria", "administration"),
+    ("configuration.view", "Ver Centro de Configuracion", "administration"),
+    ("configuration.manage", "Administrar configuracion funcional", "administration"),
+    ("configuration.catalogs.manage", "Administrar catalogos funcionales", "administration"),
+    ("configuration.rules.manage", "Administrar reglas de negocio", "administration"),
+    ("configuration.alerts.manage", "Administrar reglas de alertas", "administration"),
+    ("configuration.workflows.manage", "Administrar workflows", "administration"),
+    ("alerts.view", "Ver alertas operativas", "bi"),
+    ("alerts.manage", "Gestionar alertas", "bi"),
     ("crm.read", "Leer CRM", "crm"),
     ("crm.manage", "Gestionar CRM", "crm"),
     ("crm.manage_own", "Gestionar CRM asignado", "crm"),
@@ -99,6 +131,10 @@ PERMISSION_DEFS = [
     ("crm.clients.delete", "Eliminar clientes", "crm"),
     ("crm.clients.export", "Exportar clientes", "crm"),
     ("crm.clients.import", "Importar clientes", "crm"),
+    ("crm.assignments.view", "Ver asignaciones operativas", "crm"),
+    ("crm.assignments.manage", "Administrar asignaciones operativas", "crm"),
+    ("crm.activities.view", "Ver gestiones", "crm"),
+    ("crm.activities.create", "Registrar gestiones", "crm"),
     ("parties.view", "Ver terceros maestros", "crm"),
     ("parties.create", "Crear terceros maestros", "crm"),
     ("parties.update", "Actualizar terceros maestros", "crm"),
@@ -118,6 +154,24 @@ PERMISSION_DEFS = [
     ("collections.agreements.create", "Crear acuerdos", "collections"),
     ("collections.agreements.update", "Actualizar acuerdos", "collections"),
     ("collections.agreements.export", "Exportar acuerdos", "collections"),
+    ("typifications.view", "Ver arboles de tipificacion", "collections"),
+    ("typifications.manage", "Administrar tipificaciones legacy", "collections"),
+    ("typifications.trees.manage", "Administrar arboles de gestion", "collections"),
+    ("typifications.combinations.manage", "Administrar combinaciones", "collections"),
+    ("recordings.view", "Ver grabaciones", "collections"),
+    ("recordings.playback", "Reproducir grabaciones", "collections"),
+    ("recordings.download", "Descargar grabaciones", "collections"),
+    ("recordings.manage", "Administrar grabaciones", "collections"),
+    ("recordings.audit.view", "Auditar grabaciones", "collections"),
+    ("uploads.view", "Ver cargas", "collections"),
+    ("uploads.preview", "Previsualizar cargas", "collections"),
+    ("uploads.confirm", "Confirmar cargas", "collections"),
+    ("uploads.manage", "Administrar cargas", "collections"),
+    ("uploads.repartos.manage", "Cargar repartos", "collections"),
+    ("uploads.demographics.manage", "Cargar demograficos", "collections"),
+    ("uploads.download", "Descargar resultados de cargas", "collections"),
+    ("demographics.view", "Ver demograficos", "collections"),
+    ("demographics.manage", "Administrar demograficos", "collections"),
     ("legal.read", "Leer juridico", "legal"),
     ("legal.manage", "Gestionar juridico", "legal"),
     ("legal.cases.view", "Ver casos juridicos", "legal"),
@@ -143,9 +197,21 @@ PERMISSION_DEFS = [
     ("sales.opportunities.export", "Exportar oportunidades", "sales"),
     ("reports.view", "Ver reportes", "bi"),
     ("reports.export", "Exportar reportes", "bi"),
+    ("excel_web.view", "Ver Mi Excel Web", "bi"),
+    ("excel_web.query", "Consultar Mi Excel Web", "bi"),
+    ("excel_web.export", "Exportar Mi Excel Web", "bi"),
+    ("excel_web.views.manage", "Administrar vistas Mi Excel Web", "bi"),
+    ("excel_web.sheet.manage", "Administrar hoja operativa Mi Excel Web", "bi"),
+    ("integrations.providers.view", "Ver proveedores de integracion", "integrations"),
+    ("integrations.providers.manage", "Administrar proveedores de integracion", "integrations"),
     ("integrations.channels.view", "Ver canales", "integrations"),
     ("integrations.channels.create", "Crear canales", "integrations"),
     ("integrations.channels.update", "Actualizar canales", "integrations"),
+    ("integrations.templates.view", "Ver plantillas de comunicacion", "integrations"),
+    ("integrations.templates.manage", "Administrar plantillas de comunicacion", "integrations"),
+    ("integrations.webhooks.view", "Ver webhooks", "integrations"),
+    ("integrations.webhooks.manage", "Administrar webhooks", "integrations"),
+    ("integrations.events.view", "Ver logs de canales", "integrations"),
     ("menu.view", "Ver menu dinamico", "core"),
 ]
 
@@ -154,44 +220,62 @@ ROLE_PERMISSION_MAP = {
     TENANT_ADMIN: [
         "tenant.manage", "tenant.settings.view", "tenant.settings.configure",
         "users.manage", "users.view", "users.create", "users.update", "users.assign",
+        "teams.view", "teams.manage", "project_users.view", "project_users.manage",
         "roles.manage", "roles.view", "roles.create", "roles.update", "roles.configure",
         "modules.view", "crm.read", "crm.manage", "crm.dashboard.view",
         "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.export", "crm.clients.import",
+        "crm.assignments.view", "crm.assignments.manage",
+        "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update", "parties.export",
         "collections.read", "collections.manage", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update", "collections.promises.export",
         "collections.payments.view", "collections.payments.create", "collections.payments.export",
         "collections.agreements.view", "collections.agreements.create", "collections.agreements.update", "collections.agreements.export",
+        "typifications.view", "typifications.manage", "typifications.trees.manage", "typifications.combinations.manage",
+        "recordings.view", "recordings.playback", "recordings.download", "recordings.manage", "recordings.audit.view",
+        "uploads.view", "uploads.preview", "uploads.confirm", "uploads.manage", "uploads.repartos.manage", "uploads.demographics.manage", "uploads.download",
+        "demographics.view", "demographics.manage",
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.cases.export", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update", "documents.export",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
-        "reports.view", "reports.export", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
+        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "excel_web.export", "excel_web.views.manage", "excel_web.sheet.manage",
+        "integrations.providers.view", "integrations.providers.manage", "integrations.channels.view", "integrations.channels.create", "integrations.channels.update",
+        "integrations.templates.view", "integrations.templates.manage", "integrations.webhooks.view", "integrations.webhooks.manage", "integrations.events.view",
         "audit.logs.view", "audit.logs.export", "menu.view",
+        "configuration.view", "configuration.manage", "configuration.catalogs.manage", "configuration.rules.manage",
+        "configuration.alerts.manage", "configuration.workflows.manage", "alerts.view", "alerts.manage",
     ],
     COORDINATOR: [
         "crm.read", "crm.manage", "crm.dashboard.view", "crm.clients.view", "crm.clients.create", "crm.clients.update", "crm.clients.import",
+        "teams.view", "project_users.view", "crm.assignments.view", "crm.assignments.manage",
+        "crm.activities.view", "crm.activities.create",
         "parties.view", "parties.create", "parties.update",
         "collections.read", "collections.manage", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
         "collections.agreements.view", "collections.agreements.create", "collections.agreements.update",
+        "typifications.view", "recordings.view", "recordings.playback", "uploads.view", "uploads.preview", "uploads.confirm", "uploads.repartos.manage", "uploads.demographics.manage", "demographics.view",
         "legal.read", "legal.manage", "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
         "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
         "sales.manage", "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
-        "reports.view", "reports.export", "menu.view",
+        "reports.view", "reports.export", "excel_web.view", "excel_web.query", "excel_web.sheet.manage", "menu.view", "alerts.view",
     ],
     QUALITY_SUPERVISOR: [
         "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
+        "teams.view", "project_users.view", "crm.assignments.view",
         "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
+        "crm.activities.view", "typifications.view", "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
         "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
-        "reports.view", "menu.view",
+        "reports.view", "menu.view", "alerts.view",
     ],
     AGENT: [
-        "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update",
+        "crm.read", "crm.manage_own", "crm.dashboard.view", "crm.clients.view", "crm.clients.update", "crm.activities.view", "crm.activities.create",
         "parties.view", "collections.read", "collections.manage_own", "collections.queue.view",
         "collections.promises.view", "collections.promises.create", "collections.promises.update",
         "collections.payments.view", "collections.payments.create",
-        "collections.agreements.view", "documents.read", "documents.view", "menu.view",
+        "collections.agreements.view", "collections.agreements.create",
+        "documents.read", "documents.view", "documents.create", "typifications.view", "demographics.view",
+        "excel_web.view", "excel_web.query", "excel_web.views.manage", "excel_web.sheet.manage", "menu.view", "alerts.view",
     ],
 }
 
@@ -203,7 +287,8 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
             "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
             "documents.read", "documents.manage", "documents.view", "documents.create", "documents.update",
-            "reports.view", "audit.logs.view",
+            "recordings.view", "recordings.playback", "demographics.view", "excel_web.view", "excel_web.query",
+            "reports.view", "audit.logs.view", "alerts.view",
         ],
     },
     "lawyer": {
@@ -212,7 +297,7 @@ SPECIALIZED_ROLE_DEFS = {
         "permissions": [
             "menu.view", "crm.read", "crm.clients.view", "legal.read", "legal.manage",
             "legal.cases.view", "legal.cases.create", "legal.cases.update", "legal.deadlines.view",
-            "documents.read", "documents.view", "documents.create",
+            "documents.read", "documents.view", "documents.create", "recordings.view", "demographics.view", "alerts.view",
         ],
     },
     "sales_leader": {
@@ -222,7 +307,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.clients.view", "sales.manage",
             "sales.leads.view", "sales.leads.create", "sales.leads.update", "sales.leads.export",
             "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "sales.opportunities.export",
-            "reports.view",
+            "excel_web.view", "excel_web.query", "reports.view", "alerts.view",
         ],
     },
     "sales_advisor": {
@@ -231,7 +316,7 @@ SPECIALIZED_ROLE_DEFS = {
         "permissions": [
             "menu.view", "crm.read", "crm.clients.view", "sales.read_own", "sales.manage",
             "sales.leads.view", "sales.leads.create", "sales.leads.update",
-            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update",
+            "sales.opportunities.view", "sales.opportunities.create", "sales.opportunities.update", "excel_web.view", "excel_web.query", "alerts.view",
         ],
     },
     "collections_leader": {
@@ -251,7 +336,7 @@ SPECIALIZED_ROLE_DEFS = {
             "menu.view", "crm.read", "crm.dashboard.view", "crm.clients.view", "parties.view",
             "collections.read", "collections.queue.view", "collections.promises.view", "collections.payments.view", "collections.agreements.view",
             "legal.read", "legal.cases.view", "legal.deadlines.view", "documents.read", "documents.view",
-            "reports.view", "audit.logs.view",
+            "typifications.view", "recordings.view", "recordings.playback", "recordings.audit.view", "uploads.view", "demographics.view", "excel_web.view", "excel_web.query", "reports.view", "audit.logs.view", "alerts.view",
         ],
     },
 }
@@ -266,6 +351,8 @@ MENU_DEFS = [
     ("Proyectos", "projects", "administration", "tenant.manage", "platform_admin", 35),
     ("Tipificaciones", "typifications", "collections", "collections.manage", "platform_admin", 40),
     ("Auditoria", "audit", "administration", "audit.logs.view", "platform_admin", 45),
+    ("Centro de Configuracion", "configuration", "administration", "configuration.view", "platform_admin", 47),
+    ("Alertas", "alerts", "bi", "alerts.view", "platform_admin", 48),
     ("Salud sistema", "system-health", "core", "health.view", "platform_admin", 50),
     ("Inicio empresa", "dashboard", "core", "menu.view", "company_admin", 1),
     ("Mi empresa", "tenant-settings", "administration", "tenant.settings.view", "company_admin", 5),
@@ -273,17 +360,25 @@ MENU_DEFS = [
     ("Roles y permisos", "roles-permissions", "administration", "roles.view", "company_admin", 15),
     ("Modulos contratados", "tenant-modules", "administration", "modules.view", "company_admin", 20),
     ("Branding", "branding", "administration", "tenant.settings.configure", "company_admin", 25),
+    ("Equipos y carteras", "teams", "administration", "teams.view", "company_admin", 28),
     ("Clientes / terceros", "customers", "crm", "crm.clients.view", "company_admin", 30),
     ("Tercero maestro", "parties", "crm", "parties.view", "company_admin", 35),
     ("Cola de gestion", "queue", "collections", "collections.queue.view", "company_admin", 40),
     ("Promesas", "promises", "collections", "collections.promises.view", "company_admin", 50),
     ("Pagos", "payments", "collections", "collections.payments.view", "company_admin", 60),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "company_admin", 70),
+    ("Arboles de gestion", "typification-trees", "collections", "typifications.view", "company_admin", 72),
+    ("Grabaciones", "recordings", "collections", "recordings.view", "company_admin", 74),
+    ("Cargas y repartos", "uploads", "collections", "uploads.view", "company_admin", 76),
     ("Juridico", "legal", "legal", "legal.cases.view", "company_admin", 80),
     ("Documentos", "documents", "documents", "documents.view", "company_admin", 90),
     ("Ventas", "sales", "sales", "sales.leads.view", "company_admin", 100),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "company_admin", 108),
     ("Reportes BI", "reports", "bi", "reports.view", "company_admin", 110),
     ("Canales", "channels", "integrations", "integrations.channels.view", "company_admin", 120),
+    ("Integraciones", "integrations", "integrations", "integrations.providers.view", "company_admin", 122),
+    ("Centro de Configuracion", "configuration", "administration", "configuration.view", "company_admin", 125),
+    ("Alertas", "alerts", "bi", "alerts.view", "company_admin", 128),
     ("Auditoria", "audit", "administration", "audit.logs.view", "company_admin", 130),
     ("Inicio", "dashboard", "core", "menu.view", "operational_leader", 1),
     ("Cola de gestion", "queue", "collections", "collections.queue.view", "operational_leader", 10),
@@ -292,10 +387,15 @@ MENU_DEFS = [
     ("Promesas", "promises", "collections", "collections.promises.view", "operational_leader", 30),
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_leader", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_leader", 50),
+    ("Equipos y carteras", "teams", "administration", "teams.view", "operational_leader", 51),
+    ("Grabaciones", "recordings", "collections", "recordings.view", "operational_leader", 52),
+    ("Cargas y repartos", "uploads", "collections", "uploads.view", "operational_leader", 54),
     ("Juridico", "legal", "legal", "legal.cases.view", "operational_leader", 60),
     ("Documentos", "documents", "documents", "documents.view", "operational_leader", 70),
     ("Ventas", "sales", "sales", "sales.leads.view", "operational_leader", 80),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_leader", 88),
     ("Reportes BI", "reports", "bi", "reports.view", "operational_leader", 90),
+    ("Alertas", "alerts", "bi", "alerts.view", "operational_leader", 95),
     ("Inicio", "dashboard", "core", "menu.view", "operational_user", 1),
     ("Mi operacion", "queue", "collections", "collections.queue.view", "operational_user", 10),
     ("Clientes / terceros", "customers", "crm", "crm.clients.view", "operational_user", 20),
@@ -304,7 +404,87 @@ MENU_DEFS = [
     ("Pagos", "payments", "collections", "collections.payments.view", "operational_user", 40),
     ("Acuerdos", "agreements", "collections", "collections.agreements.view", "operational_user", 50),
     ("Documentos", "documents", "documents", "documents.view", "operational_user", 60),
+    ("Mi Excel Web", "excel-web", "bi", "excel_web.view", "operational_user", 65),
+    ("Alertas", "alerts", "bi", "alerts.view", "operational_user", 70),
 ]
+
+CATALOG_DEFAULTS = [
+    ("collections", "customer_status", "SIN_CONTACTO", "Sin contacto", "#94a3b8", 10),
+    ("collections", "customer_status", "CONTACTADO", "Contactado", "#2563eb", 20),
+    ("collections", "customer_status", "PROMESA", "Promesa", "#f59e0b", 30),
+    ("collections", "customer_status", "ESCALADO", "Escalado", "#dc2626", 40),
+    ("collections", "risk", "BAJO", "Bajo", "#16a34a", 10),
+    ("collections", "risk", "MEDIO", "Medio", "#f59e0b", 20),
+    ("collections", "risk", "ALTO", "Alto", "#dc2626", 30),
+    ("legal", "process_type", "EJECUTIVO", "Ejecutivo singular", "#2563eb", 10),
+    ("legal", "process_stage", "RECIBIDO", "Recibido", "#64748b", 10),
+    ("legal", "process_stage", "ESTUDIO", "En estudio", "#2563eb", 20),
+    ("legal", "process_stage", "RADICADO", "Radicado", "#7c3aed", 30),
+    ("legal", "process_stage", "TRAMITE", "En tramite", "#f59e0b", 40),
+    ("legal", "process_stage", "AUDIENCIA", "Audiencia", "#dc2626", 50),
+    ("legal", "process_stage", "FALLO", "Fallo", "#16a34a", 60),
+    ("legal", "action_type", "REVISION", "Revision documental", "#2563eb", 10),
+    ("legal", "hearing_type", "AUDIENCIA", "Audiencia", "#dc2626", 10),
+    ("documents", "document_type", "PAGARE", "Pagare", "#2563eb", 10),
+    ("documents", "document_type", "ACUERDO", "Acuerdo de pago", "#16a34a", 20),
+    ("documents", "document_type", "DEMANDA", "Demanda", "#dc2626", 30),
+    ("sales", "lead_source", "DEMO", "Demo comercial", "#2563eb", 10),
+    ("sales", "opportunity_stage", "NEW", "Nuevo", "#64748b", 10),
+    ("sales", "opportunity_stage", "CONTACTED", "Contactado", "#2563eb", 20),
+    ("sales", "opportunity_stage", "PROPOSAL", "Propuesta", "#7c3aed", 30),
+    ("sales", "opportunity_stage", "NEGOTIATION", "Negociacion", "#f59e0b", 40),
+    ("sales", "opportunity_stage", "WON", "Ganado", "#16a34a", 50),
+    ("sales", "opportunity_stage", "LOST", "Perdido", "#dc2626", 60),
+]
+
+BUSINESS_RULE_DEFAULTS = [
+    ("collections", "sla", "CUSTOMER_WITHOUT_ACTIVITY", "Cliente sin gestion", '{"days": 7}', '{"alert": true}', "high"),
+    ("collections", "sla", "PROMISE_DUE_SOON", "Promesa proxima a vencer", '{"days": 2}', '{"alert": true}', "medium"),
+    ("legal", "sla", "LEGAL_DEADLINE_DUE_SOON", "Vencimiento juridico proximo", '{"days": 7}', '{"alert": true}', "high"),
+    ("legal", "sla", "LEGAL_CASE_WITHOUT_ACTION", "Caso sin actuacion", '{"days": 10}', '{"alert": true}', "high"),
+    ("sales", "sla", "LEAD_WITHOUT_FOLLOWUP", "Lead sin seguimiento", '{"days": 5}', '{"alert": true}', "medium"),
+    ("sales", "sla", "OPPORTUNITY_CLOSE_DUE_SOON", "Oportunidad proxima a cierre", '{"days": 7}', '{"alert": true}', "high"),
+]
+
+ALERT_RULE_DEFAULTS = [
+    ("collections", "CUSTOMER_WITHOUT_ACTIVITY", "Cliente sin gestion", "customer_without_activity", 7, "high", "collections_leader", "Cliente sin gestion reciente."),
+    ("collections", "PROMISE_DUE_SOON", "Promesa proxima/vencida", "promise_due_soon", 2, "medium", "collections_agent", "Confirmar promesa antes del vencimiento."),
+    ("legal", "LEGAL_DEADLINE_DUE_SOON", "Vencimiento juridico", "legal_deadline_due_soon", 7, "high", "lawyer", "Revisar termino procesal."),
+    ("legal", "LEGAL_HEARING_DUE_SOON", "Audiencia proxima", "legal_hearing_due_soon", 5, "high", "lawyer", "Preparar audiencia y soportes."),
+    ("legal", "LEGAL_CASE_WITHOUT_ACTION", "Caso sin actuacion", "legal_case_without_action", 10, "high", "legal_director", "Actualizar expediente juridico."),
+    ("sales", "LEAD_WITHOUT_FOLLOWUP", "Lead sin seguimiento", "lead_without_followup", 5, "medium", "sales_advisor", "Registrar contacto comercial."),
+    ("sales", "OPPORTUNITY_CLOSE_DUE_SOON", "Oportunidad proxima a cierre", "opportunity_close_due_soon", 7, "high", "sales_leader", "Actualizar plan de cierre."),
+]
+
+WORKFLOW_DEFAULTS = {
+    "legal": {
+        "code": "LEGAL_STANDARD",
+        "name": "Flujo juridico estandar",
+        "description": "Etapas base para expedientes de Collection & Legal CRM.",
+        "stages": [
+            ("RECIBIDO", "Recibido", "#64748b", 10, False),
+            ("ESTUDIO", "En estudio", "#2563eb", 20, False),
+            ("RADICADO", "Radicado", "#7c3aed", 30, False),
+            ("TRAMITE", "En tramite", "#f59e0b", 40, False),
+            ("AUDIENCIA", "Audiencia", "#dc2626", 50, False),
+            ("FALLO", "Fallo", "#16a34a", 60, False),
+            ("CERRADO", "Cerrado", "#0f766e", 70, True),
+        ],
+    },
+    "sales": {
+        "code": "SALES_PIPELINE",
+        "name": "Pipeline comercial estandar",
+        "description": "Etapas base para leads y oportunidades comerciales.",
+        "stages": [
+            ("NEW", "Nuevo", "#64748b", 10, False),
+            ("CONTACTED", "Contactado", "#2563eb", 20, False),
+            ("PROPOSAL", "Propuesta", "#7c3aed", 30, False),
+            ("NEGOTIATION", "Negociacion", "#f59e0b", 40, False),
+            ("WON", "Ganado", "#16a34a", 50, True),
+            ("LOST", "Perdido", "#dc2626", 60, True),
+        ],
+    },
+}
 
 DEMO_TENANTS = [
     {
@@ -444,10 +624,12 @@ def _seed_roles_and_permissions(db: Session, modules: dict[str, Module]) -> dict
     db.flush()
     for role_code, permission_codes in ROLE_PERMISSION_MAP.items():
         role = roles[role_code]
-        existing = {
-            item.permission_id
-            for item in db.scalars(select(RolePermission).where(RolePermission.role_id == role.id))
-        }
+        current_links = list(db.scalars(select(RolePermission).where(RolePermission.role_id == role.id)))
+        target_permission_ids = {permissions[permission_code].id for permission_code in permission_codes}
+        for link in current_links:
+            if link.permission_id not in target_permission_ids:
+                db.delete(link)
+        existing = {item.permission_id for item in current_links if item.permission_id in target_permission_ids}
         for permission_code in permission_codes:
             permission = permissions[permission_code]
             if permission.id not in existing:
@@ -562,6 +744,82 @@ def _seed_tenant_configuration(db: Session, tenant: Tenant) -> None:
             db.add(TenantConfiguration(tenant_id=tenant.id, key=key, value_json=f'"{value}"', is_active=True))
 
 
+def _seed_functional_configuration(db: Session, tenant: Tenant | None = None) -> None:
+    tenant_id = tenant.id if tenant else None
+    for module, catalog_type, code, label, color, order in CATALOG_DEFAULTS:
+        item = db.scalar(
+            select(FunctionalCatalog).where(
+                FunctionalCatalog.tenant_id == tenant_id,
+                FunctionalCatalog.module == module,
+                FunctionalCatalog.catalog_type == catalog_type,
+                FunctionalCatalog.code == code,
+            )
+        )
+        if item is None:
+            item = FunctionalCatalog(tenant_id=tenant_id, module=module, catalog_type=catalog_type, code=code, label=label)
+            db.add(item)
+        item.label = label
+        item.color = color
+        item.order = order
+        item.is_system = tenant_id is None
+        item.is_active = True
+    for module, rule_type, code, name, condition_json, action_json, severity in BUSINESS_RULE_DEFAULTS:
+        item = db.scalar(
+            select(BusinessRule).where(
+                BusinessRule.tenant_id == tenant_id,
+                BusinessRule.module == module,
+                BusinessRule.rule_type == rule_type,
+                BusinessRule.code == code,
+            )
+        )
+        if item is None:
+            item = BusinessRule(tenant_id=tenant_id, module=module, rule_type=rule_type, code=code, name=name)
+            db.add(item)
+        item.name = name
+        item.condition_json = condition_json
+        item.action_json = action_json
+        item.severity = severity
+        item.is_active = True
+    for module, code, name, condition_type, threshold_days, severity, target_role, message_template in ALERT_RULE_DEFAULTS:
+        item = db.scalar(select(AlertRule).where(AlertRule.tenant_id == tenant_id, AlertRule.module == module, AlertRule.code == code))
+        if item is None:
+            item = AlertRule(tenant_id=tenant_id, module=module, code=code, name=name, condition_type=condition_type)
+            db.add(item)
+        item.name = name
+        item.condition_type = condition_type
+        item.threshold_days = threshold_days
+        item.severity = severity
+        item.target_role = target_role
+        item.message_template = message_template
+        item.is_active = True
+    for module, definition in WORKFLOW_DEFAULTS.items():
+        workflow = db.scalar(
+            select(WorkflowDefinition).where(
+                WorkflowDefinition.tenant_id == tenant_id,
+                WorkflowDefinition.module == module,
+                WorkflowDefinition.code == definition["code"],
+            )
+        )
+        if workflow is None:
+            workflow = WorkflowDefinition(tenant_id=tenant_id, module=module, code=definition["code"], name=definition["name"])
+            db.add(workflow)
+            db.flush()
+        workflow.name = definition["name"]
+        workflow.description = definition["description"]
+        workflow.is_active = True
+        for code, name, color, order, is_final in definition["stages"]:
+            stage = db.scalar(select(WorkflowStage).where(WorkflowStage.workflow_id == workflow.id, WorkflowStage.code == code))
+            if stage is None:
+                stage = WorkflowStage(workflow_id=workflow.id, code=code, name=name)
+                db.add(stage)
+            stage.name = name
+            stage.color = color
+            stage.order = order
+            stage.is_final = is_final
+            stage.is_active = True
+    db.flush()
+
+
 def _get_or_create_demo_tenant(db: Session, tenant_def: dict) -> Tenant:
     tenant = db.scalar(select(Tenant).where(Tenant.slug == tenant_def["slug"]))
     if tenant is None:
@@ -626,7 +884,7 @@ def _get_or_create_demo_user(
     return user
 
 
-def _ensure_assignment(db: Session, user: User, project: Project) -> None:
+def _ensure_assignment(db: Session, user: User, project: Project, role_in_project: str = "agent", is_active: bool = True) -> None:
     existing = db.scalar(
         select(UserProjectAssignment).where(
             UserProjectAssignment.user_id == user.id,
@@ -634,7 +892,11 @@ def _ensure_assignment(db: Session, user: User, project: Project) -> None:
         )
     )
     if existing is None:
-        db.add(UserProjectAssignment(user_id=user.id, project_id=project.id))
+        existing = UserProjectAssignment(user_id=user.id, project_id=project.id)
+        db.add(existing)
+    existing.tenant_id = project.tenant_id
+    existing.role_in_project = role_in_project
+    existing.is_active = is_active
 
 
 def _ensure_subscription(db: Session, tenant: Tenant, plan_code: str) -> None:
@@ -778,7 +1040,80 @@ def _ensure_customer(
     return customer
 
 
+def _ensure_customer_obligations(db: Session, customer: Customer, leader: User | None = None) -> list[CustomerObligation]:
+    count = 1 + (customer.id % 3)
+    obligations: list[CustomerObligation] = []
+    remaining_balance = customer.balance
+    product_types = ["Consumo", "Microcredito", "Tarjeta privada", "Judicializada"]
+    for position in range(1, count + 1):
+        number = f"{customer.obligation or 'OBL-DEMO'}-{position}"
+        item = db.scalar(select(CustomerObligation).where(CustomerObligation.tenant_id == customer.tenant_id, CustomerObligation.obligation_number == number))
+        if item is None:
+            item = CustomerObligation(tenant_id=customer.tenant_id, customer_id=customer.id, obligation_number=number)
+            db.add(item)
+            db.flush()
+        share = max(150000, int(remaining_balance / (count - position + 1)))
+        remaining_balance -= share
+        item.project_id = customer.project_id
+        item.customer_id = customer.id
+        item.product_type = product_types[(customer.id + position) % len(product_types)]
+        item.portfolio_name = customer.segment or "Cartera demo"
+        item.purchase_number = f"COMPRA-DEMO-{customer.project_id or 0}-{position:02d}"
+        item.original_amount = share + 250000
+        item.current_balance = share
+        item.capital_amount = int(share * 0.74)
+        item.interest_amount = int(share * 0.19)
+        item.fees_amount = share - (item.capital_amount or 0) - (item.interest_amount or 0)
+        item.days_past_due = max(0, customer.dpd - ((position - 1) * 12))
+        item.status = "judicializada" if customer.status == "Escalado" else "active"
+        item.risk = "Alto" if item.days_past_due >= 75 else "Medio" if item.days_past_due >= 25 else "Bajo"
+        item.assigned_user_id = customer.assigned_user_id
+        item.assigned_leader_id = leader.id if leader else None
+        item.metadata_json = json.dumps({"demo": True, "source": "bootstrap_operativo", "summary_from_customer": customer.id})
+        obligations.append(item)
+    return obligations
+
+
+def _ensure_operational_sheet_rows(db: Session, tenant: Tenant, customers: list[Customer], users_by_id: dict[int, User]) -> None:
+    statuses = ["Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"]
+    for index, customer in enumerate(customers[:24], start=1):
+        owner = users_by_id.get(customer.assigned_user_id or 0)
+        if owner is None:
+            continue
+        obligation = db.scalar(select(CustomerObligation).where(CustomerObligation.customer_id == customer.id).order_by(CustomerObligation.id))
+        obligation_number = obligation.obligation_number if obligation else customer.obligation
+        commitment = f"Seguimiento demo hoja operativa {index:02d}"
+        row = db.scalar(
+            select(OperationalSheetRow).where(
+                OperationalSheetRow.tenant_id == tenant.id,
+                OperationalSheetRow.user_id == owner.id,
+                OperationalSheetRow.document == customer.document,
+                OperationalSheetRow.obligation_number == obligation_number,
+                OperationalSheetRow.commitment == commitment,
+            )
+        )
+        if row is None:
+            row = OperationalSheetRow(tenant_id=tenant.id, user_id=owner.id, document=customer.document, obligation_number=obligation_number, commitment=commitment)
+            db.add(row)
+        row.project_id = customer.project_id
+        row.customer_id = customer.id
+        row.obligation_id = obligation.id if obligation else None
+        row.date = (datetime.now(timezone.utc) - timedelta(days=index % 6)).date()
+        row.portfolio = customer.segment or "Cartera demo"
+        row.customer_name = customer.name
+        row.management_note = "Registro ficticio de seguimiento para demo operacional."
+        row.amount = max(120000, int((obligation.current_balance if obligation else customer.balance) * (0.08 + (index % 4) * 0.03)))
+        row.status = statuses[index % len(statuses)]
+        row.next_action_at = datetime.now(timezone.utc) + timedelta(days=(index % 7) + 1)
+        row.metadata_json = json.dumps({"demo": True, "source": "bootstrap_excel_web_operativo", "customer_id": customer.id})
+
+
+def _first_customer_obligation(db: Session, customer: Customer) -> CustomerObligation | None:
+    return db.scalar(select(CustomerObligation).where(CustomerObligation.customer_id == customer.id).order_by(CustomerObligation.id))
+
+
 def _ensure_activity(db: Session, customer: Customer, user: User, typification: TypificationNode | None, channel: str, result: str, note: str, days_ago: int) -> None:
+    obligation = _first_customer_obligation(db, customer)
     existing = db.scalar(select(ManagementActivity).where(ManagementActivity.customer_id == customer.id, ManagementActivity.note == note))
     if existing is None:
         db.add(
@@ -786,6 +1121,7 @@ def _ensure_activity(db: Session, customer: Customer, user: User, typification: 
                 tenant_id=customer.tenant_id,
                 project_id=customer.project_id,
                 customer_id=customer.id,
+                obligation_id=obligation.id if obligation else None,
                 user_id=user.id,
                 typification_id=typification.id if typification else None,
                 channel=channel,
@@ -795,9 +1131,12 @@ def _ensure_activity(db: Session, customer: Customer, user: User, typification: 
                 created_at=datetime.now(timezone.utc) - timedelta(days=days_ago),
             )
         )
+    elif obligation and existing.obligation_id is None:
+        existing.obligation_id = obligation.id
 
 
 def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, due_in_days: int, status: str) -> None:
+    obligation = _first_customer_obligation(db, customer)
     existing = db.scalar(select(PaymentPromise).where(PaymentPromise.customer_id == customer.id, PaymentPromise.amount == amount, PaymentPromise.status == status))
     if existing is None:
         db.add(
@@ -805,6 +1144,7 @@ def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, du
                 tenant_id=customer.tenant_id,
                 project_id=customer.project_id,
                 customer_id=customer.id,
+                obligation_id=obligation.id if obligation else None,
                 user_id=user.id,
                 amount=amount,
                 due_date=datetime.now(timezone.utc) + timedelta(days=due_in_days),
@@ -812,6 +1152,8 @@ def _ensure_promise(db: Session, customer: Customer, user: User, amount: int, du
                 status=status,
             )
         )
+    elif obligation and existing.obligation_id is None:
+        existing.obligation_id = obligation.id
 
 
 def _ensure_payment(db: Session, customer: Customer, user: User, amount: int, days_ago: int) -> None:
@@ -833,6 +1175,7 @@ def _ensure_payment(db: Session, customer: Customer, user: User, amount: int, da
 
 
 def _ensure_agreement(db: Session, customer: Customer, user: User, installments: int, total_amount: int, status: str) -> PaymentAgreement:
+    obligation = _first_customer_obligation(db, customer)
     note = f"DEMO-ACUERDO-{customer.document}"
     agreement = db.scalar(select(PaymentAgreement).where(PaymentAgreement.customer_id == customer.id, PaymentAgreement.notes == note))
     if agreement is None:
@@ -840,6 +1183,7 @@ def _ensure_agreement(db: Session, customer: Customer, user: User, installments:
             tenant_id=customer.tenant_id,
             project_id=customer.project_id,
             customer_id=customer.id,
+            obligation_id=obligation.id if obligation else None,
             user_id=user.id,
             total_amount=total_amount,
             installment_count=installments,
@@ -849,6 +1193,8 @@ def _ensure_agreement(db: Session, customer: Customer, user: User, installments:
         )
         db.add(agreement)
         db.flush()
+    elif obligation and agreement.obligation_id is None:
+        agreement.obligation_id = obligation.id
     agreement.status = status
     existing_installments = list(db.scalars(select(PaymentAgreementInstallment).where(PaymentAgreementInstallment.agreement_id == agreement.id)))
     if not existing_installments:
@@ -1004,6 +1350,206 @@ def _ensure_sales_demo(db: Session, tenant: Tenant, project: Project, owner: Use
         opportunity.notes = "Oportunidad ficticia para demo comercial."
 
 
+def _seed_phase8b_collection_demo(db: Session, tenant: Tenant, projects: list[Project], users: dict[str, User]) -> None:
+    admin = users["admin.andina@demo.icodeup.local"]
+    leader = users["coord.cobranzas.andina@demo.icodeup.local"]
+    gestor_1 = users["gestor1.andina@demo.icodeup.local"]
+    gestor_2 = users["gestor2.andina@demo.icodeup.local"]
+    project = projects[0]
+
+    tree = db.scalar(select(TypificationTree).where(TypificationTree.tenant_id == tenant.id, TypificationTree.code == "COBRANZA_ANDINA"))
+    if tree is None:
+        tree = TypificationTree(tenant_id=tenant.id, project_id=None, module="collections", code="COBRANZA_ANDINA", name="Arbol Cobranza Andina Demo")
+        db.add(tree)
+        db.flush()
+    tree.description = "Arbol demo de combinaciones para cobranza administrativa, prejuridica y juridica."
+    tree.status = "active"
+    node_defs = [
+        (None, 1, "CONTACTO_EFECTIVO", "Contacto efectivo", "#16a34a", 10, {"requires_comment": True}),
+        (None, 1, "NO_CONTACTO", "No contacto", "#dc2626", 20, {"requires_next_action": True}),
+        (None, 1, "TERCERO", "Contacto tercero", "#f59e0b", 30, {"requires_comment": True}),
+        ("CONTACTO_EFECTIVO", 2, "PROMESA_PAGO", "Promesa de pago", "#2563eb", 10, {"requires_promise": True, "requires_amount": True, "requires_next_action": True, "target_customer_status": "Promesa", "changes_customer_status": True}),
+        ("CONTACTO_EFECTIVO", 2, "ACUERDO", "Acuerdo de pago", "#7c3aed", 20, {"requires_amount": True, "requires_document": True, "target_customer_status": "Acuerdo", "changes_customer_status": True}),
+        ("NO_CONTACTO", 2, "NUMERO_NO_EXISTE", "Numero no existe", "#dc2626", 10, {"generates_alert": True}),
+        ("NO_CONTACTO", 2, "SIN_RESPUESTA", "Sin respuesta", "#f59e0b", 20, {"requires_next_action": True}),
+        ("TERCERO", 2, "MENSAJE_DEJADO", "Mensaje dejado", "#f59e0b", 10, {"requires_next_action": True}),
+        ("CONTACTO_EFECTIVO", 2, "ESCALAR_JURIDICO", "Escalar a juridico", "#991b1b", 30, {"escalates_to_legal": True, "requires_document": True}),
+    ]
+    nodes: dict[str, TypificationTreeNode] = {}
+    for parent_code, level, code, label, color, order, flags in node_defs:
+        node = db.scalar(select(TypificationTreeNode).where(TypificationTreeNode.tree_id == tree.id, TypificationTreeNode.code == code))
+        if node is None:
+            node = TypificationTreeNode(tree_id=tree.id, code=code, label=label)
+            db.add(node)
+            db.flush()
+        nodes[code] = node
+        node.parent_id = nodes[parent_code].id if parent_code else None
+        node.level = level
+        node.label = label
+        node.color = color
+        node.order = order
+        node.is_active = True
+        node.requires_comment = bool(flags.get("requires_comment"))
+        node.requires_promise = bool(flags.get("requires_promise"))
+        node.requires_next_action = bool(flags.get("requires_next_action"))
+        node.requires_amount = bool(flags.get("requires_amount"))
+        node.requires_document = bool(flags.get("requires_document"))
+        node.changes_customer_status = bool(flags.get("changes_customer_status"))
+        node.target_customer_status = flags.get("target_customer_status")
+        node.generates_alert = bool(flags.get("generates_alert"))
+        node.escalates_to_legal = bool(flags.get("escalates_to_legal"))
+    combinations = [
+        (["CONTACTO_EFECTIVO", "PROMESA_PAGO"], {"promise_amount": True, "promise_due_date": True, "note": True}, {"customer_status": "Promesa", "next_action": "Confirmar cumplimiento de promesa"}),
+        (["CONTACTO_EFECTIVO", "ACUERDO"], {"amount": True, "document": True}, {"customer_status": "Acuerdo", "enable_agreement": True}),
+        (["NO_CONTACTO", "NUMERO_NO_EXISTE"], {"next_contact_at": True}, {"generate_alert": True, "next_action": "Cruzar demograficos"}),
+        (["CONTACTO_EFECTIVO", "ESCALAR_JURIDICO"], {"document": True, "note": True}, {"escalate_to_legal": True}),
+    ]
+    for path, required, effects in combinations:
+        path_ids = [nodes[code].id for code in path if code in nodes]
+        path_json = json.dumps(path_ids)
+        rule = db.scalar(select(TypificationCombinationRule).where(TypificationCombinationRule.tree_id == tree.id, TypificationCombinationRule.path_json == path_json))
+        if rule is None:
+            rule = TypificationCombinationRule(tenant_id=tenant.id, project_id=None, tree_id=tree.id, path_json=path_json)
+            db.add(rule)
+        rule.required_fields_json = json.dumps(required)
+        rule.effects_json = json.dumps(effects)
+        rule.is_active = True
+
+    customers = list(db.scalars(select(Customer).where(Customer.tenant_id == tenant.id).order_by(Customer.id).limit(60)))
+    activities = list(db.scalars(select(ManagementActivity).where(ManagementActivity.tenant_id == tenant.id).order_by(ManagementActivity.id).limit(30)))
+    for index, customer in enumerate(customers[:30], start=1):
+        demographic = db.scalar(select(CustomerDemographic).where(CustomerDemographic.tenant_id == tenant.id, CustomerDemographic.customer_id == customer.id, CustomerDemographic.source == "DEMO_FASE_8B"))
+        if demographic is None:
+            demographic = CustomerDemographic(tenant_id=tenant.id, customer_id=customer.id, source="DEMO_FASE_8B")
+            db.add(demographic)
+        demographic.phone = f"3008{index:06d}"
+        demographic.email = f"demografico{index:03d}@demo.local"
+        demographic.address = f"Calle Demo {index:02d} # 8B-00"
+        demographic.city = customer.city
+        demographic.state = "Departamento Demo"
+        demographic.employer = f"Empresa Demo {index:02d}"
+        demographic.job_title = "Cargo demo"
+        demographic.reference_name = f"Referencia Demo {index:02d}"
+        demographic.reference_phone = f"3018{index:06d}"
+        demographic.score = 60 + (index % 35)
+        demographic.metadata_json = json.dumps({"demo": True, "contactabilidad": customer.contactability})
+    for index, customer in enumerate(customers[:20], start=1):
+        activity = activities[(index - 1) % len(activities)] if activities else None
+        recording = db.scalar(select(CallRecording).where(CallRecording.tenant_id == tenant.id, CallRecording.call_id == f"CALL-DEMO-8B-{index:03d}"))
+        if recording is None:
+            recording = CallRecording(tenant_id=tenant.id, call_id=f"CALL-DEMO-8B-{index:03d}")
+            db.add(recording)
+        recording.project_id = customer.project_id
+        recording.customer_id = customer.id
+        recording.activity_id = activity.id if activity else None
+        recording.user_id = customer.assigned_user_id or (gestor_1.id if index % 2 else gestor_2.id)
+        recording.phone_number = customer.phone
+        recording.direction = "outbound"
+        recording.started_at = datetime.now(timezone.utc) - timedelta(days=index)
+        recording.duration_seconds = 60 + (index * 13)
+        recording.recording_url = None
+        recording.storage_path = f"tenants/demo/andina/recordings/call_demo_8b_{index:03d}.mp3"
+        recording.provider_code = "TRONCAL_DEMO_SIP_ANDINA"
+        recording.status = "available"
+        recording.metadata_json = json.dumps({"demo": True, "quality_score": 70 + (index % 25)})
+    batch_defs = [
+        ("reparto_cartera", "reparto_andina_demo_8b.csv", 60, 60, 0),
+        ("demograficos", "demograficos_andina_demo_8b.csv", 30, 30, 0),
+        ("grabaciones", "metadata_grabaciones_demo_8b.csv", 20, 20, 0),
+    ]
+    for upload_type, filename, total, valid, errors in batch_defs:
+        batch = db.scalar(select(UploadBatch).where(UploadBatch.tenant_id == tenant.id, UploadBatch.original_filename == filename))
+        if batch is None:
+            batch = UploadBatch(tenant_id=tenant.id, project_id=project.id, uploaded_by_id=admin.id, upload_type=upload_type, original_filename=filename)
+            db.add(batch)
+        batch.status = "completed"
+        batch.total_rows = total
+        batch.valid_rows = valid
+        batch.error_rows = errors
+        batch.created_rows = valid
+        batch.updated_rows = 0
+        batch.result_file_path = f"tenants/demo/andina/uploads/{filename}"
+        batch.summary_json = json.dumps({"demo": True, "message": "Lote ficticio para demo comercial"})
+    view_defs = [
+        (admin, "Cartera alto riesgo", "customers", ["name", "document", "balance", "dpd", "risk"], {"risk": "Alto"}, True),
+        (admin, "Pagos del mes", "payments", ["customer_id", "amount", "paid_at", "method"], {}, True),
+        (admin, "Reparto por gestor", "customers", ["name", "document", "assigned_user_id", "balance", "status"], {}, True),
+        (leader, "Productividad equipo", "activities", ["customer_id", "user_id", "channel", "result", "created_at"], {}, True),
+        (leader, "Promesas vencidas equipo", "promises", ["customer_id", "user_id", "amount", "due_date", "status"], {"status": "Vencida"}, True),
+        (leader, "Obligaciones equipo alto riesgo", "obligations", ["customer_id", "obligation_number", "current_balance", "days_past_due", "risk", "assigned_user_id"], {"risk": "Alto"}, True),
+        (gestor_1, "Mis clientes pendientes", "customers", ["name", "document", "balance", "dpd", "status", "risk"], {}, False),
+        (gestor_1, "Mis promesas vencidas", "promises", ["customer_id", "amount", "due_date", "status"], {"status": "Vencida"}, False),
+        (gestor_1, "Mis gestiones de hoy", "activities", ["customer_id", "channel", "result", "note", "created_at"], {}, False),
+        (gestor_1, "Mis obligaciones alto riesgo", "obligations", ["customer_id", "obligation_number", "current_balance", "days_past_due", "risk"], {"risk": "Alto"}, False),
+        (gestor_2, "Mis clientes pendientes", "customers", ["name", "document", "balance", "dpd", "status", "risk"], {}, False),
+        (gestor_2, "Mis obligaciones alto riesgo", "obligations", ["customer_id", "obligation_number", "current_balance", "days_past_due", "risk"], {"risk": "Alto"}, False),
+    ]
+    for owner, name, source, columns, filters, is_public in view_defs:
+        view = db.scalar(select(SavedDataView).where(SavedDataView.tenant_id == tenant.id, SavedDataView.user_id == owner.id, SavedDataView.name == name))
+        if view is None:
+            view = SavedDataView(tenant_id=tenant.id, user_id=owner.id, name=name, source=source)
+            db.add(view)
+        view.columns_json = json.dumps(columns)
+        view.filters_json = json.dumps(filters)
+        view.sort_json = json.dumps({"field": "id", "direction": "desc"})
+        view.is_public = is_public
+        view.is_favorite = True
+    provider_defs = [
+        ("TRONCAL_DEMO_SIP_ANDINA", "Troncal Demo SIP Andina", "telephony"),
+        ("WHATSAPP_BUSINESS_DEMO", "WhatsApp Business Demo", "whatsapp"),
+        ("SMTP_DEMO_ANDINA", "SMTP Demo Andina", "email"),
+    ]
+    provider_ids: dict[str, int] = {}
+    for code, name, provider_type in provider_defs:
+        provider = db.scalar(select(IntegrationProvider).where(IntegrationProvider.tenant_id == tenant.id, IntegrationProvider.code == code))
+        if provider is None:
+            provider = IntegrationProvider(tenant_id=tenant.id, code=code, name=name, provider_type=provider_type)
+            db.add(provider)
+            db.flush()
+        provider.status = "configured"
+        provider.base_url = f"https://demo.icodeup.local/{provider_type}"
+        provider.config_json = json.dumps({"demo": True, "mode": "simulated"})
+        provider.secret_mask = "de****mo"
+        provider_ids[code] = provider.id
+    channel_defs = [
+        ("telephony", "Telefonia WebRTC Demo", "TRONCAL_DEMO_SIP_ANDINA", "+570000000000"),
+        ("whatsapp", "Linea WhatsApp Cobranzas Demo", "WHATSAPP_BUSINESS_DEMO", "+570000000001"),
+        ("email", "Correo Cobranzas Demo", "SMTP_DEMO_ANDINA", "cobranzas@demo.icodeup.local"),
+        ("sms", "SMS Demo", None, "ICODEUP"),
+    ]
+    for channel_type, name, provider_code, from_value in channel_defs:
+        channel = db.scalar(select(ChannelConfiguration).where(ChannelConfiguration.tenant_id == tenant.id, ChannelConfiguration.channel_type == channel_type, ChannelConfiguration.name == name))
+        if channel is None:
+            channel = ChannelConfiguration(tenant_id=tenant.id, channel_type=channel_type, name=name)
+            db.add(channel)
+        channel.provider_id = provider_ids.get(provider_code) if provider_code else None
+        channel.status = "active"
+        channel.from_value = from_value
+        channel.config_json = json.dumps({"demo": True})
+    template_defs = [
+        ("whatsapp", "PROMESA_RECORDATORIO", "Recordatorio promesa", None, "Hola {{cliente}}, recuerda tu compromiso de pago demo."),
+        ("email", "ACUERDO_PAGO", "Acuerdo de pago", "Acuerdo de pago demo", "Adjuntamos resumen demo de acuerdo de pago."),
+        ("sms", "CONTACTO_RAPIDO", "Contacto rapido", None, "Icodeup 360 demo: por favor comunicate con nosotros."),
+    ]
+    for channel_type, code, name, subject, body in template_defs:
+        template = db.scalar(select(CommunicationTemplate).where(CommunicationTemplate.tenant_id == tenant.id, CommunicationTemplate.code == code))
+        if template is None:
+            template = CommunicationTemplate(tenant_id=tenant.id, channel_type=channel_type, code=code, name=name, body=body)
+            db.add(template)
+        template.subject = subject
+        template.body = body
+        template.status = "active"
+    webhook = db.scalar(select(WebhookConfiguration).where(WebhookConfiguration.tenant_id == tenant.id, WebhookConfiguration.name == "Webhook Pagos Demo"))
+    if webhook is None:
+        webhook = WebhookConfiguration(tenant_id=tenant.id, name="Webhook Pagos Demo", event_type="payment.created", target_url="https://demo.icodeup.local/webhooks/payments")
+        db.add(webhook)
+    webhook.status = "active"
+    webhook.secret_mask = "wh****mo"
+    event = db.scalar(select(ChannelEventLog).where(ChannelEventLog.tenant_id == tenant.id, ChannelEventLog.event_type == "demo.seed.8b"))
+    if event is None:
+        db.add(ChannelEventLog(tenant_id=tenant.id, channel_type="system", event_type="demo.seed.8b", status="simulated", payload_json=json.dumps({"demo": True, "message": "Semilla Fase 8B"})))
+
+
 def _seed_secondary_demo_tenants(db: Session, tenants: dict[str, Tenant], modules: dict[str, Module]) -> None:
     for tenant_def in DEMO_TENANTS[1:]:
         tenant = tenants[tenant_def["slug"]]
@@ -1012,8 +1558,9 @@ def _seed_secondary_demo_tenants(db: Session, tenants: dict[str, Tenant], module
         admin = _get_or_create_demo_user(db, tenant, f"admin.{tenant.slug}@demo.icodeup.local", f"Admin {tenant.name}", TENANT_ADMIN, "Administrador demo")
         for code, name, description in SECONDARY_PROJECTS.get(tenant.slug, []):
             project = _get_or_create_project(db, tenant, code, name, description)
-            _ensure_assignment(db, admin, project)
+            _ensure_assignment(db, admin, project, "leader")
         _seed_tenant_configuration(db, tenant)
+        _seed_functional_configuration(db, tenant)
 
 
 def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_tenant: Tenant) -> None:
@@ -1022,6 +1569,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
     _ensure_subscription(db, andina, "business")
     _set_demo_modules(db, andina, modules, DEMO_TENANTS[0]["modules"])
     _seed_tenant_configuration(db, andina)
+    _seed_functional_configuration(db, andina)
 
     platform_demo = _get_or_create_demo_user(db, platform_tenant, DEMO_USER_DEFS[0][0], DEMO_USER_DEFS[0][1], DEMO_USER_DEFS[0][2], DEMO_USER_DEFS[0][3])
     platform_demo.leader_id = None
@@ -1043,13 +1591,23 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
         for code, name, description, _count in ANDINA_PROJECTS
     ]
     for project in projects:
-        for user in users.values():
-            _ensure_assignment(db, user, project)
+        for email, user in users.items():
+            role_in_project = "leader"
+            if email.startswith("gestor"):
+                role_in_project = "agent"
+            elif email.startswith("calidad"):
+                role_in_project = "quality"
+            elif email.startswith("abogado"):
+                role_in_project = "lawyer"
+            elif email.startswith("comercial"):
+                role_in_project = "sales"
+            _ensure_assignment(db, user, project, role_in_project)
     _ensure_channels(db, andina, projects[0])
     typifications = _ensure_typifications(db, andina)
 
     gestor_1 = users["gestor1.andina@demo.icodeup.local"]
     gestor_2 = users["gestor2.andina@demo.icodeup.local"]
+    leader = users["coord.cobranzas.andina@demo.icodeup.local"]
     lawyer = users["abogado.andina@demo.icodeup.local"]
     commercial = users["comercial.andina@demo.icodeup.local"]
     global_index = 1
@@ -1060,6 +1618,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
             segment = ["Consumo castigado", "Microcredito", "Tarjeta privada", "Judicializado"][project_idx]
             judicialized = code == "CARTERA-JUDICIALIZADA"
             customer = _ensure_customer(db, andina, project, assigned, global_index, segment, judicialized)
+            _ensure_customer_obligations(db, customer, leader)
             _ensure_activity(db, customer, assigned, typifications.get("CONTACTO"), "phone", "Llamada efectiva", f"DEMO FASE 5 gestion telefonica {customer.document}", global_index % 10)
             if global_index % 3 == 0:
                 _ensure_activity(db, customer, assigned, typifications.get("PROMESA"), "whatsapp", "Promesa generada", f"DEMO FASE 5 promesa whatsapp {customer.document}", 2)
@@ -1108,7 +1667,10 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
                 )
             global_index += 1
 
+    andina_customers = list(db.scalars(select(Customer).where(Customer.tenant_id == andina.id).order_by(Customer.id)))
+    _ensure_operational_sheet_rows(db, andina, andina_customers, {user.id: user for user in users.values()})
     _ensure_sales_demo(db, andina, projects[0], commercial)
+    _seed_phase8b_collection_demo(db, andina, projects, users)
     _seed_secondary_demo_tenants(db, tenants, modules)
 
 def bootstrap_platform(db: Session) -> None:
@@ -1119,6 +1681,7 @@ def bootstrap_platform(db: Session) -> None:
     _seed_plans(db)
     roles = _seed_roles_and_permissions(db, modules)
     _seed_menu(db, modules)
+    _seed_functional_configuration(db)
 
     tenant = db.scalar(select(Tenant).where(Tenant.slug == settings.platform_tenant_slug))
     if tenant is None:
@@ -1158,6 +1721,7 @@ def bootstrap_platform(db: Session) -> None:
         existing_tenant.secondary_color = existing_tenant.secondary_color or "#2563eb"
         existing_tenant.timezone = existing_tenant.timezone or "America/Bogota"
         _seed_tenant_configuration(db, existing_tenant)
+        _seed_functional_configuration(db, existing_tenant)
 
     _seed_tenant_modules(db, modules)
     if settings.enable_demo_seeds or settings.enable_demo_data:

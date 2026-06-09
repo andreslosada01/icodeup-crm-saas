@@ -1,6 +1,24 @@
 from app.models.audit import AuditLog
-from app.models.configuration import TenantConfiguration
-from app.models.crm import CommunicationChannel, Customer, ImportBatch, ManagementActivity, Payment, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, TypificationNode
+from app.models.collection_ops import (
+    CallRecording,
+    ChannelConfiguration,
+    ChannelEventLog,
+    CommunicationTemplate,
+    CustomerDemographic,
+    DataExportLog,
+    IntegrationProvider,
+    OperationalSheetRow,
+    OperationalFile,
+    RecordingAccessLog,
+    SavedDataView,
+    TypificationCombinationRule,
+    TypificationTree,
+    TypificationTreeNode,
+    UploadBatch,
+    WebhookConfiguration,
+)
+from app.models.configuration import AlertRule, BusinessRule, FunctionalCatalog, GeneratedAlert, TenantConfiguration, WorkflowDefinition, WorkflowStage, WorkflowTransition
+from app.models.crm import CommunicationChannel, Customer, CustomerObligation, ImportBatch, ManagementActivity, Payment, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, TypificationNode
 from app.models.documents import Document
 from app.models.identity import User, UserProjectAssignment
 from app.models.legal import LegalAction, LegalCase, LegalDeadline, LegalHearing
@@ -13,10 +31,22 @@ from app.models.tenant import Project, Tenant
 
 __all__ = [
     "AuditLog",
+    "AlertRule",
+    "BusinessRule",
+    "CallRecording",
+    "ChannelConfiguration",
+    "ChannelEventLog",
     "CommunicationChannel",
+    "CommunicationTemplate",
     "Customer",
+    "CustomerObligation",
+    "CustomerDemographic",
+    "DataExportLog",
     "Document",
+    "FunctionalCatalog",
+    "GeneratedAlert",
     "ImportBatch",
+    "IntegrationProvider",
     "Lead",
     "LegalAction",
     "LegalCase",
@@ -26,6 +56,8 @@ __all__ = [
     "MenuItem",
     "Module",
     "Opportunity",
+    "OperationalSheetRow",
+    "OperationalFile",
     "Party",
     "Payment",
     "PaymentAgreement",
@@ -33,15 +65,25 @@ __all__ = [
     "PaymentPromise",
     "Permission",
     "Project",
+    "RecordingAccessLog",
     "Role",
     "RolePermission",
     "SaasPlan",
+    "SavedDataView",
     "Tenant",
     "TenantConfiguration",
     "TenantModule",
     "TenantSubscription",
+    "TypificationCombinationRule",
     "TypificationNode",
+    "TypificationTree",
+    "TypificationTreeNode",
+    "UploadBatch",
     "User",
     "UserProjectAssignment",
     "UserProfile",
+    "WebhookConfiguration",
+    "WorkflowDefinition",
+    "WorkflowStage",
+    "WorkflowTransition",
 ]

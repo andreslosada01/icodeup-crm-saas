@@ -83,3 +83,32 @@ La empresa ficticia Andina Servicios Financieros administra varias carteras. En 
 ## Cierre sugerido
 
 La propuesta es iniciar con el modulo Collection & Legal CRM, activar los usuarios y carteras prioritarias, medir recuperacion y productividad, y luego escalar modulos de documentos, BI avanzado e integraciones segun el plan contratado.
+## Bloque nuevo Fase 8 - Parametrizacion, alertas y operacion avanzada
+
+**Transicion sugerida:**
+
+"Ahora veamos algo clave para una empresa que quiere comprar una plataforma y no un desarrollo a la medida: la capacidad de parametrizar la operacion sin tocar codigo."
+
+**Centro de Configuracion:**
+
+"Desde aqui el administrador puede gestionar catalogos, reglas, alertas y workflows. Esto permite adaptar Icodeup 360 a diferentes empresas, carteras, procesos juridicos y equipos comerciales."
+
+**Centro de Alertas:**
+
+"Las alertas no estan aisladas en un tablero. El sistema consolida riesgos de cobranza, juridico, ventas y administracion para que cada rol sepa que atender primero."
+
+**Juridico:**
+
+"El expediente juridico avanza por etapas, tiene vencimientos, audiencias y un kanban procesal. Esto permite controlar terminos y responsabilidades sin perder trazabilidad."
+
+**Ventas:**
+
+"El modulo comercial muestra pipeline, valor ponderado y oportunidades por etapa, preparando la evolucion natural hacia CRM 360."
+
+**Cierre del bloque:**
+
+"La diferencia es que el producto ya combina operacion diaria, gobierno SaaS, configuracion funcional y alertas accionables en una sola experiencia."
+
+## Bloque nuevo Fase 8B - Collection CRM operativo
+
+"En Collection CRM el gestor puede registrar una gestion y el sistema actualiza historial, estado y auditoria. Los administradores parametrizan los arboles de tipificacion, cargan repartos, enriquecen demograficos, consultan grabaciones, cruzan informacion en Mi Excel Web y controlan canales como telefonia, WhatsApp, email y webhooks. Todo queda aislado por empresa, con permisos y trazabilidad."

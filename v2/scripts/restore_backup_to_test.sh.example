@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Example restore into TEST database only. Never run against production.
+# Required:
+#   BACKUP_FILE=/var/backups/icodeup360/file.dump
+#   TEST_DB_NAME=icodeup360_test
+
+BACKUP_FILE="${BACKUP_FILE:?Set BACKUP_FILE}"
+TEST_DB_NAME="${TEST_DB_NAME:-icodeup360_test}"
+DB_HOST="${DB_HOST:-127.0.0.1}"
+DB_USER="${DB_USER:-icodeup360}"
+
+echo "Restoring $BACKUP_FILE into test database $TEST_DB_NAME"
+dropdb --if-exists --host "$DB_HOST" --username "$DB_USER" "$TEST_DB_NAME"
+createdb --host "$DB_HOST" --username "$DB_USER" "$TEST_DB_NAME"
+pg_restore --clean --if-exists --no-owner --no-acl --host "$DB_HOST" --username "$DB_USER" --dbname "$TEST_DB_NAME" "$BACKUP_FILE"
+
+echo "Restore to test completed."

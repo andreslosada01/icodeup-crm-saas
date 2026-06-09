@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -216,8 +216,8 @@ def assign_user_projects(user_id: int, payload: ProjectAssignmentIn, db: Session
 
 
 @router.get("/audit-logs")
-def list_audit_logs(tenant_id: int | None = None, limit: int = 100, db: Session = Depends(get_db)) -> list[dict]:
-    query = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(min(max(limit, 1), 500))
+def list_audit_logs(tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db)) -> list[dict]:
+    query = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
     if tenant_id:
         query = query.where(AuditLog.tenant_id == tenant_id)
     logs = list(db.scalars(query))

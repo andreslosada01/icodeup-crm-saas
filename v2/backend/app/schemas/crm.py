@@ -76,6 +76,70 @@ class CustomerListResponse(BaseModel):
     total_pages: int
 
 
+class CustomerObligationCreate(BaseModel):
+    customer_id: int
+    obligation_number: str = Field(min_length=2, max_length=160)
+    project_id: int | None = None
+    product_type: str | None = None
+    portfolio_name: str | None = None
+    purchase_number: str | None = None
+    original_amount: int = 0
+    current_balance: int = 0
+    capital_amount: int | None = None
+    interest_amount: int | None = None
+    fees_amount: int | None = None
+    days_past_due: int = 0
+    status: str = "active"
+    risk: str | None = None
+    assigned_user_id: int | None = None
+    assigned_leader_id: int | None = None
+    metadata_json: str | None = None
+
+
+class CustomerObligationPatch(BaseModel):
+    product_type: str | None = None
+    portfolio_name: str | None = None
+    purchase_number: str | None = None
+    original_amount: int | None = None
+    current_balance: int | None = None
+    capital_amount: int | None = None
+    interest_amount: int | None = None
+    fees_amount: int | None = None
+    days_past_due: int | None = None
+    status: str | None = None
+    risk: str | None = None
+    assigned_user_id: int | None = None
+    assigned_leader_id: int | None = None
+    metadata_json: str | None = None
+
+
+class CustomerObligationOut(BaseModel):
+    id: int
+    tenant_id: int
+    project_id: int | None = None
+    customer_id: int
+    customer_name: str | None = None
+    obligation_number: str
+    product_type: str | None = None
+    portfolio_name: str | None = None
+    purchase_number: str | None = None
+    original_amount: int
+    current_balance: int
+    capital_amount: int | None = None
+    interest_amount: int | None = None
+    fees_amount: int | None = None
+    days_past_due: int
+    status: str
+    risk: str
+    assigned_user_id: int | None = None
+    assigned_user_name: str | None = None
+    assigned_leader_id: int | None = None
+    assigned_leader_name: str | None = None
+    metadata_json: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class ImportCustomersRequest(BaseModel):
     project_id: int
     assigned_user_id: int | None = None
@@ -91,6 +155,7 @@ class ImportCustomersResponse(BaseModel):
 
 
 class ActivityCreate(BaseModel):
+    obligation_id: int | None = None
     typification_id: int | None = None
     channel: str = "manual"
     result: str = "Gestion registrada"
@@ -103,6 +168,8 @@ class ActivityCreate(BaseModel):
 class ActivityOut(BaseModel):
     id: int
     customer_id: int
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     user_id: int
     user_name: str | None = None
     typification_id: int | None = None
@@ -116,6 +183,7 @@ class ActivityOut(BaseModel):
 
 class PromiseCreate(BaseModel):
     customer_id: int
+    obligation_id: int | None = None
     amount: int = Field(gt=0)
     due_date: datetime
     channel: str | None = None
@@ -125,6 +193,8 @@ class PromiseOut(BaseModel):
     id: int
     customer_id: int
     customer_name: str | None = None
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     amount: int
     due_date: datetime
     channel: str | None = None
@@ -175,6 +245,7 @@ class AgreementInstallmentOut(BaseModel):
 
 class PaymentAgreementCreate(BaseModel):
     customer_id: int
+    obligation_id: int | None = None
     total_amount: int = Field(gt=0)
     installment_count: int = Field(gt=0)
     start_date: datetime
@@ -189,6 +260,8 @@ class PaymentAgreementOut(BaseModel):
     project_id: int | None = None
     customer_id: int
     customer_name: str | None = None
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     user_id: int
     total_amount: int
     installment_count: int

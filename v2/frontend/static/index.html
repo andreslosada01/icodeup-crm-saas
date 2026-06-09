@@ -92,6 +92,7 @@
           <div class="topbar-meta">
             <span id="topbarTenant" class="status-pill">Workspace activo</span>
             <span id="systemStatusPill" class="status-pill status-pill-ok">Sistema operativo</span>
+            <span id="alertTopBadge" class="status-pill status-pill-ok">0 criticas</span>
             <span id="demoModeBadge" class="status-pill demo-mode-badge hidden">Data ficticia de demostracion</span>
             <div class="user-pill">
               <span id="sessionUser">Sesion activa</span>
@@ -279,6 +280,118 @@
             <div id="tenantModuleInsights" class="module-insight-grid"></div>
             <div id="tenantModuleCatalog" class="module-catalog"></div>
             <div id="tenantModuleTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="teams" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <h2>Equipos y carteras</h2>
+                <p>Administra la estructura operativa por cartera, lider, agente y alcance de gestion sin cruzar empresas.</p>
+              </div>
+            </div>
+            <div id="teamLeaderSummary"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Carteras operativas</h2><p>Proyectos con conteo de lideres, agentes, clientes, obligaciones y saldo visible.</p></div>
+              </div>
+              <div id="teamProjectTable" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Asignar usuario a cartera</h2><p>Relaciona usuarios con proyectos y define su rol operativo en la cartera.</p></div>
+              </div>
+              <form id="projectUserAssignForm" class="ops-form form-grid">
+                <label>Cartera<select name="project_id" required></select></label>
+                <label>Usuario<select name="user_id" required></select></label>
+                <label>Rol en cartera<select name="role_in_project"><option value="leader">Lider</option><option value="agent">Agente</option><option value="quality">Calidad</option><option value="lawyer">Abogado</option><option value="sales">Comercial</option><option value="auditor">Auditor</option></select></label>
+                <button type="submit">Guardar asignacion</button>
+              </form>
+            </article>
+          </div>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Usuarios por cartera</h2><p>Asignaciones activas e historicas sin borrado destructivo.</p></div>
+            </div>
+            <div id="teamProjectUsers" class="table-wrap"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Asignar agente a lider</h2><p>Define el equipo directo del lider y, opcionalmente, refuerza la asignacion por cartera.</p></div>
+              </div>
+              <form id="leaderAgentAssignForm" class="ops-form form-grid">
+                <label>Lider<select name="leader_id" required></select></label>
+                <label>Agente<select name="agent_user_id" required></select></label>
+                <label>Cartera opcional<select name="project_id"></select></label>
+                <button type="submit">Asociar agente</button>
+              </form>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head">
+                <div><h2>Agentes del lider</h2><p>Equipo directo segun alcance del usuario autenticado.</p></div>
+              </div>
+              <div id="teamLeaderAgents" class="table-wrap"></div>
+            </article>
+          </div>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Ranking del equipo</h2><p>Productividad basica para tomar decisiones de reparto y seguimiento.</p></div>
+            </div>
+            <div id="teamRanking" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="configuration" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <h2>Centro de Configuracion</h2>
+                <p>Parametriza catalogos, reglas, alertas y workflows sin tocar codigo ni base de datos.</p>
+              </div>
+            </div>
+            <div id="configurationKpis" class="intelligence-grid"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Catalogos funcionales</h2><p>Estados, riesgos, documentos, etapas y fuentes por modulo.</p></div></div>
+              <div id="configurationCatalogs" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Reglas de negocio</h2><p>SLAs, umbrales y acciones parametrizables.</p></div></div>
+              <div id="configurationRules" class="table-wrap"></div>
+            </article>
+          </div>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Reglas de alertas</h2><p>Condiciones, severidad, rol destino y mensaje.</p></div></div>
+              <div id="configurationAlertRules" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Workflows</h2><p>Flujos configurables por modulo y tenant.</p></div></div>
+              <div id="configurationWorkflows" class="configuration-grid"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="alerts" class="section">
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <h2>Centro de alertas</h2>
+                <p>Priorizacion transversal de cobranzas, juridico, ventas y administracion.</p>
+              </div>
+            </div>
+            <div id="alertSummaryCards" class="intelligence-grid"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Alertas abiertas</h2><p>Motor dinamico basado en reglas configurables y datos actuales.</p></div>
+            </div>
+            <div id="alertCenterTable" class="table-wrap"></div>
           </article>
         </section>
 
@@ -488,17 +601,32 @@
         </section>
 
         <section id="legal" class="section">
-          <article class="module-placeholder">
-            <div>
-              <p class="eyebrow">Collection & Legal CRM</p>
-              <h2>Gestion juridica</h2>
-              <p>Centraliza expedientes, actuaciones, audiencias, vencimientos, etapas procesales y riesgo legal por cliente sin duplicar la vision 360 del tercero.</p>
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Collection & Legal CRM</p>
+                <h2>Gestion juridica operativa</h2>
+                <p>Expedientes, etapas, vencimientos, audiencias y riesgo legal con lectura tipo workspace.</p>
+              </div>
             </div>
-            <div class="module-roadmap">
-              <span>Endpoint base: /api/legal</span>
-              <span>Activacion comercial sugerida: bandeja juridica, agenda de vencimientos y matriz de riesgo.</span>
-            </div>
+            <div id="legalKpis" class="intelligence-grid"></div>
           </article>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Kanban procesal</h2><p>Etapas configurables desde el Centro de Configuracion.</p></div>
+            </div>
+            <div id="legalKanbanBoard" class="kanban-board"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Agenda juridica</h2><p>Vencimientos proximos y vencidos.</p></div></div>
+              <div id="legalDeadlineTable" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Expedientes</h2><p>Casos visibles segun rol, tenant y asignacion.</p></div></div>
+              <div id="legalCaseTable" class="table-wrap"></div>
+            </article>
+          </div>
         </section>
 
         <section id="documents" class="section">
@@ -516,17 +644,32 @@
         </section>
 
         <section id="sales" class="section">
-          <article class="module-placeholder">
-            <div>
-              <p class="eyebrow">Expansion CRM 360</p>
-              <h2>Ventas y CRM 360</h2>
-              <p>Base inicial para leads, oportunidades y pipeline comercial, preparada para evolucionar la plataforma hacia relacionamiento 360.</p>
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Expansion CRM 360</p>
+                <h2>Pipeline comercial</h2>
+                <p>Leads, oportunidades, valor ponderado, probabilidad y forecast comercial.</p>
+              </div>
             </div>
-            <div class="module-roadmap">
-              <span>Endpoint base: /api/sales</span>
-              <span>Activacion comercial sugerida: tablero comercial, pipeline y conversion a cliente.</span>
-            </div>
+            <div id="salesKpis" class="intelligence-grid"></div>
           </article>
+          <article class="chart-panel">
+            <div class="panel-head">
+              <div><h2>Kanban comercial</h2><p>Etapas configurables para convertir leads en oportunidades y clientes.</p></div>
+            </div>
+            <div id="salesKanbanBoard" class="kanban-board"></div>
+          </article>
+          <div class="dashboard-grid">
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Pipeline por etapa</h2><p>Valor bruto y ponderado por probabilidad.</p></div></div>
+              <div id="salesPipelineTable" class="table-wrap"></div>
+            </article>
+            <article class="chart-panel">
+              <div class="panel-head"><div><h2>Leads activos</h2><p>Prospectos visibles para el perfil comercial.</p></div></div>
+              <div id="salesLeadTable" class="table-wrap"></div>
+            </article>
+          </div>
         </section>
 
         <section id="reports" class="section">
@@ -762,6 +905,83 @@
               <div id="typificationTable" class="table-wrap"></div>
             </article>
           </div>
+        </section>
+
+        <section id="typification-trees" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Arboles de gestion</h2><p>Tipificaciones y combinaciones administrables por empresa, modulo y cartera.</p></div>
+            </div>
+            <div id="typificationTreeKpis" class="metrics-grid"></div>
+            <div id="typificationTreeTable" class="table-wrap"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Combinaciones validas</h2><p>Rutas, campos obligatorios y efectos operativos de cada gestion.</p></div>
+            </div>
+            <div id="typificationCombinationTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="recordings" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Grabaciones de llamadas</h2><p>Metadata auditable asociada a clientes, gestiones, gestores y proveedores de telefonia.</p></div>
+            </div>
+            <div id="recordingKpis" class="metrics-grid"></div>
+            <div id="recordingTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="uploads" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Cargas, repartos y demograficos</h2><p>Control de lotes, validaciones, resultados, errores y enriquecimiento de clientes.</p></div>
+            </div>
+            <div id="uploadKpis" class="metrics-grid"></div>
+            <div id="uploadBatchTable" class="table-wrap"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Demograficos cargados</h2><p>Datos complementarios para mejorar contactabilidad y estrategia de cobro.</p></div>
+            </div>
+            <div id="demographicTable" class="table-wrap"></div>
+          </article>
+        </section>
+
+        <section id="excel-web" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Mi Excel Web</h2><p>Consulta, gestiona y guarda vistas operativas de tu cartera.</p></div>
+            </div>
+            <div id="excelScopeNote" class="scope-banner"></div>
+            <div id="excelWebKpis" class="metrics-grid"></div>
+            <article class="chart-panel"><h2>Resumen por estado</h2><div id="excelStatusSummary" class="excel-status-summary"></div></article>
+            <article class="chart-panel"><h2>Consulta operativa</h2><div id="excelResultTable"></div></article>
+            <article class="chart-panel"><h2>Mi hoja de seguimiento</h2><div id="excelSheetPanel"></div></article>
+            <div class="dashboard-grid">
+              <article class="chart-panel"><h2>Fuentes disponibles</h2><div id="excelSourceTable" class="table-wrap"></div></article>
+              <article class="chart-panel"><h2>Vistas guardadas</h2><div id="excelViewTable" class="table-wrap"></div></article>
+            </div>
+          </article>
+        </section>
+
+        <section id="integrations" class="section">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Integraciones y canales</h2><p>Telefonia, WhatsApp, email, SMS, webhooks, plantillas y logs con secretos enmascarados.</p></div>
+            </div>
+            <div id="integrationKpis" class="metrics-grid"></div>
+            <div class="dashboard-grid">
+              <article class="chart-panel"><h2>Proveedores</h2><div id="providerTable" class="table-wrap"></div></article>
+              <article class="chart-panel"><h2>Canales</h2><div id="integrationChannelTable" class="table-wrap"></div></article>
+            </div>
+            <div class="dashboard-grid">
+              <article class="chart-panel"><h2>Plantillas</h2><div id="templateTable" class="table-wrap"></div></article>
+              <article class="chart-panel"><h2>Webhooks</h2><div id="webhookTable" class="table-wrap"></div></article>
+            </div>
+            <article class="chart-panel"><h2>Logs de eventos</h2><div id="integrationEventTable" class="table-wrap"></div></article>
+          </article>
         </section>
       </section>
     </main>

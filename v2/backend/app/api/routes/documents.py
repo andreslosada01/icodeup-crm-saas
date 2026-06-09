@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -92,7 +92,7 @@ def document_for_access(db: Session, document_id: int, user: User, write: bool =
 
 
 @router.get("", response_model=list[DocumentOut])
-def list_documents(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Document]:
+def list_documents(limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Document]:
     require_permission(db, user, "documents.view")
     ensure_document_read(db, user)
     query = select(Document).order_by(Document.created_at.desc())
@@ -106,7 +106,7 @@ def list_documents(db: Session = Depends(get_db), user: User = Depends(current_u
         visible_customers = list(db.scalars(customer_query(db, user)))
         customer_ids = [customer.id for customer in visible_customers]
         query = query.where(Document.customer_id.in_(customer_ids)) if customer_ids else query.where(False)
-    return list(db.scalars(query))
+    return list(db.scalars(query.limit(limit)))
 
 
 @router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)

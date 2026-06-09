@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Example production deploy script. Run only after backup and approvals.
+# Do not store passwords, tokens or database URLs in this file.
+
+APP_DIR="${APP_DIR:-/opt/icodeup360/app}"
+SERVICE_NAME="${SERVICE_NAME:-icodeup360}"
+RELEASE_REF="${RELEASE_REF:-main}"
+HEALTH_URL="${HEALTH_URL:-https://crm.example.com/api/health}"
+
+echo "Creating pre-deploy backup is required before continuing."
+echo "Use backup_postgres.sh.example as a reference."
+
+cd "$APP_DIR"
+git fetch origin
+git checkout "$RELEASE_REF"
+git pull origin "$RELEASE_REF"
+
+cd "$APP_DIR/v2/backend"
+. .venv/bin/activate
+pip install -e .
+alembic upgrade head
+
+sudo systemctl restart "$SERVICE_NAME"
+sleep 5
+curl -fsS "$HEALTH_URL"
+
+echo "Production deploy completed."

@@ -74,7 +74,11 @@ class AdministrationRepository:
         users = list(self.db.scalars(query))
         rows = []
         for user in users:
-            assignments = [assignment.project for assignment in user.project_assignments if assignment.project is not None]
+            assignments = [
+                assignment.project
+                for assignment in user.project_assignments
+                if assignment.project is not None and getattr(assignment, "is_active", True)
+            ]
             rows.append(
                 {
                     "id": user.id,
@@ -116,9 +120,13 @@ class AdministrationRepository:
         current = list(self.db.scalars(select(UserProjectAssignment).where(UserProjectAssignment.user_id == user.id)))
         current_by_project = {assignment.project_id: assignment for assignment in current}
         for assignment in current:
+            assignment.tenant_id = user.tenant_id
             if assignment.project_id not in project_ids:
-                self.db.delete(assignment)
+                assignment.is_active = False
         for project_id in project_ids:
-            if project_id not in current_by_project:
-                self.db.add(UserProjectAssignment(user_id=user.id, project_id=project_id))
+            if project_id in current_by_project:
+                current_by_project[project_id].is_active = True
+                current_by_project[project_id].role_in_project = current_by_project[project_id].role_in_project or "agent"
+            else:
+                self.db.add(UserProjectAssignment(tenant_id=user.tenant_id, user_id=user.id, project_id=project_id, role_in_project="agent", is_active=True))
         self.db.flush()
