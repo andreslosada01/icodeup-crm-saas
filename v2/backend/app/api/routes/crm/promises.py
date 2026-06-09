@@ -40,7 +40,7 @@ def list_promises(limit: int = Query(default=20, ge=1, le=20), db: Session = Dep
     ensure_read_access(user)
     customers = list(db.scalars(customer_query(db, user)))
     customer_map = {customer.id: customer for customer in customers}
-    promises = list(db.scalars(select(PaymentPromise).where(PaymentPromise.customer_id.in_(customer_map.keys())).order_by(PaymentPromise.due_date.desc()).limit(limit))) if customer_map else []
+    promises = list(db.scalars(select(PaymentPromise).where(PaymentPromise.customer_id.in_(customer_map.keys())).order_by(PaymentPromise.created_at.desc()).limit(limit))) if customer_map else []
     return [promise_to_out(db, item, customer_map[item.customer_id].name if item.customer_id in customer_map else None) for item in promises]
 
 
