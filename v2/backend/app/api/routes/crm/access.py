@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, QUALITY_SUPERVISOR, TENANT_ADMIN
-from app.models import Customer, CustomerObligation, LegalCase, ManagementActivity, Project, Tenant, TypificationNode, User
+from app.models import Customer, CustomerObligation, LegalCase, ManagementActivity, Project, Tenant, TypificationNode, User, UserProjectAssignment
 from app.schemas.crm import ActivityOut, CustomerOut
 from app.services.access_control import get_profile_role_code
 
@@ -70,12 +70,38 @@ def validate_assigned_user(db: Session, tenant_id: int, assigned_user_id: int | 
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El gestor asignado no pertenece a la empresa.")
 
 
+def _team_user_ids(db: Session, user: User) -> list[int]:
+    ids = [user.id]
+    ids.extend(db.scalars(select(User.id).where(User.tenant_id == user.tenant_id, User.leader_id == user.id)))
+    return list(dict.fromkeys(ids))
+
+
+def _active_project_ids(db: Session, user: User) -> list[int]:
+    return list(
+        db.scalars(
+            select(UserProjectAssignment.project_id).where(
+                UserProjectAssignment.user_id == user.id,
+                UserProjectAssignment.is_active.is_(True),
+            )
+        )
+    )
+
+
 def customer_query(db: Session, user: User):
     query = select(Customer)
     if not is_platform(user):
         query = query.where(Customer.tenant_id == user.tenant_id)
+    if user.role == TENANT_ADMIN:
+        return query
+    profile_role = get_profile_role_code(db, user)
+    if user.role == COORDINATOR or profile_role == "collections_leader":
+        team_ids = _team_user_ids(db, user)
+        project_ids = _active_project_ids(db, user)
+        conditions = [Customer.assigned_user_id.in_(team_ids)]
+        if project_ids:
+            conditions.append(Customer.project_id.in_(project_ids))
+        return query.where(or_(*conditions))
     if user.role == AGENT:
-        profile_role = get_profile_role_code(db, user)
         if profile_role in {"sales_advisor", "sales_leader", "legal_director"}:
             return query
         if profile_role == "lawyer":

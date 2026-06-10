@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
-from app.core.roles import AGENT
+from app.core.roles import AGENT, COORDINATOR, TENANT_ADMIN
 from app.db.session import get_db
-from app.models import Customer, CustomerObligation, User
+from app.models import Customer, CustomerObligation, User, UserProjectAssignment
 from app.schemas.crm import CustomerObligationCreate, CustomerObligationOut, CustomerObligationPatch
 from app.schemas.teams import ObligationAssignmentUpdate
 from app.services.access_control import get_profile_role_code, require_permission
@@ -30,8 +30,29 @@ def obligation_query(db: Session, user: User):
     query = select(CustomerObligation)
     if not is_platform(user):
         query = query.where(CustomerObligation.tenant_id == user.tenant_id)
+    if user.role == TENANT_ADMIN:
+        return query
+    profile_role = get_profile_role_code(db, user)
+    if user.role == COORDINATOR or profile_role == "collections_leader":
+        team_ids = _team_user_ids(db, user)
+        customer_ids = select(Customer.id).where(Customer.tenant_id == user.tenant_id, Customer.assigned_user_id.in_(team_ids))
+        project_ids = list(
+            db.scalars(
+                select(UserProjectAssignment.project_id).where(
+                    UserProjectAssignment.user_id == user.id,
+                    UserProjectAssignment.is_active.is_(True),
+                )
+            )
+        )
+        conditions = [
+            CustomerObligation.assigned_user_id.in_(team_ids),
+            CustomerObligation.assigned_leader_id == user.id,
+            CustomerObligation.customer_id.in_(customer_ids),
+        ]
+        if project_ids:
+            conditions.append(CustomerObligation.project_id.in_(project_ids))
+        return query.where(or_(*conditions))
     if user.role == AGENT:
-        profile_role = get_profile_role_code(db, user)
         if profile_role in {"collections_leader", "sales_leader", "legal_director"}:
             query = query.where(
                 CustomerObligation.assigned_user_id.in_(_team_user_ids(db, user))

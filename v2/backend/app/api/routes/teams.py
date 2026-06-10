@@ -195,7 +195,7 @@ def _leader_for_access(db: Session, leader_id: int, user: User, write: bool = Fa
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lider no encontrado.")
     if not is_platform_admin(db, user) and leader.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Lider fuera de tu empresa.")
-    if not write and (is_platform_admin(db, user) or is_company_admin(db, user) or leader.id == user.id or user_has_permission(db, user, "teams.view")):
+    if not write and (is_platform_admin(db, user) or is_company_admin(db, user) or leader.id == user.id or _has_manage_scope(db, user)):
         return leader
     if write and _has_manage_scope(db, user):
         return leader
@@ -345,6 +345,8 @@ def list_leaders(db: Session = Depends(get_db), user: User = Depends(current_use
     query = select(User).where(User.status == "active").order_by(User.name)
     if not is_platform_admin(db, user):
         query = query.where(User.tenant_id == user.tenant_id)
+        if not is_company_admin(db, user) and not _has_manage_scope(db, user):
+            query = query.where(User.id == user.id)
     users = list(db.scalars(query))
     leaders = []
     for item in users:
@@ -361,6 +363,8 @@ def list_agents(db: Session = Depends(get_db), user: User = Depends(current_user
     query = select(User).where(User.status == "active").order_by(User.name)
     if not is_platform_admin(db, user):
         query = query.where(User.tenant_id == user.tenant_id)
+        if not is_company_admin(db, user) and not _has_manage_scope(db, user):
+            query = query.where(or_(User.leader_id == user.id, User.id == user.id))
     users = list(db.scalars(query))
     agents = []
     for item in users:
