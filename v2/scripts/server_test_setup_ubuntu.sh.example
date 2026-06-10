@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Example provisioning script for an Ubuntu TEST server.
+# Review before running. It does not configure secrets or create the database password.
+
+APP_USER="${APP_USER:-icodeup}"
+APP_ROOT="${APP_ROOT:-/opt/icodeup360-test}"
+CONFIG_DIR="${CONFIG_DIR:-/etc/icodeup360-test}"
+LOG_DIR="${LOG_DIR:-/var/log/icodeup360-test}"
+UPLOAD_DIR="${UPLOAD_DIR:-/var/lib/icodeup360-test/uploads}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/icodeup360-test}"
+
+sudo apt-get update
+sudo apt-get install -y \
+  ca-certificates \
+  curl \
+  git \
+  nginx \
+  postgresql-client \
+  python3 \
+  python3-pip \
+  python3-venv \
+  certbot \
+  python3-certbot-nginx
+
+if ! id "$APP_USER" >/dev/null 2>&1; then
+  sudo adduser --system --group --home "$APP_ROOT" "$APP_USER"
+fi
+
+sudo mkdir -p \
+  "$APP_ROOT" \
+  "$APP_ROOT/app" \
+  "$CONFIG_DIR" \
+  "$LOG_DIR" \
+  "$UPLOAD_DIR" \
+  "$BACKUP_DIR"
+
+sudo chown -R "$APP_USER:$APP_USER" "$APP_ROOT" "$LOG_DIR" "$UPLOAD_DIR" "$BACKUP_DIR"
+sudo chmod 750 "$CONFIG_DIR"
+sudo chmod 750 "$LOG_DIR" "$UPLOAD_DIR" "$BACKUP_DIR"
+
+cat <<EOF
+Base test server setup completed.
+
+Next manual steps:
+1. Create PostgreSQL role and database for test.
+2. Clone the repository into $APP_ROOT/app.
+3. Copy v2/backend/.env.example to $CONFIG_DIR/.env and replace placeholders.
+4. Install systemd and Nginx examples from v2/deploy/.
+5. Run v2/scripts/deploy_test.sh.example after reviewing it.
+EOF

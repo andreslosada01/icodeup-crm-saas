@@ -2,18 +2,32 @@
 set -euo pipefail
 
 # Example restore into TEST database only. Never run against production.
-# Required:
-#   BACKUP_FILE=/var/backups/icodeup360/file.dump
-#   TEST_DB_NAME=icodeup360_test
+# Required confirmation:
+#   CONFIRM_RESTORE=RESTORE_TEST_DB
+# Required backup:
+#   BACKUP_FILE=/var/backups/icodeup360-test/file.dump.gz
 
 BACKUP_FILE="${BACKUP_FILE:?Set BACKUP_FILE}"
-TEST_DB_NAME="${TEST_DB_NAME:-icodeup360_test}"
-DB_HOST="${DB_HOST:-127.0.0.1}"
-DB_USER="${DB_USER:-icodeup360}"
+CONFIRM_RESTORE="${CONFIRM_RESTORE:-}"
+PGHOST="${PGHOST:-127.0.0.1}"
+PGUSER="${PGUSER:-icodeup_test_user}"
+TARGET_DB="${TARGET_DB:-icodeup_crm_test_restore}"
 
-echo "Restoring $BACKUP_FILE into test database $TEST_DB_NAME"
-dropdb --if-exists --host "$DB_HOST" --username "$DB_USER" "$TEST_DB_NAME"
-createdb --host "$DB_HOST" --username "$DB_USER" "$TEST_DB_NAME"
-pg_restore --clean --if-exists --no-owner --no-acl --host "$DB_HOST" --username "$DB_USER" --dbname "$TEST_DB_NAME" "$BACKUP_FILE"
+if [ "$CONFIRM_RESTORE" != "RESTORE_TEST_DB" ]; then
+  echo "Refusing restore. Set CONFIRM_RESTORE=RESTORE_TEST_DB to continue."
+  exit 1
+fi
+
+case "$TARGET_DB" in
+  *prod*|*production*)
+    echo "Refusing restore into database name that looks like production: $TARGET_DB"
+    exit 1
+    ;;
+esac
+
+echo "Restoring $BACKUP_FILE into TEST database $TARGET_DB"
+dropdb --if-exists --host "$PGHOST" --username "$PGUSER" "$TARGET_DB"
+createdb --host "$PGHOST" --username "$PGUSER" "$TARGET_DB"
+gunzip -c "$BACKUP_FILE" | pg_restore --no-owner --no-acl --host "$PGHOST" --username "$PGUSER" --dbname "$TARGET_DB"
 
 echo "Restore to test completed."

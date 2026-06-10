@@ -1,27 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Example deploy script for a TEST server. Do not store secrets here.
-# Required env vars:
-#   APP_DIR=/opt/icodeup360/app
-#   SERVICE_NAME=icodeup360
+# Example deploy script for Icodeup 360 TEST server.
+# Do not store secrets here. Real secrets must live in /etc/icodeup360-test/.env.
+# Basic rollback:
+#   1. git checkout <previous-known-good-commit>
+#   2. alembic downgrade only if a documented migration rollback exists
+#   3. sudo systemctl restart "$SERVICE_NAME"
+#   4. validate "$HEALTH_URL"
 
-APP_DIR="${APP_DIR:-/opt/icodeup360/app}"
-SERVICE_NAME="${SERVICE_NAME:-icodeup360}"
-BRANCH="${BRANCH:-main}"
+APP_DIR="${APP_DIR:-/opt/icodeup360-test/app}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
+SERVICE_NAME="${SERVICE_NAME:-icodeup360-test}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8020/api/health}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+VENV_DIR="${VENV_DIR:-$APP_DIR/.venv}"
 
 cd "$APP_DIR"
 git fetch origin
-git checkout "$BRANCH"
-git pull origin "$BRANCH"
+git checkout "$DEPLOY_BRANCH"
+git pull origin "$DEPLOY_BRANCH"
+
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+  "$PYTHON_BIN" -m venv "$VENV_DIR"
+fi
+
+. "$VENV_DIR/bin/activate"
+python -m pip install --upgrade pip
+python -m pip install -r "$APP_DIR/v2/backend/requirements.txt"
 
 cd "$APP_DIR/v2/backend"
-. .venv/bin/activate
-pip install -e .
 alembic upgrade head
+python -m compileall app
 
 sudo systemctl restart "$SERVICE_NAME"
 sleep 3
-curl -fsS http://127.0.0.1:8020/api/health
+curl -fsS "$HEALTH_URL"
 
 echo "Test deploy completed."
