@@ -1,0 +1,18 @@
+-- Icodeup 360 - PostgreSQL local Windows database bootstrap.
+-- Ambiente: local funcional / QA interno / piloto temporal.
+-- No usar esta contrasena en test ni produccion.
+--
+-- Opcion pgAdmin:
+-- 1. Abrir Query Tool conectado como postgres/superuser.
+-- 2. Cambiar 'change-me' por una contrasena local segura.
+-- 3. Ejecutar este archivo.
+--
+-- Opcion psql:
+-- psql -U postgres -h 127.0.0.1 -p 5432 -f v2/deploy/postgres/create_local_windows_database.sql.example
+
+CREATE USER icodeup_local_user WITH PASSWORD 'change-me';
+CREATE DATABASE icodeup_crm_local OWNER icodeup_local_user;
+GRANT ALL PRIVILEGES ON DATABASE icodeup_crm_local TO icodeup_local_user;
+
+-- Si se recrea el usuario manualmente, validar permisos:
+-- GRANT ALL PRIVILEGES ON DATABASE icodeup_crm_local TO icodeup_local_user;

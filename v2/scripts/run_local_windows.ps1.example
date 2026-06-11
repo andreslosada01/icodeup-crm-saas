@@ -1,0 +1,33 @@
+# Icodeup 360 - Run local Windows example.
+# Ejecutar desde la raiz del repositorio:
+# powershell -ExecutionPolicy Bypass -File .\v2\scripts\run_local_windows.ps1.example
+
+$ErrorActionPreference = "Stop"
+
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$V2Root = Join-Path $RepoRoot "v2"
+$BackendRoot = Join-Path $V2Root "backend"
+$EnvFile = Join-Path $V2Root ".env"
+$VenvPython = Join-Path $BackendRoot ".venv\Scripts\python.exe"
+
+if (-not (Test-Path -LiteralPath $EnvFile)) {
+    throw "No existe v2\.env. Copia v2\backend\.env.local.windows.example a v2\.env y configura los valores locales."
+}
+
+Set-Location -LiteralPath $BackendRoot
+
+if (-not (Test-Path -LiteralPath $VenvPython)) {
+    Write-Host "Creando entorno virtual local..."
+    py -3.12 -m venv .venv
+}
+
+Write-Host "Instalando dependencias..."
+& $VenvPython -m pip install --upgrade pip
+& $VenvPython -m pip install -r requirements.txt
+
+Write-Host "Aplicando migraciones Alembic..."
+& $VenvPython -m alembic upgrade head
+& $VenvPython -m alembic current
+
+Write-Host "Levantando Icodeup 360 en http://127.0.0.1:8020/"
+& $VenvPython -m uvicorn app.main:app --host 127.0.0.1 --port 8020

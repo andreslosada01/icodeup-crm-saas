@@ -1,0 +1,24 @@
+# Icodeup 360 - Backup local Windows PostgreSQL example.
+# No guardar contrasenas en este archivo.
+# Si PostgreSQL solicita password, usar prompt interactivo o una variable temporal:
+# $env:PGPASSWORD = "tu-password-local"; luego ejecutar este script y despues: Remove-Item Env:PGPASSWORD
+
+$ErrorActionPreference = "Stop"
+
+$BackupDir = "C:\icodeup360-local\backups"
+$DbName = "icodeup_crm_local"
+$DbUser = "icodeup_local_user"
+$DbHost = "127.0.0.1"
+$DbPort = "5432"
+$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$BackupFile = Join-Path $BackupDir "$DbName`_$Timestamp.dump"
+
+if (-not (Test-Path -LiteralPath $BackupDir)) {
+    New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
+}
+
+$pgDump = Get-Command "pg_dump.exe" -ErrorAction Stop
+
+Write-Host "Generando backup local: $BackupFile"
+& $pgDump.Source -h $DbHost -p $DbPort -U $DbUser -F c -b -v -f $BackupFile $DbName
+Write-Host "Backup finalizado: $BackupFile"

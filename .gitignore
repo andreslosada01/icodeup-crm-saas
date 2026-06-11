@@ -16,6 +16,7 @@ build/
 .env
 .env.*
 !.env.example
+!v2/backend/.env.local.windows.example
 v2/.env
 !v2/.env.example
 v2/backend/.venv/

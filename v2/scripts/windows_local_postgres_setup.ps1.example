@@ -1,0 +1,53 @@
+# Icodeup 360 - Local Windows PostgreSQL setup example.
+# Ejecutar desde la raiz del repositorio: powershell -ExecutionPolicy Bypass -File .\v2\scripts\windows_local_postgres_setup.ps1.example
+# Este archivo es una guia segura. No contiene secretos reales.
+
+$ErrorActionPreference = "Stop"
+
+$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+$V2Root = Join-Path $RepoRoot "v2"
+$BackendRoot = Join-Path $V2Root "backend"
+$EnvExample = Join-Path $BackendRoot ".env.local.windows.example"
+$EnvTarget = Join-Path $V2Root ".env"
+$SqlExample = Join-Path $V2Root "deploy\postgres\create_local_windows_database.sql.example"
+
+Write-Host "== Icodeup 360 local Windows setup =="
+
+$psql = Get-Command "psql.exe" -ErrorAction SilentlyContinue
+if (-not $psql) {
+    Write-Warning "psql.exe no esta en PATH. Instala PostgreSQL para Windows o agrega PostgreSQL\\bin al PATH."
+    Write-Host "Puedes ejecutar manualmente el SQL en pgAdmin: $SqlExample"
+} else {
+    Write-Host "psql detectado en: $($psql.Source)"
+    Write-Host "Para crear la base local, revisa la contrasena placeholder y ejecuta:"
+    Write-Host "psql -U postgres -h 127.0.0.1 -p 5432 -f `"$SqlExample`""
+}
+
+$localDirs = @(
+    "C:\icodeup360-local\uploads",
+    "C:\icodeup360-local\backups",
+    "C:\icodeup360-local\logs"
+)
+
+foreach ($dir in $localDirs) {
+    if (-not (Test-Path -LiteralPath $dir)) {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        Write-Host "Creada carpeta: $dir"
+    } else {
+        Write-Host "Carpeta existente: $dir"
+    }
+}
+
+if (-not (Test-Path -LiteralPath $EnvTarget)) {
+    Copy-Item -LiteralPath $EnvExample -Destination $EnvTarget
+    Write-Host "Se creo $EnvTarget desde el ejemplo local."
+    Write-Warning "Edita $EnvTarget y reemplaza SECRET_KEY, DATABASE_URL y PLATFORM_ADMIN_PASSWORD antes de ejecutar la app."
+} else {
+    Write-Host "No se sobrescribe $EnvTarget porque ya existe."
+}
+
+Write-Host ""
+Write-Host "Siguientes pasos:"
+Write-Host "1. Crear la base icodeup_crm_local desde pgAdmin o psql."
+Write-Host "2. Editar v2\\.env con los valores locales reales."
+Write-Host "3. Ejecutar .\\v2\\scripts\\run_local_windows.ps1.example"

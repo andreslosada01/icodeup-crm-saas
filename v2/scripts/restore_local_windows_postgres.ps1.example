@@ -1,0 +1,40 @@
+# Icodeup 360 - Restore local Windows PostgreSQL example.
+# ADVERTENCIA: restaurar puede reemplazar/eliminar datos locales.
+# No usar contra test ni produccion.
+
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$BackupFile
+)
+
+$ErrorActionPreference = "Stop"
+
+$DbName = "icodeup_crm_local"
+$DbUser = "icodeup_local_user"
+$DbHost = "127.0.0.1"
+$DbPort = "5432"
+
+if (-not (Test-Path -LiteralPath $BackupFile)) {
+    throw "No existe el archivo de backup: $BackupFile"
+}
+
+Write-Warning "Esto restaurara $BackupFile sobre la base local $DbName."
+Write-Warning "Puede eliminar o reemplazar datos locales."
+$confirmation = Read-Host "Para continuar, escribir RESTAURAR_LOCAL"
+if ($confirmation -ne "RESTAURAR_LOCAL") {
+    Write-Host "Restore cancelado."
+    exit 1
+}
+
+$psql = Get-Command "psql.exe" -ErrorAction Stop
+$pgRestore = Get-Command "pg_restore.exe" -ErrorAction Stop
+
+Write-Host "Cerrando conexiones activas a $DbName..."
+& $psql.Source -h $DbHost -p $DbPort -U $DbUser -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DbName' AND pid <> pg_backend_pid();"
+
+Write-Host "Limpiando schema public local..."
+& $psql.Source -h $DbHost -p $DbPort -U $DbUser -d $DbName -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO $DbUser;"
+
+Write-Host "Restaurando backup..."
+& $pgRestore.Source -h $DbHost -p $DbPort -U $DbUser -d $DbName -v $BackupFile
+Write-Host "Restore local finalizado."
