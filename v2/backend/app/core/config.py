@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     platform_tenant_slug: str = "icodeup-platform"
     enable_demo_seeds: bool = False
     enable_demo_data: bool = False
+    enable_pilot_icodeup_seed: bool = False
     platform_admin_email: str = ""
     platform_admin_password: str = ""
 

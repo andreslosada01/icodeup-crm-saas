@@ -556,6 +556,37 @@ DEMO_NAMES = [
 
 DEMO_CITIES = ["Bogota", "Medellin", "Cali", "Barranquilla", "Bucaramanga", "Pereira", "Manizales", "Cartagena"]
 
+PILOT_TENANT_DEF = {
+    "slug": "icodeup-advisors",
+    "name": "Icodeup Advisors",
+    "document_number": "900360001-1",
+    "plan": "business",
+    "modules": {"core", "administration", "crm", "collections", "legal", "documents", "bi", "sales", "integrations"},
+    "primary_color": "#15956f",
+    "secondary_color": "#2563eb",
+    "notes": "Tenant piloto local ficticio para QA interno de Icodeup 360 Collection CRM.",
+}
+
+PILOT_PROJECTS = [
+    ("PILOTO-CONSUMO", "Cartera Consumo Piloto", "Cartera ficticia de consumo para validacion local.", 120),
+    ("PILOTO-PREVENTIVA", "Cartera Preventiva Piloto", "Cartera ficticia preventiva con mora temprana.", 90),
+    ("PILOTO-JURIDICA", "Cartera Juridica Piloto", "Cartera ficticia prejuridica y juridica.", 90),
+]
+
+PILOT_USER_DEFS = [
+    ("admin.icodeup@demo.icodeup.local", "Admin Icodeup Advisors Piloto", TENANT_ADMIN, "Administrador tenant piloto", None, "tenant_admin"),
+    ("lider.cobranzas.icodeup@demo.icodeup.local", "Lider Cobranzas Icodeup Piloto", COORDINATOR, "Lider de cobranzas piloto", None, "collections_leader"),
+    ("gestor1.icodeup@demo.icodeup.local", "Gestor Uno Icodeup Piloto", AGENT, "Gestor piloto", "lider.cobranzas.icodeup@demo.icodeup.local", "collections_agent"),
+    ("gestor2.icodeup@demo.icodeup.local", "Gestor Dos Icodeup Piloto", AGENT, "Gestor piloto", "lider.cobranzas.icodeup@demo.icodeup.local", "collections_agent"),
+    ("gestor3.icodeup@demo.icodeup.local", "Gestor Tres Icodeup Piloto", AGENT, "Gestor piloto", "lider.cobranzas.icodeup@demo.icodeup.local", "collections_agent"),
+    ("gestor4.icodeup@demo.icodeup.local", "Gestor Cuatro Icodeup Piloto", AGENT, "Gestor piloto", "lider.cobranzas.icodeup@demo.icodeup.local", "collections_agent"),
+    ("gestor5.icodeup@demo.icodeup.local", "Gestor Cinco Icodeup Piloto", AGENT, "Gestor piloto", "lider.cobranzas.icodeup@demo.icodeup.local", "collections_agent"),
+    ("calidad.icodeup@demo.icodeup.local", "Calidad Icodeup Piloto", QUALITY_SUPERVISOR, "Supervisor calidad piloto", "lider.cobranzas.icodeup@demo.icodeup.local", "tenant_auditor"),
+    ("auditor.icodeup@demo.icodeup.local", "Auditor Icodeup Piloto", QUALITY_SUPERVISOR, "Auditor piloto", None, "tenant_auditor"),
+    ("abogado.icodeup@demo.icodeup.local", "Abogado Icodeup Piloto", AGENT, "Abogado piloto", None, "lawyer"),
+    ("comercial.icodeup@demo.icodeup.local", "Comercial Icodeup Piloto", AGENT, "Comercial piloto", None, "sales_advisor"),
+]
+
 
 def _get_or_create_module(db: Session, code: str, name: str, description: str, category: str, base_price: int, icon: str, order: int) -> Module:
     module = db.scalar(select(Module).where(Module.code == code))
@@ -1350,6 +1381,190 @@ def _ensure_sales_demo(db: Session, tenant: Tenant, project: Project, owner: Use
         opportunity.notes = "Oportunidad ficticia para demo comercial."
 
 
+def _ensure_pilot_customer(db: Session, tenant: Tenant, project: Project, assigned_user: User, index: int, segment: str) -> Customer:
+    document = f"9903{index:05d}"
+    customer = db.scalar(select(Customer).where(Customer.tenant_id == tenant.id, Customer.document == document))
+    if customer is None:
+        customer = Customer(tenant_id=tenant.id, document=document, name=f"Cliente Piloto Icodeup {index:03d}")
+        db.add(customer)
+        db.flush()
+    if project.code == "PILOTO-PREVENTIVA":
+        dpd = (index * 3) % 45
+    elif project.code == "PILOTO-JURIDICA":
+        dpd = 90 + ((index * 5) % 160)
+    else:
+        dpd = 25 + ((index * 7) % 120)
+    balance = 650000 + ((index % 60) * 135000) + (index * 17500)
+    customer.project_id = project.id
+    customer.assigned_user_id = assigned_user.id
+    customer.name = f"Cliente Piloto Icodeup {index:03d}"
+    customer.phone = f"3009{index:06d}"
+    customer.email = f"cliente.piloto{index:03d}@demo.icodeup.local"
+    customer.city = DEMO_CITIES[index % len(DEMO_CITIES)]
+    customer.segment = segment
+    customer.obligation = f"PILOT-{project.code}-{index:03d}"
+    customer.balance = balance
+    customer.original_balance = balance + 380000
+    customer.dpd = dpd
+    customer.risk = "Alto" if dpd >= 75 else "Medio" if dpd >= 25 else "Bajo"
+    customer.priority = min(100, int(dpd * 0.6) + int(balance / 1_200_000))
+    customer.status = "Escalado" if project.code == "PILOTO-JURIDICA" and index % 3 == 0 else ("Promesa" if index % 5 == 0 else "Contactado" if index % 2 == 0 else "Sin contacto")
+    customer.next_action = "Revisar ruta juridica piloto" if customer.status == "Escalado" else ("Confirmar compromiso piloto" if customer.status == "Promesa" else "Gestionar contacto piloto")
+    customer.contactability = "Alta" if index % 4 == 0 else "Media" if index % 4 in {1, 2} else "Baja"
+    customer.notes = "Registro ficticio del piloto local Icodeup Advisors. No corresponde a una persona real."
+    customer.last_contact_at = datetime.now(timezone.utc) - timedelta(days=index % 12)
+    customer.next_contact_at = datetime.now(timezone.utc) + timedelta(days=(index % 6) + 1)
+    _ensure_party_for_customer(db, tenant, customer)
+    return customer
+
+
+def _ensure_pilot_obligation(db: Session, customer: Customer, leader: User, position: int) -> CustomerObligation:
+    number = f"PILOT-OBL-{customer.document}-{position:02d}"
+    item = db.scalar(select(CustomerObligation).where(CustomerObligation.tenant_id == customer.tenant_id, CustomerObligation.obligation_number == number))
+    if item is None:
+        item = CustomerObligation(tenant_id=customer.tenant_id, customer_id=customer.id, obligation_number=number)
+        db.add(item)
+        db.flush()
+    divisor = 2 if position == 1 and customer.balance > 1_000_000 else 3
+    current_balance = max(180000, int(customer.balance / divisor) + (position * 55000))
+    item.project_id = customer.project_id
+    item.customer_id = customer.id
+    item.product_type = ["Consumo", "Preventiva", "Tarjeta", "Juridica"][position % 4]
+    item.portfolio_name = customer.segment or "Piloto Icodeup"
+    item.purchase_number = f"PILOT-COMPRA-{customer.project_id}-{position:02d}"
+    item.original_amount = current_balance + 240000
+    item.current_balance = current_balance
+    item.capital_amount = int(current_balance * 0.72)
+    item.interest_amount = int(current_balance * 0.2)
+    item.fees_amount = current_balance - (item.capital_amount or 0) - (item.interest_amount or 0)
+    item.days_past_due = max(0, customer.dpd - ((position - 1) * 9))
+    item.status = "judicializada" if customer.status == "Escalado" else "active"
+    item.risk = "Alto" if item.days_past_due >= 75 else "Medio" if item.days_past_due >= 25 else "Bajo"
+    item.assigned_user_id = customer.assigned_user_id
+    item.assigned_leader_id = leader.id
+    item.metadata_json = json.dumps({"demo": True, "pilot": "icodeup_advisors", "source": "seed_pilot_icodeup_advisors"})
+    return item
+
+
+def _ensure_pilot_demographic(db: Session, tenant: Tenant, customer: Customer, index: int) -> None:
+    demographic = db.scalar(select(CustomerDemographic).where(CustomerDemographic.tenant_id == tenant.id, CustomerDemographic.customer_id == customer.id, CustomerDemographic.source == "PILOTO_ICODEUP"))
+    if demographic is None:
+        demographic = CustomerDemographic(tenant_id=tenant.id, customer_id=customer.id, source="PILOTO_ICODEUP")
+        db.add(demographic)
+    demographic.phone = f"3019{index:06d}"
+    demographic.email = f"demografico.piloto{index:03d}@demo.icodeup.local"
+    demographic.address = f"Carrera Piloto {index:03d} # 36-00"
+    demographic.city = customer.city
+    demographic.state = "Departamento Piloto"
+    demographic.employer = f"Empresa Piloto {index:03d}"
+    demographic.job_title = "Cargo piloto"
+    demographic.reference_name = f"Referencia Piloto {index:03d}"
+    demographic.reference_phone = f"3029{index:06d}"
+    demographic.score = 55 + (index % 40)
+    demographic.metadata_json = json.dumps({"demo": True, "pilot": "icodeup_advisors", "contactability": customer.contactability})
+    demographic.is_active = True
+
+
+def _ensure_pilot_upload_batch(db: Session, tenant: Tenant, project: Project, user: User, upload_type: str, filename: str, total: int, created: int, reparto: bool = False) -> None:
+    batch = db.scalar(select(UploadBatch).where(UploadBatch.tenant_id == tenant.id, UploadBatch.original_filename == filename))
+    if batch is None:
+        batch = UploadBatch(tenant_id=tenant.id, project_id=project.id, uploaded_by_id=user.id, upload_type=upload_type, original_filename=filename)
+        db.add(batch)
+    batch.project_id = project.id
+    batch.uploaded_by_id = user.id
+    batch.upload_type = upload_type
+    batch.status = "completed"
+    batch.total_rows = total
+    batch.valid_rows = total
+    batch.error_rows = 0
+    batch.created_rows = created
+    batch.updated_rows = 0
+    batch.result_file_path = f"tenants/piloto/icodeup-advisors/uploads/{filename}"
+    batch.summary_json = json.dumps({"demo": True, "pilot": "icodeup_advisors", "reparto": reparto, "file_is_metadata_only": True})
+
+
+def seed_pilot_icodeup_advisors(db: Session, modules: dict[str, Module], roles: dict[str, Role]) -> None:
+    tenant = _get_or_create_demo_tenant(db, PILOT_TENANT_DEF)
+    _ensure_subscription(db, tenant, PILOT_TENANT_DEF["plan"])
+    _set_demo_modules(db, tenant, modules, PILOT_TENANT_DEF["modules"])
+    _seed_tenant_configuration(db, tenant)
+    _seed_functional_configuration(db, tenant)
+
+    users: dict[str, User] = {}
+    for email, name, legacy_role, title, leader_email, _profile_code in PILOT_USER_DEFS:
+        users[email] = _get_or_create_demo_user(db, tenant, email, name, legacy_role, title, leader_email)
+
+    specialized_roles = _ensure_specialized_roles_for_tenant(db, tenant)
+    for email, _name, legacy_role, _title, _leader_email, profile_code in PILOT_USER_DEFS:
+        role = specialized_roles.get(profile_code) or roles[legacy_role]
+        _assign_profile_role(db, users[email], role)
+
+    projects = [
+        _get_or_create_project(db, tenant, code, name, description)
+        for code, name, description, _count in PILOT_PROJECTS
+    ]
+    for project in projects:
+        for email, user in users.items():
+            if email.startswith("admin."):
+                role_in_project = "admin"
+            elif email.startswith("lider."):
+                role_in_project = "leader"
+            elif email.startswith("gestor"):
+                role_in_project = "agent"
+            elif email.startswith("calidad") or email.startswith("auditor"):
+                role_in_project = "quality"
+            elif email.startswith("abogado"):
+                role_in_project = "lawyer"
+            elif email.startswith("comercial"):
+                role_in_project = "sales"
+            else:
+                role_in_project = "viewer"
+            _ensure_assignment(db, user, project, role_in_project)
+
+    admin = users["admin.icodeup@demo.icodeup.local"]
+    leader = users["lider.cobranzas.icodeup@demo.icodeup.local"]
+    lawyer = users["abogado.icodeup@demo.icodeup.local"]
+    commercial = users["comercial.icodeup@demo.icodeup.local"]
+    agents = [users[f"gestor{idx}.icodeup@demo.icodeup.local"] for idx in range(1, 6)]
+    _ensure_channels(db, tenant, projects[0])
+    typifications = _ensure_typifications(db, tenant)
+
+    customers: list[Customer] = []
+    global_index = 1
+    for project_idx, (project_code, _name, _description, count) in enumerate(PILOT_PROJECTS):
+        project = next(item for item in projects if item.code == project_code)
+        segment = ["Consumo Piloto", "Preventiva Piloto", "Juridica Piloto"][project_idx]
+        for _ in range(count):
+            assigned = agents[(global_index - 1) % len(agents)]
+            customer = _ensure_pilot_customer(db, tenant, project, assigned, global_index, segment)
+            _ensure_pilot_obligation(db, customer, leader, 1)
+            if global_index <= 200:
+                _ensure_pilot_obligation(db, customer, leader, 2)
+            activity_code = "PROMESA" if global_index % 5 == 0 else "ESCALAR_JURIDICO" if project.code == "PILOTO-JURIDICA" and global_index % 7 == 0 else "CONTACTO" if global_index % 2 == 0 else "NO_CONTACTO"
+            _ensure_activity(db, customer, assigned, typifications.get(activity_code), "phone" if activity_code != "ESCALAR_JURIDICO" else "email", "Gestion piloto", f"PILOTO ICODEUP gestion {customer.document}", global_index % 14)
+            if global_index <= 50:
+                _ensure_promise(db, customer, assigned, max(95000, int(customer.balance * 0.1)), 4 + (global_index % 10), "Vigente" if global_index <= 38 else "Vencida")
+            if global_index <= 30:
+                _ensure_payment(db, customer, assigned, max(85000, int(customer.balance * 0.06)), global_index % 12)
+            if global_index <= 20:
+                _ensure_agreement(db, customer, assigned, 4, max(320000, int(customer.balance * 0.35)), "active" if global_index % 5 else "overdue")
+            if global_index <= 100:
+                _ensure_pilot_demographic(db, tenant, customer, global_index)
+            if project.code == "PILOTO-JURIDICA" and global_index % 9 == 0:
+                _ensure_legal_case(db, tenant, customer, lawyer, 500 + global_index)
+            customers.append(customer)
+            global_index += 1
+
+    _ensure_operational_sheet_rows(db, tenant, customers, {user.id: user for user in users.values()})
+    _ensure_sales_demo(db, tenant, projects[0], commercial)
+    _ensure_pilot_upload_batch(db, tenant, projects[0], admin, "reparto_cartera", "reparto_icodeup_piloto_consumo.csv", 120, 120, reparto=True)
+    _ensure_pilot_upload_batch(db, tenant, projects[1], admin, "reparto_cartera", "reparto_icodeup_piloto_preventiva.csv", 90, 90, reparto=True)
+    _ensure_pilot_upload_batch(db, tenant, projects[2], admin, "demograficos", "demograficos_icodeup_piloto.csv", 100, 100)
+    event = db.scalar(select(ChannelEventLog).where(ChannelEventLog.tenant_id == tenant.id, ChannelEventLog.event_type == "pilot.seed.icodeup_advisors"))
+    if event is None:
+        db.add(ChannelEventLog(tenant_id=tenant.id, channel_type="system", event_type="pilot.seed.icodeup_advisors", status="simulated", payload_json=json.dumps({"demo": True, "pilot": "icodeup_advisors", "customers": 300, "obligations": 500})))
+
+
 def _seed_phase8b_collection_demo(db: Session, tenant: Tenant, projects: list[Project], users: dict[str, User]) -> None:
     admin = users["admin.andina@demo.icodeup.local"]
     leader = users["coord.cobranzas.andina@demo.icodeup.local"]
@@ -1726,6 +1941,8 @@ def bootstrap_platform(db: Session) -> None:
     _seed_tenant_modules(db, modules)
     if settings.enable_demo_seeds or settings.enable_demo_data:
         _seed_phase5_demo_data(db, modules, tenant)
+    if settings.enable_pilot_icodeup_seed:
+        seed_pilot_icodeup_advisors(db, modules, roles)
 
     for existing_user in db.scalars(select(User)):
         sync_user_profile(db, existing_user)

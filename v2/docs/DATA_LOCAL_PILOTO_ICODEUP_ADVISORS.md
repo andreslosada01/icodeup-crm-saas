@@ -1,45 +1,75 @@
 # Data Local Piloto Icodeup Advisors
 
+Fecha: 2026-06-11
+Ambiente objetivo: Windows local con PostgreSQL `icodeup_crm_local`
+
 ## 1. Objetivo
 
-Definir la data recomendada para probar Icodeup 360 localmente con PostgreSQL Windows antes de migrar al servidor test. La data debe ser ficticia, idempotente y separada de la demo Andina existente.
+El seed piloto de Icodeup Advisors permite probar Icodeup 360 como CRM Collection funcional en una maquina Windows local antes de migrar al servidor test. La data es ficticia, idempotente, separada de la demo Andina y no debe mezclarse con produccion.
 
-## 2. Tenant piloto
+## 2. Activacion
 
-Tenant sugerido:
+El seed esta apagado por defecto.
 
-- Nombre: `Icodeup Advisors`
-- Slug: `icodeup-advisors-piloto`
-- Uso: piloto interno de CRM Collection y preparacion comercial
+Para activarlo en local/test:
 
-## 3. Usuarios sugeridos
+```env
+ENABLE_PILOT_ICODEUP_SEED=true
+```
 
-| Perfil | Cantidad | Proposito |
-|---|---:|---|
-| SuperAdmin | 1 | Gobierno SaaS global |
-| Admin empresa | 1 | Administracion tenant |
-| Lider cobranzas | 1 | Equipo, carteras y dashboard |
-| Gestores | 5 | Gestion diaria |
-| Calidad | 1 | Revision y auditoria operativa |
-| Auditor | 1 | Control y trazabilidad |
-| Abogado | 1 | Casos juridicos |
-| Comercial | 1 | Leads y oportunidades |
+La variable vive en `v2/.env`. El ejemplo seguro esta en:
 
-Correos recomendados:
+```text
+v2/backend/.env.local.windows.example
+```
 
-- usar dominio `@piloto.local`
-- no usar correos reales
-- no usar nombres de clientes reales
+No se debe activar este seed en produccion.
 
-## 4. Carteras sugeridas
+## 3. Tenant creado
 
-- Cartera Consumo Piloto
-- Cartera Preventiva Piloto
-- Cartera Juridica Piloto
+| Campo | Valor |
+|---|---|
+| Nombre | `Icodeup Advisors` |
+| Slug | `icodeup-advisors` |
+| Base local | `icodeup_crm_local` |
+| Arquitectura | Shared schema con `tenant_id` |
+| Plan | `business` |
 
-## 5. Volumen sugerido
+## 4. Usuarios piloto
 
-| Entidad | Volumen |
+Todos usan contrasena demo local:
+
+```text
+Demo360!2026
+```
+
+| Perfil | Email |
+|---|---|
+| Admin empresa | `admin.icodeup@demo.icodeup.local` |
+| Lider cobranzas | `lider.cobranzas.icodeup@demo.icodeup.local` |
+| Gestor 1 | `gestor1.icodeup@demo.icodeup.local` |
+| Gestor 2 | `gestor2.icodeup@demo.icodeup.local` |
+| Gestor 3 | `gestor3.icodeup@demo.icodeup.local` |
+| Gestor 4 | `gestor4.icodeup@demo.icodeup.local` |
+| Gestor 5 | `gestor5.icodeup@demo.icodeup.local` |
+| Calidad | `calidad.icodeup@demo.icodeup.local` |
+| Auditor | `auditor.icodeup@demo.icodeup.local` |
+| Abogado | `abogado.icodeup@demo.icodeup.local` |
+| Comercial | `comercial.icodeup@demo.icodeup.local` |
+
+## 5. Carteras
+
+| Codigo | Nombre |
+|---|---|
+| `PILOTO-CONSUMO` | Cartera Consumo Piloto |
+| `PILOTO-PREVENTIVA` | Cartera Preventiva Piloto |
+| `PILOTO-JURIDICA` | Cartera Juridica Piloto |
+
+El lider y los 5 gestores quedan asignados a las carteras. Los usuarios de calidad, auditor, abogado y comercial tambien quedan relacionados segun su rol operativo.
+
+## 6. Volumen generado
+
+| Entidad | Volumen minimo |
 |---|---:|
 | Clientes | 300 |
 | Obligaciones | 500 |
@@ -48,29 +78,50 @@ Correos recomendados:
 | Pagos | 30 |
 | Acuerdos | 20 |
 | Demograficos | 100 |
-| Cargas demo | 3 |
-| Repartos demo | 2 |
+| Lotes de carga demo | 3 |
+| Repartos demo | 2 dentro de los lotes |
 
-## 6. Reglas de datos
+## 7. Reglas de datos ficticios
 
-- documentos ficticios consecutivos, por ejemplo `990000001`
-- telefonos ficticios, por ejemplo `3000000001`
-- correos `cliente001@piloto.local`
-- nombres ficticios o sinteticos
-- no cargar cedulas, telefonos, correos ni documentos reales
-- no subir soportes reales
-- documentos solo como metadata local si se requieren
+- Documentos sinteticos: `990300001`, `990300002`, etc.
+- Telefonos sinteticos: `3009000001`, `3019000001`, etc.
+- Correos demo: `@demo.icodeup.local`.
+- Nombres sinteticos: `Cliente Piloto Icodeup 001`, etc.
+- Saldos, mora, riesgo y estados variados.
+- Clientes distribuidos entre 5 gestores.
+- Obligaciones con `assigned_user_id` y `assigned_leader_id`.
+- Cargas registradas como metadata; no hay archivos reales.
+- No se crean cedulas, telefonos, correos ni soportes reales.
 
-## 7. Estado actual
+## 8. Idempotencia
 
-El proyecto ya tiene seed demo comercial para tenants como Andina y otros tenants demo. No se debe romper ni duplicar esa demo.
+El seed busca registros por claves naturales:
 
-Para el piloto Icodeup Advisors se recomienda crear una funcion separada e idempotente en una fase posterior, por ejemplo:
+- tenant por `slug`
+- usuarios por `email`
+- proyectos por `tenant_id + code`
+- clientes por `tenant_id + document`
+- obligaciones por `tenant_id + obligation_number`
+- cargas por `tenant_id + original_filename`
 
-- `seed_local_pilot_icodeup_advisors(db)`
-- activada solo con variable explicita como `ENABLE_LOCAL_PILOT_DATA=true`
-- nunca activa por defecto en produccion
+Puede ejecutarse varias veces sin duplicar masivamente la data piloto.
 
-## 8. Siguiente paso
+## 9. Validacion rapida
 
-Crear seed piloto solo despues de validar PostgreSQL local, migraciones, login demo y flujo de CRM Collection. La funcion debe verificar codigos, slugs, documentos y correos antes de crear registros.
+Despues de activar el seed y reiniciar la app:
+
+```powershell
+cd .\v2\backend
+.\.venv\Scripts\python.exe -m pytest tests\test_pilot_icodeup_advisors_seed.py
+```
+
+Para ejecutar las pruebas de integracion se requieren variables seguras:
+
+```powershell
+$env:ICODEUP_RUN_INTEGRATION_TESTS="1"
+$env:ICODEUP_TEST_PLATFORM_PASSWORD="..."
+$env:ICODEUP_TEST_TENANT_PASSWORD="Demo360!2026"
+$env:ICODEUP_TEST_PILOT_PASSWORD="Demo360!2026"
+```
+
+No registrar ni subir esas variables al repositorio.
