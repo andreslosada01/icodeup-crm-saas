@@ -1,5 +1,7 @@
 let token = localStorage.getItem("icodeup_v2_token") || "";
 let currentUser = JSON.parse(localStorage.getItem("icodeup_v2_user") || "null");
+const recentToasts = new Map();
+const pendingClickToCallCustomers = new Set();
 
 const state = {
   core: { menu: null, roleDashboard: null },
@@ -326,6 +328,10 @@ function ensureToastContainer() {
 }
 
 function showToast(type = "info", message = "Accion procesada.") {
+  const key = `${type}:${message}`;
+  const now = Date.now();
+  if (recentToasts.has(key) && now - recentToasts.get(key) < 1800) return;
+  recentToasts.set(key, now);
   const container = ensureToastContainer();
   const toast = document.createElement("article");
   toast.className = `toast toast-${type}`;
@@ -2828,7 +2834,24 @@ function renderTelephony() {
   const providerOptions = providers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.provider_type)})</option>`).join("");
   const userOptions = userSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} - ${escapeHtml(item.email || "")}</option>`).join("");
   const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.provider_type)}</small></td><td>${escapeHtml(item.host || item.websocket_url || item.api_url || "Manual/simulado")}</td><td>${item.is_active ? "Activo" : "Inactivo"}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
-  const extensionRows = extensions.map((item) => `<tr><td><strong>${escapeHtml(item.extension_number)}</strong><small>${escapeHtml(item.display_name || item.user_name || "-")}</small></td><td>${escapeHtml(item.user_name || "-")}</td><td>${escapeHtml(item.provider_name || "-")}</td><td>${escapeHtml(item.status)}</td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join("");
+  const extensionByUser = new Map(extensions.map((item) => [Number(item.user_id), item]));
+  const extensionRows = (userSource.length ? userSource : extensions).map((item) => {
+    const user = item.email ? item : null;
+    const extension = user ? extensionByUser.get(Number(user.id)) : item;
+    const userName = user ? user.name : extension.user_name;
+    const userEmail = user ? user.email : "";
+    return `<tr>
+      <td><strong>${escapeHtml(userName || "-")}</strong><small>${escapeHtml(userEmail || "Usuario con extension")}</small></td>
+      <td>${extension ? `<strong>${escapeHtml(extension.extension_number)}</strong><small>${escapeHtml(extension.display_name || "")}</small>` : `<span class="status-pill status-pill-warn">Sin extension</span>`}</td>
+      <td>${escapeHtml(extension?.provider_name || "Manual/simulado")}</td>
+      <td>${extension ? escapeHtml(extension.status) : "-"}</td>
+      <td>${extension ? (extension.is_active ? "Activa" : "Inactiva") : "Pendiente"}</td>
+      <td class="row-actions">
+        ${canManageTelephony() && extension ? `<button type="button" data-edit-telephony-extension="${extension.id}">Editar</button><button type="button" data-toggle-telephony-extension="${extension.id}">${extension.is_active ? "Desactivar" : "Activar"}</button>` : ""}
+        ${canManageTelephony() && !extension && user ? `<button type="button" data-new-telephony-extension="${user.id}">Crear</button>` : ""}
+      </td>
+    </tr>`;
+  }).join("");
   document.querySelector("#telephonyProviderPanel") && (document.querySelector("#telephonyProviderPanel").innerHTML = `
     ${canManageTelephony() ? `<form id="telephonyProviderForm" class="ops-form form-grid">
       ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
@@ -2845,6 +2868,7 @@ function renderTelephony() {
   `);
   document.querySelector("#telephonyExtensionPanel") && (document.querySelector("#telephonyExtensionPanel").innerHTML = `
     ${canManageTelephony() ? `<form id="telephonyExtensionForm" class="ops-form form-grid">
+      <input type="hidden" name="extension_id" />
       ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
       <label>Usuario<select name="user_id" required>${userOptions}</select></label>
       <label>Proveedor<select name="provider_id"><option value="">Manual/sin proveedor</option>${providerOptions}</select></label>
@@ -2854,8 +2878,9 @@ function renderTelephony() {
       <label>Dominio SIP<input name="sip_domain" placeholder="pbx.empresa.local" /></label>
       <label>Estado<select name="status"><option value="not_connected">No conectado</option><option value="available">Disponible</option><option value="busy">Ocupado</option></select></label>
       <button type="submit">Asignar extension</button>
+      <button type="button" data-clear-telephony-extension>Limpiar</button>
     </form>` : `<p class="empty">Tu administrador asigna las extensiones.</p>`}
-    ${table(["Extension", "Usuario", "Proveedor", "Estado", "Activa"], extensionRows, "Sin extensiones configuradas para tu alcance.")}
+    ${table(["Usuario", "Extension", "Proveedor", "Estado", "Activa", "Acciones"], extensionRows, "Sin usuarios disponibles para configurar extensiones.")}
   `);
 }
 
@@ -3588,7 +3613,8 @@ async function handleTelephonyProviderSubmit(form) {
 }
 
 async function handleTelephonyExtensionSubmit(form) {
-  await submitJson(form, "/api/telephony/extensions", (currentForm) => ({
+  const extensionId = form.elements.extension_id?.value;
+  await submitJson(form, extensionId ? `/api/telephony/extensions/${extensionId}` : "/api/telephony/extensions", (currentForm) => ({
     tenant_id: currentForm.elements.tenant_id?.value ? Number(currentForm.elements.tenant_id.value) : null,
     user_id: Number(currentForm.elements.user_id.value),
     provider_id: currentForm.elements.provider_id.value ? Number(currentForm.elements.provider_id.value) : null,
@@ -3598,11 +3624,72 @@ async function handleTelephonyExtensionSubmit(form) {
     sip_domain: currentForm.elements.sip_domain.value || null,
     status: currentForm.elements.status.value,
     metadata: {}
-  }));
+  }), { method: extensionId ? "PATCH" : "POST" });
+}
+
+function telephonyExtensionMessage(error) {
+  const rawMessage = String(error?.message || "");
+  if (rawMessage.toLowerCase().includes("extension")) {
+    if (canManageTelephony()) {
+      return "Configura una extension en Telefonia > Extensiones antes de iniciar la llamada.";
+    }
+    return "No tienes una extension telefonica configurada. Solicita al administrador configurarla en Telefonia > Extensiones.";
+  }
+  return rawMessage || "No fue posible registrar la llamada.";
+}
+
+function clearTelephonyExtensionForm(userId = "") {
+  const form = document.querySelector("#telephonyExtensionForm");
+  if (!form) return;
+  form.reset();
+  form.elements.extension_id.value = "";
+  if (userId && form.elements.user_id) form.elements.user_id.value = String(userId);
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.textContent = "Asignar extension";
+}
+
+function editTelephonyExtension(extensionId) {
+  const form = document.querySelector("#telephonyExtensionForm");
+  const extension = (state.ops.telephonyExtensions || []).find((item) => Number(item.id) === Number(extensionId));
+  if (!form || !extension) return;
+  form.elements.extension_id.value = extension.id;
+  if (form.elements.tenant_id) form.elements.tenant_id.value = String(extension.tenant_id);
+  form.elements.user_id.value = String(extension.user_id);
+  form.elements.provider_id.value = extension.provider_id ? String(extension.provider_id) : "";
+  form.elements.extension_number.value = extension.extension_number || "";
+  form.elements.display_name.value = extension.display_name || "";
+  form.elements.sip_username.value = extension.sip_username || "";
+  form.elements.sip_domain.value = extension.sip_domain || "";
+  form.elements.status.value = extension.status || "not_connected";
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.textContent = "Guardar extension";
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function toggleTelephonyExtension(extensionId, button) {
+  const extension = (state.ops.telephonyExtensions || []).find((item) => Number(item.id) === Number(extensionId));
+  if (!extension) return;
+  await runAction(button, async () => {
+    await api(`/api/telephony/extensions/${extension.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: !extension.is_active })
+    });
+    showToast("success", !extension.is_active ? "Extension activada." : "Extension desactivada.");
+    await loadPhase8BData();
+    renderTelephony();
+  }, "Actualizando...");
 }
 
 async function startClickToCall(customerId, button) {
-  await runAction(button, async () => {
+  const key = String(customerId || "");
+  if (pendingClickToCallCustomers.has(key)) {
+    showToast("info", "La llamada ya se esta procesando.");
+    return;
+  }
+  pendingClickToCallCustomers.add(key);
+  const relatedButtons = Array.from(document.querySelectorAll("[data-click-to-call]")).filter((item) => item.dataset.clickToCall === key);
+  relatedButtons.forEach((item) => setButtonLoading(item, true, "Llamando..."));
+  try {
     const result = await api("/api/telephony/click-to-call", {
       method: "POST",
       body: JSON.stringify({ customer_id: Number(customerId) })
@@ -3611,7 +3698,13 @@ async function startClickToCall(customerId, button) {
     await loadPhase8BData();
     await refreshCustomerAfterActivity(customerId);
     renderTelephony();
-  }, "Llamando...");
+  } catch (error) {
+    console.warn(error);
+    showToast("warning", telephonyExtensionMessage(error));
+  } finally {
+    pendingClickToCallCustomers.delete(key);
+    relatedButtons.forEach((item) => setButtonLoading(item, false));
+  }
 }
 
 function optionalNumber(value) {
@@ -3622,10 +3715,10 @@ function platformTenantValue(form) {
   return isPlatform() && form.elements.tenant_id?.value ? Number(form.elements.tenant_id.value) : null;
 }
 
-async function submitJson(form, endpoint, buildPayload) {
+async function submitJson(form, endpoint, buildPayload, options = {}) {
   const button = form.querySelector("button[type='submit']");
   await runAction(button, async () => {
-    await api(endpoint, { method: "POST", body: JSON.stringify(buildPayload(form)) });
+    await api(endpoint, { method: options.method || "POST", body: JSON.stringify(buildPayload(form)) });
     showToast("success", "Registro guardado correctamente.");
     form.reset();
     await refreshAll();
@@ -3865,6 +3958,26 @@ function setupEvents() {
     const clickToCall = event.target.closest("[data-click-to-call]");
     if (clickToCall) {
       await startClickToCall(clickToCall.dataset.clickToCall, clickToCall);
+      return;
+    }
+    const editTelephony = event.target.closest("[data-edit-telephony-extension]");
+    if (editTelephony) {
+      editTelephonyExtension(editTelephony.dataset.editTelephonyExtension);
+      return;
+    }
+    const toggleTelephony = event.target.closest("[data-toggle-telephony-extension]");
+    if (toggleTelephony) {
+      await toggleTelephonyExtension(toggleTelephony.dataset.toggleTelephonyExtension, toggleTelephony);
+      return;
+    }
+    const newTelephony = event.target.closest("[data-new-telephony-extension]");
+    if (newTelephony) {
+      clearTelephonyExtensionForm(newTelephony.dataset.newTelephonyExtension);
+      return;
+    }
+    const clearTelephony = event.target.closest("[data-clear-telephony-extension]");
+    if (clearTelephony) {
+      clearTelephonyExtensionForm();
       return;
     }
     const teamProject = event.target.closest("[data-team-project]");

@@ -1521,6 +1521,29 @@ tbody tr:hover {
   background: #f8fbfb;
 }
 
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.row-actions button {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.row-actions button:hover {
+  background: #ecfdf5;
+  border-color: rgba(21, 149, 111, 0.35);
+}
+
 .table-pager {
   display: flex;
   align-items: center;

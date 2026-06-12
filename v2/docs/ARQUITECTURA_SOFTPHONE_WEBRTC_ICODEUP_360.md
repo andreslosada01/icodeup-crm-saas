@@ -87,3 +87,5 @@ La seleccion debe considerar costos, soporte de grabaciones, seguridad, escalabi
 ## Decision de esta fase
 
 Esta fase no implementa WebRTC real. Se deja la arquitectura preparada con entidades, permisos, UI, auditoria y endpoints para evolucionar a softphone web sin reescribir el core.
+
+La operacion actual usa proveedor `manual` y extensiones simuladas por tenant demo/piloto. El CRM registra `CallLog` y actividad de gestion, pero no origina trafico SIP, no abre microfono y no usa credenciales reales.

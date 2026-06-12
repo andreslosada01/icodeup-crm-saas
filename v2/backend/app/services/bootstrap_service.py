@@ -48,6 +48,8 @@ from app.models import (
     TenantConfiguration,
     TenantModule,
     TenantSubscription,
+    TelephonyExtension,
+    TelephonyProvider,
     TypificationCombinationRule,
     TypificationNode,
     TypificationTree,
@@ -601,6 +603,26 @@ PILOT_USER_DEFS = [
     ("comercial.icodeup@demo.icodeup.local", "Comercial Icodeup Piloto", AGENT, "Comercial piloto", None, "sales_advisor"),
 ]
 
+TELEPHONY_SIMULATED_PROVIDER_NAME = "Telefonia simulada local"
+
+TELEPHONY_EXTENSION_SEEDS = {
+    "andina-servicios-financieros": {
+        "coord.cobranzas.andina@demo.icodeup.local": "1000",
+        "gestor1.andina@demo.icodeup.local": "1001",
+        "gestor2.andina@demo.icodeup.local": "1002",
+        "admin.andina@demo.icodeup.local": "1099",
+    },
+    "icodeup-advisors": {
+        "lider.cobranzas.icodeup@demo.icodeup.local": "2000",
+        "gestor1.icodeup@demo.icodeup.local": "2001",
+        "gestor2.icodeup@demo.icodeup.local": "2002",
+        "gestor3.icodeup@demo.icodeup.local": "2003",
+        "gestor4.icodeup@demo.icodeup.local": "2004",
+        "gestor5.icodeup@demo.icodeup.local": "2005",
+        "admin.icodeup@demo.icodeup.local": "2099",
+    },
+}
+
 
 def _get_or_create_module(db: Session, code: str, name: str, description: str, category: str, base_price: int, icon: str, order: int) -> Module:
     module = db.scalar(select(Module).where(Module.code == code))
@@ -993,6 +1015,75 @@ def _ensure_channels(db: Session, tenant: Tenant, project: Project | None = None
         channel.is_default = True
         channel.status = "active"
         channel.config_json = '{"demo": true, "real_provider_connected": false}'
+
+
+def _ensure_simulated_telephony_provider(db: Session, tenant: Tenant) -> TelephonyProvider:
+    provider = db.scalar(
+        select(TelephonyProvider).where(
+            TelephonyProvider.tenant_id == tenant.id,
+            TelephonyProvider.name == TELEPHONY_SIMULATED_PROVIDER_NAME,
+        )
+    )
+    if provider is None:
+        provider = TelephonyProvider(tenant_id=tenant.id, name=TELEPHONY_SIMULATED_PROVIDER_NAME)
+        db.add(provider)
+        db.flush()
+    provider.provider_type = "manual"
+    provider.host = None
+    provider.port = None
+    provider.websocket_url = None
+    provider.api_url = None
+    provider.is_active = True
+    provider.config_json = json.dumps({"mode": "simulated", "real_call_executed": False, "demo": True})
+    return provider
+
+
+def _ensure_simulated_extension(db: Session, tenant: Tenant, provider: TelephonyProvider, email: str, extension_number: str) -> None:
+    user = db.scalar(select(User).where(User.email == email.lower(), User.tenant_id == tenant.id))
+    if user is None:
+        return
+    extension = db.scalar(
+        select(TelephonyExtension).where(
+            TelephonyExtension.tenant_id == tenant.id,
+            TelephonyExtension.extension_number == extension_number,
+        )
+    )
+    if extension is None:
+        extension = db.scalar(
+            select(TelephonyExtension).where(
+                TelephonyExtension.tenant_id == tenant.id,
+                TelephonyExtension.user_id == user.id,
+            )
+        )
+    if extension is None:
+        extension = TelephonyExtension(tenant_id=tenant.id, user_id=user.id, extension_number=extension_number)
+        db.add(extension)
+        db.flush()
+    extension.user_id = user.id
+    extension.provider_id = provider.id
+    extension.extension_number = extension_number
+    extension.display_name = f"{user.name} - Extension {extension_number}"
+    extension.sip_username = extension_number
+    extension.sip_domain = "pbx.demo.local"
+    extension.status = "available"
+    extension.is_active = True
+    extension.metadata_json = json.dumps({"mode": "simulated", "seeded": True, "real_credentials": False})
+
+
+def _ensure_demo_telephony_extensions(db: Session, tenant: Tenant) -> None:
+    extension_map = TELEPHONY_EXTENSION_SEEDS.get(tenant.slug)
+    if not extension_map:
+        return
+    provider = _ensure_simulated_telephony_provider(db, tenant)
+    for email, extension_number in extension_map.items():
+        _ensure_simulated_extension(db, tenant, provider, email, extension_number)
+
+
+def _seed_known_demo_telephony(db: Session) -> None:
+    for slug in TELEPHONY_EXTENSION_SEEDS:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
+        if tenant is not None:
+            _ensure_demo_telephony_extensions(db, tenant)
 
 
 def _ensure_typifications(db: Session, tenant: Tenant) -> dict[str, TypificationNode]:
@@ -1541,6 +1632,7 @@ def seed_pilot_icodeup_advisors(db: Session, modules: dict[str, Module], roles: 
     commercial = users["comercial.icodeup@demo.icodeup.local"]
     agents = [users[f"gestor{idx}.icodeup@demo.icodeup.local"] for idx in range(1, 6)]
     _ensure_channels(db, tenant, projects[0])
+    _ensure_demo_telephony_extensions(db, tenant)
     typifications = _ensure_typifications(db, tenant)
 
     customers: list[Customer] = []
@@ -1832,6 +1924,7 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
                 role_in_project = "sales"
             _ensure_assignment(db, user, project, role_in_project)
     _ensure_channels(db, andina, projects[0])
+    _ensure_demo_telephony_extensions(db, andina)
     typifications = _ensure_typifications(db, andina)
 
     gestor_1 = users["gestor1.andina@demo.icodeup.local"]
@@ -1957,6 +2050,7 @@ def bootstrap_platform(db: Session) -> None:
         _seed_phase5_demo_data(db, modules, tenant)
     if settings.enable_pilot_icodeup_seed:
         seed_pilot_icodeup_advisors(db, modules, roles)
+    _seed_known_demo_telephony(db)
 
     for existing_user in db.scalars(select(User)):
         sync_user_profile(db, existing_user)

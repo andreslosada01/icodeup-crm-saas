@@ -344,7 +344,7 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
     require_permission(db, user, "telephony.call")
     extension = db.scalar(select(TelephonyExtension).where(TelephonyExtension.tenant_id == user.tenant_id, TelephonyExtension.user_id == user.id, TelephonyExtension.is_active.is_(True)).order_by(TelephonyExtension.id.desc()).limit(1))
     if extension is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Extension no configurada para el usuario autenticado.")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No tienes una extension telefonica configurada. Solicita al administrador configurarla en Telefonia > Extensiones.")
     customer = customer_for_access(db, payload.customer_id, user, write=False)
     obligation = obligation_for_access(db, payload.obligation_id, user, write=False) if payload.obligation_id else None
     if obligation and obligation.customer_id != customer.id:
@@ -354,10 +354,10 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El cliente no tiene telefono disponible para llamar.")
     provider = db.get(TelephonyProvider, extension.provider_id) if extension.provider_id else None
     mode = "manual"
-    message = "Llamada registrada en modo manual/simulado. No se ejecuto llamada real porque no hay integracion PBX/WebRTC activa."
+    message = "Llamada registrada en modo simulado."
     if provider and provider.is_active and provider.provider_type != "manual":
         mode = "simulated"
-        message = "Llamada registrada. El proveedor esta configurado, pero la marcacion real queda pendiente de la integracion PBX/WebRTC."
+        message = "Llamada registrada en modo simulado. El proveedor esta configurado, pero la marcacion real queda pendiente de la integracion PBX/WebRTC."
     now = datetime.now(timezone.utc)
     call = CallLog(
         tenant_id=customer.tenant_id,
