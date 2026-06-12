@@ -344,7 +344,14 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
     require_permission(db, user, "telephony.call")
     extension = db.scalar(select(TelephonyExtension).where(TelephonyExtension.tenant_id == user.tenant_id, TelephonyExtension.user_id == user.id, TelephonyExtension.is_active.is_(True)).order_by(TelephonyExtension.id.desc()).limit(1))
     if extension is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No tienes una extension telefonica configurada. Solicita al administrador configurarla en Telefonia > Extensiones.")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "ok": False,
+                "code": "extension_not_configured",
+                "message": "No tienes una extension telefonica configurada. Solicita al administrador configurarla en Telefonia > Extensiones.",
+            },
+        )
     customer = customer_for_access(db, payload.customer_id, user, write=False)
     obligation = obligation_for_access(db, payload.obligation_id, user, write=False) if payload.obligation_id else None
     if obligation and obligation.customer_id != customer.id:
@@ -376,6 +383,7 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
                 "extension_number": extension.extension_number,
                 "provider_type": provider.provider_type if provider else "manual",
                 "real_call_executed": False,
+                "source": payload.source or "crm_customer_drawer",
             },
             ensure_ascii=True,
         ),
@@ -395,10 +403,10 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
     db.add(activity)
     db.flush()
     call.management_activity_id = activity.id
-    record_audit(db, user, "call_log", "click_to_call", call.id, customer.tenant_id, module="telephony", after={"customer_id": customer.id, "obligation_id": call.obligation_id, "mode": mode, "real_call_executed": False}, request=request)
+    record_audit(db, user, "call_log", "click_to_call", call.id, customer.tenant_id, module="telephony", after={"customer_id": customer.id, "obligation_id": call.obligation_id, "mode": mode, "real_call_executed": False, "source": payload.source or "crm_customer_drawer"}, request=request)
     db.commit()
     db.refresh(call)
-    return ClickToCallResponse(ok=True, mode=mode, message=message, call_log=_call_log_to_out(db, call))
+    return ClickToCallResponse(ok=True, mode=mode, message=message, call_log_id=call.id, call_log=_call_log_to_out(db, call))
 
 
 @router.post("/call-logs/{call_log_id}/finish", response_model=CallLogOut)

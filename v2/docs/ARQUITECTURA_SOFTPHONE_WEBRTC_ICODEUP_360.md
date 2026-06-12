@@ -89,3 +89,11 @@ La seleccion debe considerar costos, soporte de grabaciones, seguridad, escalabi
 Esta fase no implementa WebRTC real. Se deja la arquitectura preparada con entidades, permisos, UI, auditoria y endpoints para evolucionar a softphone web sin reescribir el core.
 
 La operacion actual usa proveedor `manual` y extensiones simuladas por tenant demo/piloto. El CRM registra `CallLog` y actividad de gestion, pero no origina trafico SIP, no abre microfono y no usa credenciales reales.
+
+## Diferencia entre click-to-call simulado, integracion PBX y softphone web nativo
+
+El flujo actual de `Llamar` es interno al CRM. No debe usar `tel:`, `sip:`, `callto:`, `window.location` ni `window.open` para abrir aplicaciones externas. El frontend llama a `POST /api/telephony/click-to-call`, y el backend registra una llamada simulada/manual con trazabilidad.
+
+En una integracion PBX futura, el mismo endpoint podra delegar a un servicio desacoplado que origine la llamada mediante una PBX o API autorizada por tenant. Esa fase requiere vault de secretos, control de costos, eventos de llamada y pruebas en servidor test.
+
+En la fase avanzada de softphone WebRTC embebido, el navegador tendra controles de llamada nativos dentro de Icodeup 360. Ese escenario requiere HTTPS, SIP sobre WebSocket, STUN/TURN y credenciales temporales. Incluso en esa fase, la experiencia debe permanecer dentro del CRM y no depender de softphones externos instalados.

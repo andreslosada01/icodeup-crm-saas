@@ -44,6 +44,16 @@ Si no hay proveedor real o el proveedor es `manual`, no se ejecuta llamada real.
 
 Si el usuario no tiene extension activa, la UI muestra un solo mensaje claro para que solicite configuracion al administrador. El boton queda bloqueado mientras la accion se procesa para evitar llamadas o toasts duplicados.
 
+El frontend no debe renderizar `tel:`, `sip:` ni `callto:` para el boton `Llamar`. La accion debe ejecutarse siempre dentro del CRM mediante `POST /api/telephony/click-to-call`; asi se evita que el navegador abra el dialogo del sistema operativo para escoger una aplicacion externa.
+
+## 3.1. Diferencia entre click-to-call simulado, integracion PBX y softphone web nativo
+
+| Escenario | Estado | Que hace | Que no hace |
+| --- | --- | --- | --- |
+| Click-to-call simulado/manual | Actual | Valida usuario, tenant, permiso, extension y cliente. Registra `CallLog`, actividad y auditoria. | No origina una llamada real, no abre protocolos externos y no usa credenciales SIP. |
+| Integracion PBX | Fase posterior | Conecta el evento interno con una PBX/API de prueba o produccion por tenant. | No debe exponer secretos en frontend ni mezclar extensiones entre tenants. |
+| Softphone WebRTC embebido | Fase avanzada | Permite hablar desde el navegador con SIP sobre WebSocket, HTTPS y STUN/TURN. | No depende de Zoiper, MicroSIP, X-Lite ni prompts del sistema operativo. |
+
 ## 4. Que falta para llamada real
 
 Para llamadas reales se requiere:

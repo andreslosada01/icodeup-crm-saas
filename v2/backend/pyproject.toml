@@ -22,3 +22,6 @@ factory = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+  "safe_static: static checks that can run without integration credentials",
+]

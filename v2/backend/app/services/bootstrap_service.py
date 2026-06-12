@@ -798,6 +798,38 @@ def _seed_tenant_modules(db: Session, modules: dict[str, Module]) -> None:
                     existing.enabled_at = datetime.now(timezone.utc)
 
 
+def _ensure_demo_telephony_modules(db: Session, modules: dict[str, Module]) -> None:
+    module = modules.get("telephony")
+    if module is None:
+        return
+    for slug in TELEPHONY_EXTENSION_SEEDS:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
+        if tenant is None:
+            continue
+        tenant_module = db.scalar(
+            select(TenantModule).where(
+                TenantModule.tenant_id == tenant.id,
+                TenantModule.module_code == "telephony",
+            )
+        )
+        if tenant_module is None:
+            tenant_module = TenantModule(tenant_id=tenant.id, module_code="telephony")
+            db.add(tenant_module)
+        tenant_module.module_id = module.id
+        tenant_module.enabled = True
+        tenant_module.is_enabled = True
+        if tenant_module.enabled_at is None:
+            tenant_module.enabled_at = datetime.now(timezone.utc)
+        tenant_module.configuration_json = tenant_module.configuration_json or '{"demo": true, "mode": "simulated"}'
+
+
+def _ensure_known_demo_specialized_roles(db: Session) -> None:
+    for slug in TELEPHONY_EXTENSION_SEEDS:
+        tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
+        if tenant is not None:
+            _ensure_specialized_roles_for_tenant(db, tenant)
+
+
 def _seed_tenant_configuration(db: Session, tenant: Tenant) -> None:
     defaults = {
         "login.headline": "Plataforma Inteligente de Operaciones Empresariales",
@@ -2050,6 +2082,8 @@ def bootstrap_platform(db: Session) -> None:
         _seed_phase5_demo_data(db, modules, tenant)
     if settings.enable_pilot_icodeup_seed:
         seed_pilot_icodeup_advisors(db, modules, roles)
+    _ensure_known_demo_specialized_roles(db)
+    _ensure_demo_telephony_modules(db, modules)
     _seed_known_demo_telephony(db)
 
     for existing_user in db.scalars(select(User)):

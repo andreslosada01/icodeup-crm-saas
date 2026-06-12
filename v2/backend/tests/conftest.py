@@ -41,6 +41,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         reason = "Set ICODEUP_TEST_PLATFORM_PASSWORD and ICODEUP_TEST_TENANT_PASSWORD to run integration tests."
     marker = pytest.mark.skip(reason=reason)
     for item in items:
+        if item.get_closest_marker("safe_static"):
+            continue
         item.add_marker(marker)
 
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
+
+import pytest
 
 from .conftest import AGENT_EMAIL, LEADER_EMAIL, TENANT_PASSWORD, login
 
@@ -108,6 +111,7 @@ def test_agent_with_extension_can_start_simulated_click_to_call(client: Any, adm
     assert response.status_code == 201, response.text
     payload = response.json()
     assert payload["ok"] is True
+    assert payload["call_log_id"] == payload["call_log"]["id"]
     assert payload["mode"] in {"manual", "simulated"}
     assert payload["call_log"]["customer_id"] == customer["id"]
     assert payload["call_log"]["call_status"] == "initiated"
@@ -125,7 +129,10 @@ def test_agent_without_extension_receives_clear_error(client: Any, admin_session
     try:
         response = client.post("/api/telephony/click-to-call", headers=_headers(second_agent), json={"customer_id": customer["id"]})
         assert response.status_code == 422, response.text
-        assert "extension telefonica configurada" in response.text
+        payload = response.json()["detail"]
+        assert payload["ok"] is False
+        assert payload["code"] == "extension_not_configured"
+        assert "extension telefonica configurada" in payload["message"]
     finally:
         restored = client.patch(f"/api/telephony/extensions/{extension['id']}", headers=_headers(admin_session), json={"is_active": True})
         assert restored.status_code == 200, restored.text
@@ -171,3 +178,22 @@ def test_admin_tenant_and_customer_access_do_not_cross_tenants(client: Any, admi
     if other_customer:
         response = client.post("/api/telephony/click-to-call", headers=_headers(admin_session), json={"customer_id": other_customer["id"]})
         assert response.status_code in {403, 422}, response.text
+
+
+@pytest.mark.safe_static
+def test_frontend_click_to_call_does_not_open_external_protocols() -> None:
+    app_js = Path(__file__).resolve().parents[2] / "frontend" / "static" / "assets" / "app.js"
+    content = app_js.read_text(encoding="utf-8")
+    forbidden_snippets = [
+        "return `tel:",
+        "href=\"tel:",
+        "href='tel:",
+        "window.location",
+        "location.href",
+        "window.open(\"tel:",
+        "window.open('tel:",
+        "sip:",
+        "callto:",
+    ]
+    for snippet in forbidden_snippets:
+        assert snippet not in content

@@ -91,6 +91,7 @@ class ClickToCallRequest(BaseModel):
     customer_id: int
     obligation_id: int | None = None
     phone_number: str | None = None
+    source: str | None = None
 
 
 class FinishCallLogRequest(BaseModel):
@@ -129,4 +130,5 @@ class ClickToCallResponse(BaseModel):
     ok: bool
     mode: str
     message: str
+    call_log_id: int
     call_log: CallLogOut

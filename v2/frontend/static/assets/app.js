@@ -301,7 +301,14 @@ async function api(path, options = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) logout();
-    throw new Error(payload.detail || "No fue posible completar la solicitud. Intenta nuevamente o contacta al administrador.");
+    const detail = payload.detail;
+    const message = typeof detail === "string"
+      ? detail
+      : detail?.message || payload.message || "No fue posible completar la solicitud. Intenta nuevamente o contacta al administrador.";
+    const error = new Error(message);
+    error.code = detail?.code || payload.code || null;
+    error.payload = payload;
+    throw error;
   }
   return payload;
 }
@@ -1542,7 +1549,11 @@ function channelHref(kind, customer) {
   if (kind === "email") {
     return `mailto:${customer.email || ""}?subject=${encodeURIComponent("Alternativas de normalizacion")}`;
   }
-  return `tel:${customer.phone || ""}`;
+  return "#";
+}
+
+function callActionButton(customer) {
+  return `<button type="button" data-click-to-call="${customer.id}">Llamar</button>`;
 }
 
 function renderQueueDetail() {
@@ -1580,7 +1591,7 @@ function renderQueueDetail() {
       <div><span>Gestor</span><strong>${escapeHtml(customer.assigned_user_name || "-")}</strong></div>
     </div>
     <div class="channel-actions">
-      ${menuHasSection("telephony") ? `<button type="button" data-click-to-call="${customer.id}">Llamar</button>` : `<a href="${channelHref("telephony", customer)}">Llamar</a>`}
+      ${callActionButton(customer)}
       <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
       <a href="${channelHref("email", customer)}">Email</a>
     </div>
@@ -1666,7 +1677,7 @@ function renderManagementDrawer() {
         <article><span>Estado</span><strong>${escapeHtml(customer.status || "-")}</strong></article>
       </div>
       <div class="drawer-actions">
-        ${menuHasSection("telephony") ? `<button type="button" data-click-to-call="${customer.id}">Llamar</button>` : `<a href="${channelHref("telephony", customer)}">Llamar</a>`}
+        ${callActionButton(customer)}
         <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
         <a href="${channelHref("email", customer)}">Email</a>
         <button type="button" data-prefill-result="Contactado">Registrar llamada</button>
@@ -3638,6 +3649,22 @@ function telephonyExtensionMessage(error) {
   return rawMessage || "No fue posible registrar la llamada.";
 }
 
+function clickToCallPayload(customerId) {
+  const customer = state.selectedCustomer && Number(state.selectedCustomer.id) === Number(customerId)
+    ? state.selectedCustomer
+    : (state.crm.customers?.items || []).find((item) => Number(item.id) === Number(customerId));
+  const activityForm = document.querySelector(`#activityForm[data-customer-id="${customerId}"]`);
+  const drawerForm = document.querySelector(`#drawerActivityForm[data-customer-id="${customerId}"]`);
+  const obligationId = optionalNumber(drawerForm?.elements.obligation_id?.value || activityForm?.elements.obligation_id?.value || "");
+  const payload = {
+    customer_id: Number(customerId),
+    source: "crm_customer_drawer"
+  };
+  if (customer?.phone) payload.phone_number = customer.phone;
+  if (obligationId) payload.obligation_id = obligationId;
+  return payload;
+}
+
 function clearTelephonyExtensionForm(userId = "") {
   const form = document.querySelector("#telephonyExtensionForm");
   if (!form) return;
@@ -3692,7 +3719,7 @@ async function startClickToCall(customerId, button) {
   try {
     const result = await api("/api/telephony/click-to-call", {
       method: "POST",
-      body: JSON.stringify({ customer_id: Number(customerId) })
+      body: JSON.stringify(clickToCallPayload(customerId))
     });
     showToast("success", result.message || "Llamada registrada.");
     await loadPhase8BData();
