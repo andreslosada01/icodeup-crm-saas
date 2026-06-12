@@ -2292,7 +2292,8 @@ tbody tr:hover {
   margin-bottom: 14px;
 }
 
-.channel-actions a {
+.channel-actions a,
+.channel-actions button {
   min-height: 42px;
   display: grid;
   place-items: center;
@@ -2301,6 +2302,8 @@ tbody tr:hover {
   color: var(--primary-dark);
   background: #ffffff;
   font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .management-grid {

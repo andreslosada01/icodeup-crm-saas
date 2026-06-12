@@ -11,7 +11,7 @@ const state = {
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
   teams: { projects: [], leaders: [], agents: [], projectUsers: [], leaderAgents: [], leaderSummary: null, selectedProjectId: null, selectedLeaderId: null },
-  ops: { trees: [], combinations: [], recordings: [], uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, excelSheetChanges: {}, excelSheetNewRow: {}, excelSheetActiveCell: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
+  ops: { trees: [], combinations: [], recordings: [], telephonyProviders: [], telephonyExtensions: [], telephonyCallLogs: [], myExtension: null, uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, excelSheetChanges: {}, excelSheetNewRow: {}, excelSheetActiveCell: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   ui: { tablePages: {} },
   selectedCustomer: null,
   selectedActivities: [],
@@ -44,6 +44,7 @@ const titles = {
   alerts: "Alertas",
   "typification-trees": "Arboles de gestion",
   recordings: "Grabaciones",
+  telephony: "Telefonia",
   uploads: "Cargas y repartos",
   "excel-web": "Mi Excel Web",
   integrations: "Integraciones",
@@ -112,6 +113,7 @@ const sectionCategories = {
   sales: "Operacion",
   channels: "Operacion",
   recordings: "Operacion",
+  telephony: "Operacion",
   uploads: "Operacion",
   integrations: "Operacion",
   parties: "Operacion",
@@ -151,6 +153,7 @@ const sectionModules = {
   sales: "sales",
   channels: "integrations",
   recordings: "collections",
+  telephony: "telephony",
   uploads: "collections",
   integrations: "integrations",
   parties: "crm",
@@ -168,6 +171,7 @@ const moduleCopy = {
   documents: { name: "Documentos", category: "Operacion", description: "Metadatos documentales asociados a terceros, pagos, acuerdos y casos." },
   sales: { name: "Ventas", category: "Expansion", description: "Leads, oportunidades y pipeline para evolucionar hacia CRM 360." },
   bi: { name: "BI y analitica", category: "Analitica", description: "KPIs, scoring, semaforos, alertas y tableros ejecutivos." },
+  telephony: { name: "Telefonia", category: "Integraciones", description: "Click-to-call, extensiones, historial de llamadas y base para softphone WebRTC." },
   integrations: { name: "Integraciones", category: "Integraciones", description: "Base para WhatsApp, correo, telefonia, APIs y automatizaciones." }
 };
 
@@ -496,6 +500,7 @@ function iconForSection(section) {
     reports: '<path d="M4 19V5"/><path d="M9 19v-7"/><path d="M14 19V9"/><path d="M19 19V3"/>',
     channels: '<path d="M4 12h5"/><path d="M15 12h5"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/>',
     recordings: '<rect x="3" y="7" width="18" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>',
+    telephony: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L8 9.71a16 16 0 0 0 6.29 6.29l1.28-1.28a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/>',
     uploads: '<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/>',
     integrations: '<path d="M8 7V3"/><path d="M16 7V3"/><path d="M7 7h10v5a5 5 0 0 1-10 0z"/><path d="M12 17v4"/>',
     configuration: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1V21a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-.4-1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1-.4H3a2 2 0 1 1 0-4h.08a1.7 1.7 0 0 0 1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.11 3.4l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1V3a2 2 0 1 1 4 0v.08a1.7 1.7 0 0 0 .4 1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.2.35.4.65.6 1 .3.2.62.35 1 .4H21a2 2 0 1 1 0 4h-.08a1.7 1.7 0 0 0-1 .4 1.7 1.7 0 0 0-.52.6z"/>',
@@ -879,10 +884,14 @@ async function loadPhase8Data() {
 
 async function loadPhase8BData() {
   const allowed = (...sections) => menuHasSection(...sections);
-  const [trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events] = await Promise.all([
+  const [trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events] = await Promise.all([
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/trees", []) : [],
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/combinations", []) : [],
     allowed("recordings") ? apiMaybe("/api/recordings", []) : [],
+    allowed("telephony") ? apiMaybe("/api/telephony/providers", []) : [],
+    allowed("telephony") ? apiMaybe("/api/telephony/extensions", []) : [],
+    allowed("telephony") ? apiMaybe("/api/telephony/call-logs", []) : [],
+    allowed("telephony") ? apiMaybe("/api/telephony/my-extension", null) : null,
     allowed("uploads") ? apiMaybe("/api/uploads/batches", []) : [],
     allowed("uploads", "queue", "customers") ? apiMaybe("/api/uploads/demographics?page_size=20", []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/sources", []) : [],
@@ -895,7 +904,7 @@ async function loadPhase8BData() {
     allowed("integrations") ? apiMaybe("/api/integrations/webhooks", []) : [],
     allowed("integrations") ? apiMaybe("/api/integrations/events", []) : []
   ]);
-  state.ops = { ...state.ops, trees, combinations, recordings, uploads, demographics, excelSources, excelViews, excelResult: state.ops.excelResult || excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events };
+  state.ops = { ...state.ops, trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult: state.ops.excelResult || excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events };
 }
 
 async function refreshAll() {
@@ -916,7 +925,7 @@ async function refreshAll() {
   if (menuHasSection("configuration", "alerts", "legal", "sales", "dashboard", "reports")) {
     await optionalLoad("Fase 8", loadPhase8Data);
   }
-  if (menuHasSection("typification-trees", "recordings", "uploads", "excel-web", "integrations")) {
+  if (menuHasSection("typification-trees", "recordings", "telephony", "uploads", "excel-web", "integrations")) {
     await optionalLoad("Fase 8B", loadPhase8BData);
   }
   renderAll();
@@ -1565,7 +1574,7 @@ function renderQueueDetail() {
       <div><span>Gestor</span><strong>${escapeHtml(customer.assigned_user_name || "-")}</strong></div>
     </div>
     <div class="channel-actions">
-      <a href="${channelHref("telephony", customer)}">Click to call</a>
+      ${menuHasSection("telephony") ? `<button type="button" data-click-to-call="${customer.id}">Llamar</button>` : `<a href="${channelHref("telephony", customer)}">Llamar</a>`}
       <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
       <a href="${channelHref("email", customer)}">Email</a>
     </div>
@@ -1651,7 +1660,7 @@ function renderManagementDrawer() {
         <article><span>Estado</span><strong>${escapeHtml(customer.status || "-")}</strong></article>
       </div>
       <div class="drawer-actions">
-        <a href="${channelHref("telephony", customer)}">Click to call</a>
+        ${menuHasSection("telephony") ? `<button type="button" data-click-to-call="${customer.id}">Llamar</button>` : `<a href="${channelHref("telephony", customer)}">Llamar</a>`}
         <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
         <a href="${channelHref("email", customer)}">Email</a>
         <button type="button" data-prefill-result="Contactado">Registrar llamada</button>
@@ -2788,6 +2797,68 @@ function renderRecordings() {
   `);
 }
 
+function canManageTelephony() {
+  return ["platform_admin", "company_admin"].includes(menuUser().audience) || ["platform_admin", "tenant_admin"].includes(currentUser?.role);
+}
+
+function renderTelephony() {
+  const providers = state.ops.telephonyProviders || [];
+  const extensions = state.ops.telephonyExtensions || [];
+  const logs = state.ops.telephonyCallLogs || [];
+  const myExtension = state.ops.myExtension;
+  const activeProviders = providers.filter((item) => item.is_active);
+  const activeExtensions = extensions.filter((item) => item.is_active);
+  renderCardSet("#telephonyKpis", [
+    { label: "Proveedores", value: providers.length, detail: "PBX, WebRTC SIP, API externa o modo manual.", tone: providers.length ? "green" : "yellow", action: providers.length ? "Listos para parametrizacion." : "Configura un proveedor manual para comenzar." },
+    { label: "Extensiones", value: activeExtensions.length, detail: "Usuarios con extension activa.", tone: activeExtensions.length ? "green" : "yellow", action: "Asignar extension por usuario y tenant." },
+    { label: "Llamadas", value: logs.length, detail: "Historial visible segun rol.", tone: logs.length ? "blue" : "yellow", action: "Click-to-call registra llamadas simuladas." },
+    { label: "Modo", value: activeProviders.some((item) => item.provider_type !== "manual") ? "Simulado" : "Manual", detail: "No se hacen llamadas reales sin integracion PBX/WebRTC.", tone: "blue", action: "Base lista para softphone embebido." },
+  ]);
+  const mineHtml = myExtension
+    ? `<article class="workspace-profile-card"><span>Extension</span><strong>${escapeHtml(myExtension.extension_number)}</strong><p>${escapeHtml(myExtension.display_name || myExtension.user_name || "Extension asignada")}</p><small>${escapeHtml(myExtension.status)} - ${escapeHtml(myExtension.provider_name || "Sin proveedor")}</small></article>`
+    : `<article class="empty-state"><strong>Extension no configurada</strong><p>Solicita al administrador de tu empresa una extension activa para usar click-to-call desde la ficha del cliente.</p></article>`;
+  document.querySelector("#myTelephonyPanel") && (document.querySelector("#myTelephonyPanel").innerHTML = mineHtml);
+
+  const logRows = logs.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.customer_name || "Cliente")}</strong><small>${escapeHtml(item.phone_number)}</small></td><td>${escapeHtml(item.user_name || "-")}</td><td>${escapeHtml(item.call_status)}</td><td>${escapeHtml(item.metadata?.mode || item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${dateOnly(item.started_at)}</td></tr>`).join("");
+  document.querySelector("#telephonyCallLogTable") && (document.querySelector("#telephonyCallLogTable").innerHTML = table(["Cliente", "Usuario", "Estado", "Modo", "Duracion", "Inicio"], logRows, "Sin llamadas registradas para tu alcance."));
+
+  const tenantSource = state.crm.options.tenants?.length ? state.crm.options.tenants : (state.admin.tenants || []);
+  const userSource = state.crm.options.users?.length ? state.crm.options.users : (state.admin.users || []);
+  const tenantOptions = tenantSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
+  const providerOptions = providers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.provider_type)})</option>`).join("");
+  const userOptions = userSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} - ${escapeHtml(item.email || "")}</option>`).join("");
+  const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.provider_type)}</small></td><td>${escapeHtml(item.host || item.websocket_url || item.api_url || "Manual/simulado")}</td><td>${item.is_active ? "Activo" : "Inactivo"}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
+  const extensionRows = extensions.map((item) => `<tr><td><strong>${escapeHtml(item.extension_number)}</strong><small>${escapeHtml(item.display_name || item.user_name || "-")}</small></td><td>${escapeHtml(item.user_name || "-")}</td><td>${escapeHtml(item.provider_name || "-")}</td><td>${escapeHtml(item.status)}</td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join("");
+  document.querySelector("#telephonyProviderPanel") && (document.querySelector("#telephonyProviderPanel").innerHTML = `
+    ${canManageTelephony() ? `<form id="telephonyProviderForm" class="ops-form form-grid">
+      ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
+      <label>Nombre<input name="name" required placeholder="PBX principal" /></label>
+      <label>Tipo<select name="provider_type"><option value="manual">Manual/simulado</option><option value="pbx_ami">Asterisk AMI</option><option value="pbx_ari">Asterisk ARI</option><option value="webrtc_sip">WebRTC SIP</option><option value="external_api">API externa</option></select></label>
+      <label>Host<input name="host" placeholder="pbx.empresa.local" /></label>
+      <label>Puerto<input name="port" type="number" min="1" max="65535" /></label>
+      <label class="wide">WebSocket URL<input name="websocket_url" placeholder="wss://pbx.empresa/ws" /></label>
+      <label class="wide">API URL<input name="api_url" placeholder="https://proveedor/api" /></label>
+      <label class="wide">Config JSON sin secretos<textarea name="config" placeholder='{"mode":"simulated"}'></textarea></label>
+      <button type="submit">Crear proveedor</button>
+    </form>` : `<p class="empty">Solo administradores pueden configurar proveedores.</p>`}
+    ${table(["Proveedor", "Conexion", "Estado", "Actualizado"], providerRows, "Sin proveedores configurados. Click-to-call puede operar en modo manual si existe extension.")}
+  `);
+  document.querySelector("#telephonyExtensionPanel") && (document.querySelector("#telephonyExtensionPanel").innerHTML = `
+    ${canManageTelephony() ? `<form id="telephonyExtensionForm" class="ops-form form-grid">
+      ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
+      <label>Usuario<select name="user_id" required>${userOptions}</select></label>
+      <label>Proveedor<select name="provider_id"><option value="">Manual/sin proveedor</option>${providerOptions}</select></label>
+      <label>Extension<input name="extension_number" required placeholder="1001" /></label>
+      <label>Nombre visible<input name="display_name" placeholder="Gestor 1001" /></label>
+      <label>SIP username<input name="sip_username" placeholder="1001" /></label>
+      <label>Dominio SIP<input name="sip_domain" placeholder="pbx.empresa.local" /></label>
+      <label>Estado<select name="status"><option value="not_connected">No conectado</option><option value="available">Disponible</option><option value="busy">Ocupado</option></select></label>
+      <button type="submit">Asignar extension</button>
+    </form>` : `<p class="empty">Tu administrador asigna las extensiones.</p>`}
+    ${table(["Extension", "Usuario", "Proveedor", "Estado", "Activa"], extensionRows, "Sin extensiones configuradas para tu alcance.")}
+  `);
+}
+
 function renderUploads() {
   const batches = state.ops.uploads || [];
   const demographics = state.ops.demographics || [];
@@ -3482,6 +3553,7 @@ function renderAll() {
   renderSalesAdvanced();
   renderTypificationTrees();
   renderRecordings();
+  renderTelephony();
   renderUploads();
   renderExcelWeb();
   renderIntegrations();
@@ -3500,6 +3572,46 @@ function parseJsonField(value, fallback = {}) {
   } catch (error) {
     throw new Error("El campo JSON no tiene un formato valido.");
   }
+}
+
+async function handleTelephonyProviderSubmit(form) {
+  await submitJson(form, "/api/telephony/providers", (currentForm) => ({
+    tenant_id: currentForm.elements.tenant_id?.value ? Number(currentForm.elements.tenant_id.value) : null,
+    name: currentForm.elements.name.value,
+    provider_type: currentForm.elements.provider_type.value,
+    host: currentForm.elements.host.value || null,
+    port: currentForm.elements.port.value ? Number(currentForm.elements.port.value) : null,
+    websocket_url: currentForm.elements.websocket_url.value || null,
+    api_url: currentForm.elements.api_url.value || null,
+    config: parseJsonField(currentForm.elements.config.value, {})
+  }));
+}
+
+async function handleTelephonyExtensionSubmit(form) {
+  await submitJson(form, "/api/telephony/extensions", (currentForm) => ({
+    tenant_id: currentForm.elements.tenant_id?.value ? Number(currentForm.elements.tenant_id.value) : null,
+    user_id: Number(currentForm.elements.user_id.value),
+    provider_id: currentForm.elements.provider_id.value ? Number(currentForm.elements.provider_id.value) : null,
+    extension_number: currentForm.elements.extension_number.value,
+    display_name: currentForm.elements.display_name.value || null,
+    sip_username: currentForm.elements.sip_username.value || null,
+    sip_domain: currentForm.elements.sip_domain.value || null,
+    status: currentForm.elements.status.value,
+    metadata: {}
+  }));
+}
+
+async function startClickToCall(customerId, button) {
+  await runAction(button, async () => {
+    const result = await api("/api/telephony/click-to-call", {
+      method: "POST",
+      body: JSON.stringify({ customer_id: Number(customerId) })
+    });
+    showToast("success", result.message || "Llamada registrada.");
+    await loadPhase8BData();
+    await refreshCustomerAfterActivity(customerId);
+    renderTelephony();
+  }, "Llamando...");
 }
 
 function optionalNumber(value) {
@@ -3694,6 +3806,14 @@ function setupEvents() {
       event.preventDefault();
       await handleIntegrationSubmit(form);
     }
+    if (form.id === "telephonyProviderForm") {
+      event.preventDefault();
+      await handleTelephonyProviderSubmit(form);
+    }
+    if (form.id === "telephonyExtensionForm") {
+      event.preventDefault();
+      await handleTelephonyExtensionSubmit(form);
+    }
     if (form.id === "uploadPreviewForm") {
       event.preventDefault();
       await handleUploadPreview(form);
@@ -3740,6 +3860,11 @@ function setupEvents() {
     const open = event.target.closest("[data-open-customer]");
     if (open) {
       await openCustomerDrawer(open.dataset.openCustomer);
+      return;
+    }
+    const clickToCall = event.target.closest("[data-click-to-call]");
+    if (clickToCall) {
+      await startClickToCall(clickToCall.dataset.clickToCall, clickToCall);
       return;
     }
     const teamProject = event.target.closest("[data-team-project]");

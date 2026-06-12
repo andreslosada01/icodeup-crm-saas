@@ -1,0 +1,121 @@
+# Modulo Telefonia Click-to-Call
+
+## 1. Objetivo
+
+Agregar a Icodeup 360 una base corporativa para llamadas de cobranza desde la ficha del cliente, con extensiones por usuario, proveedores configurables por tenant, historial de llamadas y preparacion para telefonia embebida WebRTC.
+
+## 2. Alcance actual
+
+Incluye:
+
+- modelos `TelephonyProvider`, `TelephonyExtension` y `CallLog`,
+- migracion Alembic no destructiva,
+- permisos `telephony.*`,
+- menu dinamico para Telefonia,
+- endpoints `/api/telephony`,
+- UI base para proveedores, extensiones, mi telefono e historial,
+- boton `Llamar` desde cola/ficha de gestion,
+- click-to-call simulado o manual,
+- auditoria de creacion/actualizacion y llamadas.
+
+No incluye aun:
+
+- llamada real contra PBX,
+- softphone WebRTC activo,
+- credenciales SIP,
+- grabacion real,
+- monitoreo en vivo de llamadas.
+
+## 3. Click-to-call simulado
+
+Cuando el usuario pulsa `Llamar`, el backend:
+
+1. valida modulo `telephony`,
+2. valida permiso `telephony.call`,
+3. valida tenant,
+4. valida extension activa del usuario,
+5. valida cliente y obligacion si aplica,
+6. crea un `CallLog` con estado `initiated`,
+7. crea una `ManagementActivity` de canal `phone`,
+8. registra auditoria,
+9. responde que la llamada fue registrada.
+
+Si no hay proveedor real o el proveedor es `manual`, no se ejecuta llamada real.
+
+## 4. Que falta para llamada real
+
+Para llamadas reales se requiere:
+
+- proveedor PBX/API configurado por tenant,
+- credenciales seguras en vault,
+- motor que origine llamadas,
+- eventos de estado,
+- control de errores y reintentos,
+- limites de uso,
+- politicas de grabacion,
+- pruebas en ambiente test.
+
+## 5. Configurar extensiones
+
+Un administrador de empresa o SuperAdmin puede:
+
+1. entrar a `Telefonia`,
+2. crear proveedor manual o PBX/API,
+3. crear extension,
+4. asociarla a un usuario,
+5. definir numero de extension y estado.
+
+El gestor ve su panel `Mi telefono` con la extension asignada. Si no tiene extension activa, el click-to-call devuelve un mensaje claro.
+
+## 6. Conexion a PBX
+
+Los proveedores permiten parametrizar:
+
+- `provider_type`,
+- `host`,
+- `port`,
+- `websocket_url`,
+- `api_url`,
+- `config_json` sin secretos.
+
+La integracion PBX real debera implementarse como servicio separado, idealmente desacoplado del endpoint de click-to-call para manejar latencia, eventos y reintentos.
+
+## 7. Evolucion a WebRTC
+
+La evolucion esperada es:
+
+1. extension y proveedor manual,
+2. PBX de test,
+3. eventos de llamada,
+4. softphone WebRTC embebido,
+5. grabaciones y reportes avanzados.
+
+WebRTC debe operar con HTTPS, SIP sobre WebSocket y STUN/TURN.
+
+## 8. Seguridad
+
+La implementacion actual:
+
+- valida tenant en proveedores, extensiones, clientes y logs,
+- valida permisos por accion,
+- evita guardar claves sensibles en `config_json` y `metadata_json`,
+- no guarda contrasenas SIP,
+- no ejecuta llamadas reales sin integracion explicita,
+- audita cambios y llamadas.
+
+## 9. Limitaciones
+
+- El modo actual es manual/simulado.
+- No hay softphone web activo.
+- No hay control de grabaciones reales.
+- El consumo de llamadas no descuenta limites comerciales.
+- Las metricas avanzadas de telefonia quedan para una fase posterior.
+
+## 10. Proximos pasos
+
+1. Configurar una PBX de prueba por tenant.
+2. Definir vault de credenciales.
+3. Implementar origen real de llamadas en ambiente test.
+4. Agregar eventos de llamada y cierre automatico de `CallLog`.
+5. Implementar softphone WebRTC MVP.
+6. Agregar reporteria de llamadas, calidad y productividad.

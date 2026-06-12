@@ -27,6 +27,7 @@ from app.models.party import Party
 from app.models.sales import Lead, Opportunity
 from app.models.security import Permission, Role, RolePermission, UserProfile
 from app.models.subscription import Module, SaasPlan, TenantModule, TenantSubscription
+from app.models.telephony import CallLog, TelephonyExtension, TelephonyProvider
 from app.models.tenant import Project, Tenant
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "AlertRule",
     "BusinessRule",
     "CallRecording",
+    "CallLog",
     "ChannelConfiguration",
     "ChannelEventLog",
     "CommunicationChannel",
@@ -74,6 +76,8 @@ __all__ = [
     "TenantConfiguration",
     "TenantModule",
     "TenantSubscription",
+    "TelephonyExtension",
+    "TelephonyProvider",
     "TypificationCombinationRule",
     "TypificationNode",
     "TypificationTree",
