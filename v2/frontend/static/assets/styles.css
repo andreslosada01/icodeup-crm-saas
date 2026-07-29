@@ -136,53 +136,111 @@ button:disabled {
 }
 
 .login-shell {
+  position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 28px;
+  overflow: hidden;
+  padding: 32px;
   background:
-    linear-gradient(115deg, rgba(8, 21, 25, 0.94), rgba(15, 48, 55, 0.82)),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0 1px, transparent 1px 42px),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 42px),
-    #0b1d22;
+    linear-gradient(115deg, rgba(34, 211, 238, 0.16) 0%, transparent 34%),
+    linear-gradient(245deg, rgba(21, 149, 111, 0.2) 0%, transparent 36%),
+    linear-gradient(135deg, #06131f 0%, #071922 42%, #0b1521 100%);
+  isolation: isolate;
+}
+
+.login-shell::before,
+.login-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.login-shell::before {
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.07) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(115deg, transparent 0%, #000 16%, #000 74%, transparent 100%);
+  animation: premiumGrid 18s linear infinite;
+}
+
+.login-shell::after {
+  background:
+    linear-gradient(120deg, transparent 8%, rgba(34, 211, 238, 0.12) 34%, transparent 56%),
+    linear-gradient(35deg, transparent 18%, rgba(21, 149, 111, 0.11) 48%, transparent 72%);
+  filter: blur(18px);
+  opacity: 0.78;
+  animation: ambientShift 14s ease-in-out infinite alternate;
 }
 
 .login-stage {
-  width: min(1120px, 100%);
-  min-height: 620px;
+  position: relative;
+  width: min(1180px, 100%);
+  min-height: 680px;
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  gap: 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(148, 163, 184, 0.28);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: var(--shadow);
+  background: rgba(7, 18, 28, 0.76);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+  animation: loginEnter 700ms ease both;
+}
+
+.login-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.22), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 24%);
+  pointer-events: none;
 }
 
 .brand-panel {
   position: relative;
   display: grid;
-  align-content: end;
-  gap: 28px;
-  padding: 48px;
+  grid-template-rows: auto auto auto 1fr auto;
+  gap: 26px;
+  padding: 44px;
   color: #ffffff;
   background:
-    linear-gradient(135deg, rgba(20, 149, 111, 0.36), transparent 45%),
-    linear-gradient(55deg, rgba(37, 99, 235, 0.34), transparent 50%);
+    linear-gradient(135deg, rgba(9, 30, 44, 0.98), rgba(4, 20, 31, 0.72)),
+    linear-gradient(42deg, rgba(34, 211, 238, 0.16), transparent 42%);
   isolation: isolate;
 }
 
 .brand-panel::before {
   content: "";
   position: absolute;
-  inset: 28px;
+  inset: 24px;
   z-index: -1;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
-  background-size: 38px 38px;
-  animation: gridShift 10s linear infinite;
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 42px 42px;
+  animation: gridShift 16s linear infinite;
+}
+
+.brand-panel::after {
+  content: "";
+  position: absolute;
+  right: -18%;
+  bottom: -12%;
+  width: 56%;
+  height: 46%;
+  z-index: -1;
+  background: linear-gradient(135deg, rgba(21, 149, 111, 0.22), transparent 68%);
+  filter: blur(12px);
+  animation: softGlow 9s ease-in-out infinite alternate;
 }
 
 @keyframes gridShift {
@@ -194,11 +252,99 @@ button:disabled {
   }
 }
 
-.brand-logo {
-  width: 190px;
-  padding: 18px;
+@keyframes premiumGrid {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 108px 54px;
+  }
+}
+
+@keyframes ambientShift {
+  from {
+    transform: translate3d(-1.5%, -1%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(1.5%, 1%, 0) scale(1.03);
+  }
+}
+
+@keyframes softGlow {
+  from {
+    opacity: 0.52;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0.86;
+    transform: translate3d(-18px, -12px, 0);
+  }
+}
+
+@keyframes loginEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes chipFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes nodeFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.brand-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.brand-topline > div {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.suite-badge {
+  display: inline-grid;
+  min-height: 28px;
+  place-items: center;
+  border: 1px solid rgba(45, 212, 191, 0.42);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
+  padding: 0 11px;
+  color: #d7fff3;
+  background: rgba(20, 184, 166, 0.14);
+}
+
+.brand-logo {
+  width: 154px;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
 }
 
 .eyebrow {
@@ -211,7 +357,7 @@ button:disabled {
 }
 
 .brand-panel .eyebrow {
-  color: #9dffbf;
+  color: #84f0d5;
 }
 
 h1,
@@ -235,16 +381,179 @@ h2 {
 .lead {
   max-width: 650px;
   margin-bottom: 0;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(235, 250, 248, 0.88);
   font-size: 17px;
   line-height: 1.55;
 }
 
 .brand-credit {
   margin: 14px 0 0;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(190, 214, 218, 0.78);
   font-size: 13px;
   font-weight: 800;
+}
+
+.hero-copy h1 {
+  max-width: 650px;
+  margin-bottom: 16px;
+  color: #f8fffd;
+  text-wrap: balance;
+}
+
+.hero-secondary {
+  max-width: 620px;
+  margin: 14px 0 0;
+  color: rgba(203, 213, 225, 0.82);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.module-pill-grid,
+.trust-strip,
+.login-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.module-pill-grid span,
+.trust-strip span,
+.login-trust span {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  color: rgba(240, 253, 250, 0.9);
+  background: rgba(15, 23, 42, 0.42);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.module-pill-grid span {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: chipFloat 7s ease-in-out infinite;
+}
+
+.module-pill-grid span:nth-child(2n) {
+  animation-delay: 700ms;
+}
+
+.module-pill-grid span:nth-child(3n) {
+  animation-delay: 1200ms;
+}
+
+.platform-constellation {
+  position: relative;
+  min-height: 176px;
+  margin-top: 2px;
+}
+
+.ecosystem-core,
+.ecosystem-card,
+.constellation-line {
+  position: absolute;
+}
+
+.ecosystem-core {
+  left: 50%;
+  top: 50%;
+  width: 116px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(45, 212, 191, 0.44);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(20, 184, 166, 0.28), rgba(15, 23, 42, 0.7));
+  box-shadow: 0 0 48px rgba(45, 212, 191, 0.18);
+}
+
+.ecosystem-core span {
+  color: #ecfffb;
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.ecosystem-core small,
+.ecosystem-card span {
+  color: rgba(203, 213, 225, 0.72);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ecosystem-card {
+  min-width: 118px;
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: rgba(2, 12, 20, 0.64);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.2);
+  animation: nodeFloat 8s ease-in-out infinite;
+}
+
+.ecosystem-card strong {
+  color: #f8fafc;
+  font-size: 13px;
+}
+
+.node-one {
+  left: 8%;
+  top: 6%;
+}
+
+.node-two {
+  right: 6%;
+  top: 18%;
+  animation-delay: 900ms;
+}
+
+.node-three {
+  left: 18%;
+  bottom: 2%;
+  animation-delay: 1500ms;
+}
+
+.constellation-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.52), transparent);
+  transform-origin: center;
+  opacity: 0.62;
+}
+
+.line-one {
+  left: 20%;
+  top: 40%;
+  width: 38%;
+  transform: rotate(17deg);
+}
+
+.line-two {
+  right: 20%;
+  top: 45%;
+  width: 32%;
+  transform: rotate(-20deg);
+}
+
+.line-three {
+  left: 26%;
+  bottom: 34%;
+  width: 34%;
+  transform: rotate(-18deg);
+}
+
+.trust-strip {
+  align-self: end;
+  padding-top: 4px;
+}
+
+.trust-strip span,
+.login-trust span {
+  padding: 8px 10px;
+  color: rgba(226, 232, 240, 0.8);
 }
 
 .capability-grid {
@@ -266,15 +575,72 @@ h2 {
 }
 
 .login-card {
+  position: relative;
   display: grid;
   align-content: center;
-  gap: 16px;
-  padding: 56px;
-  background: rgba(255, 255, 255, 0.96);
+  gap: 18px;
+  padding: 58px;
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 250, 249, 0.91)),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.26);
+}
+
+.login-card::before {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border: 1px solid rgba(21, 149, 111, 0.12);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.login-card-head {
+  margin-bottom: 6px;
 }
 
 .login-card p {
   color: var(--muted);
+}
+
+.login-card h2 {
+  margin-bottom: 10px;
+  color: #0d1b24;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.login-card label {
+  gap: 9px;
+  color: #21343c;
+}
+
+.login-card label span {
+  color: #314852;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.login-card input {
+  min-height: 50px;
+  border-color: #ccdddf;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 252, 251, 0.98));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.login-card input:hover {
+  border-color: #a8c6c8;
+}
+
+.login-card input:focus {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.16), 0 10px 26px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
 label {
@@ -318,6 +684,37 @@ textarea:focus {
   color: #ffffff;
   background: var(--primary);
   font-weight: 800;
+}
+
+.login-card .login-submit {
+  min-height: 52px;
+  margin-top: 4px;
+  background:
+    linear-gradient(135deg, #0f766e, #14b8a6 52%, #2563eb);
+  box-shadow: 0 16px 32px rgba(20, 184, 166, 0.28);
+  font-weight: 900;
+  transition: transform 170ms ease, box-shadow 170ms ease, filter 170ms ease;
+}
+
+.login-card .login-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(20, 184, 166, 0.36);
+  filter: saturate(1.05);
+}
+
+.login-card .login-submit:disabled {
+  transform: none;
+  box-shadow: 0 10px 22px rgba(20, 184, 166, 0.2);
+}
+
+.login-trust {
+  margin-top: 2px;
+}
+
+.login-trust span {
+  border-color: rgba(21, 149, 111, 0.16);
+  color: #49626b;
+  background: rgba(237, 248, 246, 0.72);
 }
 
 .form-grid .secondary-button {
@@ -2478,6 +2875,18 @@ tbody tr:hover {
   .capability-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .login-stage {
+    min-height: auto;
+  }
+
+  .brand-panel {
+    min-height: 620px;
+  }
+
+  .platform-constellation {
+    min-height: 150px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2491,8 +2900,70 @@ tbody tr:hover {
     padding: 28px;
   }
 
+  .brand-panel {
+    min-height: auto;
+    gap: 20px;
+  }
+
+  .brand-topline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .brand-topline > div {
+    justify-items: start;
+  }
+
+  .brand-logo {
+    width: 132px;
+  }
+
   h1 {
     font-size: 34px;
+  }
+
+  .hero-copy h1 {
+    font-size: 36px;
+  }
+
+  .module-pill-grid span,
+  .trust-strip span,
+  .login-trust span {
+    font-size: 11px;
+  }
+
+  .platform-constellation {
+    min-height: 118px;
+  }
+
+  .ecosystem-core {
+    width: 94px;
+    height: 62px;
+  }
+
+  .ecosystem-card {
+    min-width: 92px;
+    padding: 9px 10px;
+  }
+
+  .node-one {
+    left: 0;
+  }
+
+  .node-two {
+    right: 0;
+  }
+
+  .node-three {
+    display: none;
+  }
+
+  .line-three {
+    display: none;
+  }
+
+  .login-card::before {
+    inset: 14px;
   }
 
   .form-grid {

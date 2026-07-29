@@ -11,33 +11,64 @@
     <main id="loginView" class="login-shell">
       <section class="login-stage" aria-label="Acceso IEP - Icodeup Enterprise Platform">
         <div class="brand-panel">
-          <img src="/assets/icodeup-logo.png" alt="Icodeup Advisors" class="brand-logo" />
-          <div>
-            <p class="eyebrow">IEP</p>
+          <div class="brand-topline">
+            <img src="/assets/icodeup-logo.png" alt="Icodeup Advisors" class="brand-logo" />
+            <div>
+              <span class="suite-badge">IEP</span>
+              <strong>Icodeup Advisors</strong>
+            </div>
+          </div>
+          <div class="hero-copy">
+            <p class="eyebrow">Suite empresarial modular</p>
             <h1>Icodeup Enterprise Platform</h1>
             <p class="lead">
-              Suite inteligente para operar empresas, datos, procesos y decisiones.
+              Una plataforma inteligente para operar empresas, datos, procesos y decisiones.
+            </p>
+            <p class="hero-secondary">
+              Centraliza operacion, analitica, automatizacion y control empresarial en un solo ecosistema modular.
             </p>
             <p class="brand-credit">Desarrollado por Icodeup Advisors</p>
           </div>
-          <div class="capability-grid" aria-label="Capacidades">
-            <span>Suite empresarial</span>
-            <span>Modulos 360</span>
-            <span>Gobierno seguro</span>
-            <span>Analitica ejecutiva</span>
+          <div class="module-pill-grid" aria-label="Modulos IEP">
+            <span>Collects 360</span>
+            <span>PayControl 360</span>
+            <span>Analytics 360</span>
+            <span>ChatBOX 360</span>
+            <span>FoodFlow 360</span>
+            <span>ProdLine 360</span>
+          </div>
+          <div class="platform-constellation" aria-hidden="true">
+            <div class="constellation-line line-one"></div>
+            <div class="constellation-line line-two"></div>
+            <div class="constellation-line line-three"></div>
+            <div class="ecosystem-core"><span>IEP</span><small>Core</small></div>
+            <div class="ecosystem-card node-one"><strong>Data</strong><span>Analytics</span></div>
+            <div class="ecosystem-card node-two"><strong>Ops</strong><span>Workflow</span></div>
+            <div class="ecosystem-card node-three"><strong>Risk</strong><span>Control</span></div>
+          </div>
+          <div class="trust-strip" aria-label="Confianza empresarial">
+            <span>Multiempresa</span>
+            <span>Permisos por rol</span>
+            <span>Datos aislados</span>
+            <span>Auditoria operacional</span>
           </div>
         </div>
 
         <form id="loginForm" class="login-card">
-          <div>
+          <div class="login-card-head">
             <p class="eyebrow">Acceso seguro</p>
-            <h2>IEP</h2>
-            <p>Icodeup Enterprise Platform para operar tu workspace empresarial con modulos, permisos y datos aislados por organizacion.</p>
+            <h2>Ingresa a IEP</h2>
+            <p>Accede a tu workspace empresarial con modulos, permisos y datos aislados por organizacion.</p>
           </div>
-          <label>Email<input id="email" type="email" autocomplete="username" placeholder="usuario@empresa.com" required /></label>
-          <label>Contrasena<input id="password" type="password" autocomplete="current-password" required /></label>
-          <button type="submit">Ingresar</button>
+          <label><span>Correo empresarial</span><input id="email" type="email" autocomplete="username" placeholder="usuario@empresa.com" required /></label>
+          <label><span>Contrasena</span><input id="password" type="password" autocomplete="current-password" required /></label>
+          <button class="login-submit" type="submit">Ingresar a la plataforma</button>
           <p id="loginResult" class="form-note"></p>
+          <div class="login-trust" aria-label="Controles de acceso">
+            <span>SSO ready</span>
+            <span>Tenant seguro</span>
+            <span>Roles activos</span>
+          </div>
         </form>
       </section>
     </main>
