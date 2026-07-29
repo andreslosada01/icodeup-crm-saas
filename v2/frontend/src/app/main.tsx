@@ -7,10 +7,10 @@ function App() {
   return (
     <main className="app-shell">
       <section className="panel">
-        <p className="eyebrow">IcodeUp CRM V2</p>
-        <h1>Arquitectura SaaS corporativa</h1>
+        <p className="eyebrow">IEP</p>
+        <h1>Icodeup Enterprise Platform</h1>
         <p>
-          Base modular para evolucionar el frontend React de la plataforma actual.
+          Suite inteligente para operar empresas, datos, procesos y decisiones.
         </p>
       </section>
     </main>

@@ -39,7 +39,7 @@ def platform_dashboard(db: Session, user: User) -> dict:
     recent_audit = db.scalar(select(func.count(AuditLog.id))) or 0
     return {
         "audience": "platform_admin",
-        "title": "Gobierno SaaS Icodeup 360",
+        "title": "Gobierno SaaS IEP",
         "generated_at": datetime.now(timezone.utc),
         "cards": [
             _card("Empresas activas", active_tenants, "Tenants cliente operativos.", "green"),

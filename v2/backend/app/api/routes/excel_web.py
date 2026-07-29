@@ -58,7 +58,7 @@ SOURCE_DEFS = {
     "obligations": {"label": "Obligaciones", "columns": ["id", "customer_id", "obligation_number", "product_type", "portfolio_name", "original_amount", "current_balance", "days_past_due", "status", "risk", "assigned_user_id", "assigned_leader_id"]},
     "activities": {"label": "Gestiones", "columns": ["id", "customer_id", "obligation_id", "user_id", "channel", "result", "note", "created_at"]},
     "promises": {"label": "Promesas", "columns": ["id", "customer_id", "obligation_id", "user_id", "amount", "due_date", "status", "channel"]},
-    "payments": {"label": "Pagos", "columns": ["id", "customer_id", "user_id", "amount", "paid_at", "method", "reference"]},
+    "payments": {"label": "PayControl 360", "columns": ["id", "customer_id", "user_id", "amount", "paid_at", "method", "reference"]},
     "agreements": {"label": "Acuerdos", "columns": ["id", "customer_id", "obligation_id", "user_id", "total_amount", "installment_count", "status", "created_at"]},
     "demographics": {"label": "Demograficos", "columns": ["id", "customer_id", "source", "phone", "email", "city", "state", "employer", "score"]},
     "recordings": {"label": "Grabaciones", "columns": ["id", "customer_id", "user_id", "call_id", "phone_number", "direction", "duration_seconds", "status", "provider_code"]},
@@ -548,7 +548,7 @@ def export_data(payload: ExcelWebQuery, request: Request, db: Session = Depends(
     db.flush()
     record_audit(db, user, "excel_web_export", "create", entity_id=log.id, tenant_id=user.tenant_id, module="excel_web", after={"source": payload.source, "rows": len(items)}, request=request)
     db.commit()
-    file_name = f"icodeup360_{payload.source}_{log.id}.csv"
+    file_name = f"iep_{payload.source}_{log.id}.csv"
     return Response(
         content=output.getvalue(),
         media_type="text/csv; charset=utf-8",

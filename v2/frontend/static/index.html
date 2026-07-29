@@ -3,26 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Icodeup 360</title>
+    <title>IEP — Icodeup Enterprise Platform</title>
     <link rel="icon" href="/favicon.ico" type="image/svg+xml" />
     <link rel="stylesheet" href="/assets/styles.css" />
   </head>
   <body>
     <main id="loginView" class="login-shell">
-      <section class="login-stage" aria-label="Acceso Icodeup 360">
+      <section class="login-stage" aria-label="Acceso IEP - Icodeup Enterprise Platform">
         <div class="brand-panel">
-          <img src="/assets/icodeup-logo.png" alt="IcodeUp" class="brand-logo" />
+          <img src="/assets/icodeup-logo.png" alt="Icodeup Advisors" class="brand-logo" />
           <div>
-            <p class="eyebrow">Icodeup 360</p>
-            <h1>Plataforma Inteligente de Operaciones Empresariales.</h1>
+            <p class="eyebrow">IEP</p>
+            <h1>Icodeup Enterprise Platform</h1>
             <p class="lead">
-              Un core SaaS modular para operar empresas, datos, equipos, procesos y decisiones con seguridad,
-              trazabilidad y analitica accionable.
+              Suite inteligente para operar empresas, datos, procesos y decisiones.
             </p>
+            <p class="brand-credit">Desarrollado por Icodeup Advisors</p>
           </div>
           <div class="capability-grid" aria-label="Capacidades">
-            <span>Core SaaS</span>
-            <span>Modulos activos</span>
+            <span>Suite empresarial</span>
+            <span>Modulos 360</span>
             <span>Gobierno seguro</span>
             <span>Analitica ejecutiva</span>
           </div>
@@ -31,8 +31,8 @@
         <form id="loginForm" class="login-card">
           <div>
             <p class="eyebrow">Acceso seguro</p>
-            <h2>Icodeup 360</h2>
-            <p>Ingresa a tu workspace empresarial con modulos, permisos y datos aislados por organizacion.</p>
+            <h2>IEP</h2>
+            <p>Icodeup Enterprise Platform para operar tu workspace empresarial con modulos, permisos y datos aislados por organizacion.</p>
           </div>
           <label>Email<input id="email" type="email" autocomplete="username" placeholder="usuario@empresa.com" required /></label>
           <label>Contrasena<input id="password" type="password" autocomplete="current-password" required /></label>
@@ -45,10 +45,10 @@
     <main id="appView" class="app-shell hidden">
       <aside class="sidebar">
         <div class="sidebar-brand">
-          <img src="/assets/icodeup-logo.png" alt="IcodeUp" class="sidebar-logo" />
+          <img src="/assets/icodeup-logo.png" alt="Icodeup Advisors" class="sidebar-logo" />
           <div>
-            <strong>Icodeup 360</strong>
-            <span id="sidebarTenant">Workspace empresarial</span>
+            <strong>IEP</strong>
+            <span id="sidebarTenant">Icodeup Enterprise Platform</span>
           </div>
         </div>
         <div class="sidebar-context" aria-label="Contexto de sesion">
@@ -66,13 +66,13 @@
           <button class="nav-item" data-section="queue">Cola de gestion</button>
           <button class="nav-item" data-section="customers">Clientes</button>
           <button class="nav-item manager-only" data-section="promises">Promesas</button>
-          <button class="nav-item manager-only" data-section="payments">Pagos</button>
+          <button class="nav-item manager-only" data-section="payments">PayControl 360</button>
           <button class="nav-item manager-only" data-section="agreements">Acuerdos</button>
           <button class="nav-item manager-only" data-section="legal">Juridico</button>
           <button class="nav-item manager-only" data-section="documents">Documentos</button>
           <button class="nav-item manager-only" data-section="sales">Ventas</button>
-          <button class="nav-item manager-only" data-section="reports">Reportes BI</button>
-          <button class="nav-item manager-only" data-section="channels">Canales</button>
+          <button class="nav-item manager-only" data-section="reports">Analytics 360</button>
+          <button class="nav-item manager-only" data-section="channels">ChatBOX 360</button>
           <button class="nav-item platform-only" data-section="tenants">Empresas</button>
           <button class="nav-item platform-only" data-section="projects">Proyectos</button>
           <button class="nav-item platform-only" data-section="users">Usuarios</button>
@@ -87,7 +87,7 @@
       <section class="workspace">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Icodeup 360</p>
+            <p class="eyebrow">IEP</p>
             <h1 id="sectionTitle">Tablero ejecutivo</h1>
           </div>
           <div class="topbar-meta">
@@ -170,7 +170,7 @@
           </article>
           <article class="chart-panel platform-only">
             <div class="panel-head">
-              <div><h2>Empresas contratantes</h2><p>Inventario global visible solo para IcodeUp plataforma.</p></div>
+              <div><h2>Empresas contratantes</h2><p>Inventario global visible solo para IEP.</p></div>
             </div>
             <div id="tenantBars" class="bar-list"></div>
           </article>
@@ -179,7 +179,7 @@
         <section id="governance" class="section">
           <article class="module-intelligence">
             <div class="panel-head">
-              <div><h2>Gobierno SaaS Icodeup</h2><p>Control global de empresas, licenciamiento, modulos, seguridad y salud operacional.</p></div>
+              <div><h2>Gobierno SaaS IEP</h2><p>Control global de empresas, licenciamiento, modulos, seguridad y salud operacional.</p></div>
             </div>
             <div id="governanceCards" class="intelligence-grid"></div>
             <div id="governanceAlerts" class="compact-alert-list horizontal-alerts"></div>
@@ -215,7 +215,7 @@
         <section id="modules" class="section">
           <article class="panel">
             <div class="panel-head">
-              <div><h2>Activacion de modulos</h2><p>Solo Icodeup puede activar o desactivar capacidades contratadas por empresa.</p></div>
+              <div><h2>Activacion de modulos</h2><p>Solo IEP SuperAdmin puede activar o desactivar capacidades contratadas por empresa.</p></div>
               <div class="inline-controls"><select id="moduleTenantFilter" aria-label="Empresa para modulos"></select></div>
             </div>
             <div id="moduleCatalog" class="module-catalog"></div>
@@ -429,7 +429,7 @@
         <section id="system-health" class="section">
           <article class="panel">
             <div class="panel-head">
-              <div><h2>Salud del sistema</h2><p>Estado tecnico visible para gobierno interno de Icodeup.</p></div>
+              <div><h2>Salud del sistema</h2><p>Estado tecnico visible para gobierno interno de IEP.</p></div>
             </div>
             <div id="systemHealthPanel" class="settings-summary"></div>
           </article>
@@ -560,7 +560,7 @@
         <section id="payments" class="section">
           <article class="module-intelligence">
             <div class="panel-head">
-              <div><h2>Analitica de recuperacion</h2><p>Pagos, eficiencia frente a cartera y senales de cumplimiento.</p></div>
+              <div><h2>PayControl 360</h2><p>Control, validacion, soporte y reporteria de pagos.</p></div>
             </div>
             <div id="paymentInsightCards" class="intelligence-grid"></div>
             <div id="paymentInsightAlerts" class="compact-alert-list horizontal-alerts"></div>
@@ -605,7 +605,7 @@
           <article class="module-intelligence">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Collection & Legal CRM</p>
+                <p class="eyebrow">Collects 360 · Legal</p>
                 <h2>Gestion juridica operativa</h2>
                 <p>Expedientes, etapas, vencimientos, audiencias y riesgo legal con lectura tipo workspace.</p>
               </div>
@@ -648,7 +648,7 @@
           <article class="module-intelligence">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Expansion CRM 360</p>
+                <p class="eyebrow">Expansion comercial IEP</p>
                 <h2>Pipeline comercial</h2>
                 <p>Leads, oportunidades, valor ponderado, probabilidad y forecast comercial.</p>
               </div>
@@ -677,19 +677,19 @@
           <article class="panel bi-control-panel">
             <div class="panel-head">
               <div>
-                <h2>Centro BI predictivo</h2>
+                <h2>Analytics 360 predictivo</h2>
                 <p>Scoring, semaforizacion, alertas y proyecciones para toma de decisiones.</p>
               </div>
               <div class="inline-controls">
-                <select id="biTenant" aria-label="Empresa BI"></select>
-                <select id="biProject" aria-label="Proyecto BI"></select>
+                <select id="biTenant" aria-label="Empresa Analytics 360"></select>
+                <select id="biProject" aria-label="Proyecto Analytics 360"></select>
                 <select id="biHorizon" aria-label="Horizonte predictivo">
                   <option value="30">30 dias</option>
                   <option value="60">60 dias</option>
                   <option value="90">90 dias</option>
                   <option value="180">180 dias</option>
                 </select>
-                <button id="refreshBi" class="table-button" type="button">Actualizar BI</button>
+                <button id="refreshBi" class="table-button" type="button">Actualizar Analytics 360</button>
               </div>
             </div>
           </article>
@@ -762,7 +762,7 @@
         <section id="channels" class="section">
           <article class="module-intelligence">
             <div class="panel-head">
-              <div><h2>Salud omnicanal</h2><p>Preparacion de WhatsApp, correo y telefonia antes de conectar proveedores reales.</p></div>
+              <div><h2>ChatBOX 360</h2><p>Canales, chatbot, WhatsApp y automatizacion conversacional.</p></div>
             </div>
             <div id="channelInsightCards" class="intelligence-grid"></div>
             <div id="channelInsightAlerts" class="compact-alert-list horizontal-alerts"></div>
@@ -791,7 +791,7 @@
         <section id="tenants" class="section platform-only">
           <article class="module-intelligence">
             <div class="panel-head">
-              <div><h2>Gobierno SaaS IcodeUp</h2><p>Inventario global de empresas contratantes, operacion y aislamiento logico.</p></div>
+              <div><h2>Gobierno SaaS IEP</h2><p>Inventario global de empresas contratantes, operacion y aislamiento logico.</p></div>
             </div>
             <div id="tenantInsightCards" class="intelligence-grid"></div>
             <div id="tenantInsightAlerts" class="compact-alert-list horizontal-alerts"></div>

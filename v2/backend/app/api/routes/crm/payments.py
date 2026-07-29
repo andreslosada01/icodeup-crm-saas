@@ -49,7 +49,7 @@ def export_payments(db: Session = Depends(get_db), user: User = Depends(current_
     output.seek(0)
     record_audit(db, user, "payment", "export", None, user.tenant_id, module="collections", after={"payment_count": len(payments)})
     db.commit()
-    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=pagos_icodeup360.csv"})
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=pagos_iep.csv"})
 
 
 @router.post("/payments", response_model=PaymentOut, status_code=status.HTTP_201_CREATED)

@@ -78,8 +78,8 @@ def build_menu(db: Session, user: User) -> dict:
         seen_sections.add(item.route_name)
     return {
         "product": {
-            "name": "Icodeup 360",
-            "tagline": "Plataforma Inteligente de Operaciones Empresariales",
+            "name": "IEP",
+            "tagline": "Icodeup Enterprise Platform",
         },
         "tenant": {
             "id": tenant.id,
@@ -110,9 +110,9 @@ def public_branding(db: Session, slug: str | None = None) -> dict:
     if slug:
         tenant = db.scalar(select(Tenant).where(Tenant.slug == slug))
     return {
-        "product_name": "Icodeup 360",
-        "headline": "Plataforma Inteligente de Operaciones Empresariales",
-        "subheadline": "Operacion, datos, modulos y decisiones en una experiencia SaaS segura.",
+        "product_name": "IEP",
+        "headline": "Icodeup Enterprise Platform",
+        "subheadline": "Suite inteligente para operar empresas, datos, procesos y decisiones.",
         "tenant_name": tenant.name if tenant else None,
         "logo_url": tenant.logo_url if tenant else None,
         "primary_color": tenant.primary_color if tenant else "#15956f",

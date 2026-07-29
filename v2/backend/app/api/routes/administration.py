@@ -60,7 +60,7 @@ def validate_business_tenant(tenant: Tenant | None) -> Tenant:
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada.")
     if tenant.slug == settings.platform_tenant_slug:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El tenant interno de IcodeUp no admite proyectos ni usuarios de cliente.")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El tenant interno de IEP no admite proyectos ni usuarios de cliente.")
     return tenant
 
 

@@ -8,7 +8,7 @@ TENANT_ROLES = {TENANT_ADMIN, COORDINATOR, QUALITY_SUPERVISOR, AGENT}
 ALL_ROLES = {PLATFORM_ADMIN, *TENANT_ROLES}
 
 ROLE_LABELS = {
-    PLATFORM_ADMIN: "Super administrador IcodeUp",
+    PLATFORM_ADMIN: "SuperAdmin",
     TENANT_ADMIN: "Administrador empresa",
     COORDINATOR: "Lider / Coordinador",
     QUALITY_SUPERVISOR: "Supervisor calidad",

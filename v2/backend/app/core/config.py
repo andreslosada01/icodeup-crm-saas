@@ -8,7 +8,7 @@ V2_ROOT = Path(__file__).resolve().parents[3]
 
 class Settings(BaseSettings):
     app_env: str = "development"
-    app_name: str = "Icodeup 360"
+    app_name: str = "IEP — Icodeup Enterprise Platform"
     app_host: str = "127.0.0.1"
     app_port: int = 8020
     frontend_dir: str = str(V2_ROOT / "frontend" / "static")

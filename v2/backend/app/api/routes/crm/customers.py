@@ -89,7 +89,7 @@ def export_customers(
     output.seek(0)
     record_audit(db, user, "customer", "export", None, user.tenant_id, module="crm", after={"tenant_id": tenant_id, "project_id": project_id})
     db.commit()
-    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=clientes_icodeup360.csv"})
+    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=clientes_iep.csv"})
 
 
 @router.post("/customers", response_model=CustomerOut, status_code=status.HTTP_201_CREATED)

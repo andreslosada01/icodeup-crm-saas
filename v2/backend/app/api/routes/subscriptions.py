@@ -19,7 +19,7 @@ SUPPORTED_MODULES = {"core", "administration", "crm", "collections", "legal", "s
 
 def require_platform(user: User) -> None:
     if user.role != PLATFORM_ADMIN:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo IcodeUp plataforma puede administrar suscripciones.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo IEP SuperAdmin puede administrar suscripciones.")
 
 
 def ensure_subscription_read(user: User, tenant_id: int) -> None:

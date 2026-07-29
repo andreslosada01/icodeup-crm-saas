@@ -57,7 +57,7 @@ def _ensure_patch_access(db: Session, user: User, tenant_id: int | None) -> None
     if is_platform_admin(db, user):
         return
     if tenant_id is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo Icodeup puede modificar plantillas globales.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo IEP SuperAdmin puede modificar plantillas globales.")
     require_tenant(db, user, tenant_id)
 
 

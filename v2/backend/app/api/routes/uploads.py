@@ -114,7 +114,7 @@ UPLOAD_TYPE_CONFIG: dict[str, dict[str, Any]] = {
         "template": ["documento", "telefono", "email", "direccion", "ciudad", "departamento", "fuente", "score"],
     },
     "pagos": {
-        "label": "Pagos y recaudos",
+        "label": "PayControl 360",
         "permission": "uploads.manage",
         "required": ["document", "amount"],
         "optional": ["obligation_number", "paid_at", "method", "reference"],
@@ -689,7 +689,7 @@ def upload_template(upload_type: str, db: Session = Depends(get_db), user: User 
     writer = csv.writer(output)
     writer.writerow(config["template"])
     writer.writerow(_sample_template_row(upload_type, config["template"]))
-    return {"upload_type": upload_type, "filename": f"plantilla_{upload_type}_icodeup360.csv", "csv_text": output.getvalue()}
+    return {"upload_type": upload_type, "filename": f"plantilla_{upload_type}_iep.csv", "csv_text": output.getvalue()}
 
 
 def _sample_template_row(upload_type: str, columns: list[str]) -> list[str]:

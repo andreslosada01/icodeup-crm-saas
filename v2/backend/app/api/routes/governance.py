@@ -53,13 +53,13 @@ ADMIN_PERMISSION_PREFIXES = ("platform.",)
 MODULE_PERMISSION_LABELS = {
     "core": "Core SaaS",
     "administration": "Administracion",
-    "crm": "CRM",
-    "collections": "Cobranzas",
+    "crm": "Collects 360",
+    "collections": "Collects 360 · Cobranzas",
     "legal": "Juridico",
     "documents": "Documentos",
-    "sales": "Ventas",
-    "bi": "BI",
-    "integrations": "Integraciones",
+    "sales": "Pipeline comercial",
+    "bi": "Analytics 360",
+    "integrations": "ChatBOX 360",
 }
 
 
@@ -88,7 +88,7 @@ def validate_assignable_permissions(user: User, db: Session, permission_codes: l
         return
     restricted = [code for code in permission_codes if code.startswith("platform.") or code in {"modules.configure", "health.view"}]
     if restricted:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permisos reservados para Icodeup: {', '.join(sorted(restricted))}")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Permisos reservados para IEP: {', '.join(sorted(restricted))}")
 
 
 def role_to_out(db: Session, role: Role) -> RoleOut:
@@ -477,7 +477,7 @@ def update_role(role_id: int, payload: RolePatch, db: Session = Depends(get_db),
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rol no encontrado.")
     if role.is_system_role and not is_platform_admin(db, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Los roles de sistema solo los modifica Icodeup.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Los roles de sistema solo los modifica IEP SuperAdmin.")
     if role.tenant_id is not None:
         target_tenant(db, user, role.tenant_id)
     updates = payload.model_dump(exclude_unset=True)
@@ -513,7 +513,7 @@ def update_role_permissions(role_id: int, payload: RolePermissionsUpdate, db: Se
     if role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rol no encontrado.")
     if role.is_system_role and not is_platform_admin(db, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Los roles de sistema solo los modifica Icodeup.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Los roles de sistema solo los modifica IEP SuperAdmin.")
     if role.tenant_id is not None:
         target_tenant(db, user, role.tenant_id)
     validate_assignable_permissions(user, db, payload.permission_codes)
@@ -588,7 +588,7 @@ def list_module_status(tenant_id: int | None = None, db: Session = Depends(get_d
 @router.put("/modules/{tenant_id}", response_model=list[ModuleStatusOut])
 def update_module_status(tenant_id: int, payload: list[TenantModuleToggle], db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ModuleStatusOut]:
     if not is_platform_admin(db, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo Icodeup puede activar o desactivar modulos contratados.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo IEP SuperAdmin puede activar o desactivar modulos contratados.")
     tenant = target_tenant(db, user, tenant_id)
     configured = {item.module_code: item for item in db.scalars(select(TenantModule).where(TenantModule.tenant_id == tenant.id))}
     modules = {item.code: item for item in db.scalars(select(Module))}
@@ -723,7 +723,7 @@ def update_party(party_id: int, payload: PartyPatch, db: Session = Depends(get_d
 @router.get("/subscriptions")
 def list_subscription_overview(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
     if not is_platform_admin(db, user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo Icodeup plataforma ve el inventario comercial global.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo IEP SuperAdmin ve el inventario comercial global.")
     rows = []
     tenants = list(db.scalars(select(Tenant).where(Tenant.slug != settings.platform_tenant_slug).order_by(Tenant.name)))
     for tenant in tenants:

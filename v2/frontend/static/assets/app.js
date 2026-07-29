@@ -27,18 +27,18 @@ const titles = {
   queue: "Cola de gestion",
   customers: "Clientes y repartos",
   promises: "Promesas de pago",
-  payments: "Pagos",
+  payments: "PayControl 360",
   agreements: "Acuerdos de pago",
   legal: "Gestion juridica",
   documents: "Gestion documental",
-  sales: "Ventas y CRM 360",
-  reports: "Reportes BI",
-  channels: "Canales",
+  sales: "Pipeline comercial",
+  reports: "Analytics 360",
+  channels: "ChatBOX 360",
   tenants: "Empresas",
   projects: "Proyectos",
   users: "Usuarios",
   typifications: "Tipificaciones",
-  governance: "Gobierno SaaS",
+  governance: "Gobierno SaaS IEP",
   plans: "Planes",
   subscriptions: "Suscripciones",
   modules: "Modulos",
@@ -63,7 +63,7 @@ const titles = {
 };
 
 const roleLabels = {
-  platform_admin: "SuperAdmin Icodeup",
+  platform_admin: "SuperAdmin",
   tenant_admin: "Admin empresa",
   coordinator: "Lider operativo",
   quality_supervisor: "Supervisor calidad",
@@ -78,7 +78,7 @@ const roleLabels = {
 };
 
 const audienceLabels = {
-  platform_admin: "Gobierno SaaS Icodeup",
+  platform_admin: "Gobierno SaaS",
   company_admin: "Administracion de empresa",
   operational_leader: "Liderazgo operativo",
   operational_user: "Operacion diaria"
@@ -165,16 +165,19 @@ const sectionModules = {
 };
 
 const moduleCopy = {
-  crm: { name: "CRM 360", category: "Operacion", description: "Terceros, clientes, relaciones y trazabilidad transversal." },
+  crm: { name: "Collects 360", category: "Operacion", description: "CRM de cobranzas, recuperacion de cartera, promesas, pagos y acuerdos." },
   core: { name: "Core SaaS", category: "Core", description: "Identidad, tenants, permisos, auditoria y base de operacion segura." },
   administration: { name: "Administracion", category: "Administracion", description: "Usuarios, roles, configuracion, branding y gobierno de empresa." },
-  collections: { name: "Cobranzas", category: "Operacion", description: "Cola, clientes, promesas, pagos, acuerdos y recuperacion de cartera." },
+  collections: { name: "Collects 360 · Cobranzas", category: "Operacion", description: "CRM de cobranzas, recuperacion de cartera, promesas, pagos y acuerdos." },
   legal: { name: "Juridico", category: "Operacion", description: "Casos, actuaciones, audiencias, vencimientos y riesgo legal." },
   documents: { name: "Documentos", category: "Operacion", description: "Metadatos documentales asociados a terceros, pagos, acuerdos y casos." },
-  sales: { name: "Ventas", category: "Expansion", description: "Leads, oportunidades y pipeline para evolucionar hacia CRM 360." },
-  bi: { name: "BI y analitica", category: "Analitica", description: "KPIs, scoring, semaforos, alertas y tableros ejecutivos." },
+  sales: { name: "Pipeline comercial", category: "Expansion", description: "Leads, oportunidades, valor ponderado y forecast comercial." },
+  bi: { name: "Analytics 360", category: "Analitica", description: "Dashboards, reportes, analitica operacional y ejecutiva." },
   telephony: { name: "Telefonia", category: "Integraciones", description: "Click-to-call, extensiones, historial de llamadas y base para softphone WebRTC." },
-  integrations: { name: "Integraciones", category: "Integraciones", description: "Base para WhatsApp, correo, telefonia, APIs y automatizaciones." }
+  integrations: { name: "ChatBOX 360", category: "Integraciones", description: "Canales, chatbot, WhatsApp y automatizacion conversacional." },
+  hr: { name: "FoodFlow 360", category: "Operacion", description: "Produccion de alimentos, inventarios, pedidos, costos y trazabilidad." },
+  finance: { name: "PayControl 360", category: "Operacion", description: "Control, validacion, soporte y reporteria de pagos." },
+  industrial: { name: "ProdLine 360", category: "Operacion", description: "Produccion industrial, ordenes, costos, maquinas y operaciones." }
 };
 
 const loginView = document.querySelector("#loginView");
@@ -430,7 +433,7 @@ function downloadCsvText(filename, csvText) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = filename || "icodeup360.csv";
+  link.download = filename || "iep.csv";
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -468,7 +471,7 @@ function audienceLabel(audience = menuUser().audience) {
 
 function activePlanLabel() {
   const tenant = activeTenant();
-  if (tenant.is_platform || menuUser().is_platform_admin || isPlatform()) return "Plataforma Icodeup";
+  if (tenant.is_platform || menuUser().is_platform_admin || isPlatform()) return "IEP";
   const subscription = (state.governance.subscriptions || []).find((item) => Number(item.tenant_id) === Number(tenant.id));
   return subscription?.plan || "Plan empresarial";
 }
@@ -487,12 +490,17 @@ function sectionCategory(item) {
 
 function moduleMeta(code, fallback = {}) {
   const key = code || fallback.code || sectionModules[fallback.section] || "core";
+  const copy = moduleCopy[key] || {};
   return {
     code: key,
-    name: fallback.name || moduleCopy[key]?.name || fallback.label || key,
-    category: fallback.category || moduleCopy[key]?.category || "Modulo",
-    description: fallback.description || moduleCopy[key]?.description || "Capacidad modular disponible bajo permisos y plan contratado.",
+    name: copy.name || fallback.name || fallback.label || key,
+    category: copy.category || fallback.category || "Modulo",
+    description: copy.description || fallback.description || "Capacidad modular disponible bajo permisos y plan contratado.",
   };
+}
+
+function menuItemLabel(item) {
+  return titles[item.section] || item.label;
 }
 
 function moduleEnabled(module) {
@@ -537,16 +545,18 @@ function limitText(value) {
 function renderShellContext() {
   const tenant = activeTenant();
   const user = menuUser();
+  const isPlatformContext = Boolean(tenant.is_platform || user.is_platform_admin || currentUser?.role === "platform_admin");
   const tenantName = tenant.name || currentUser?.tenant_name || "Workspace activo";
   const profile = roleLabel(user.profile_role || user.role || currentUser?.role);
   const audience = audienceLabel(user.audience);
   const plan = activePlanLabel();
-  const sessionText = user.name ? `${user.name} - ${profile}` : currentUser ? `${currentUser.name} - ${profile}` : "Sesion activa";
+  const displayName = isPlatformContext ? "Icodeup Enterprise Platform" : user.name || currentUser?.name;
+  const sessionText = displayName ? `${displayName} · ${profile}` : "Sesion activa";
   document.querySelector("#sessionUser") && (document.querySelector("#sessionUser").textContent = sessionText);
-  document.querySelector("#sidebarTenant") && (document.querySelector("#sidebarTenant").textContent = tenantName);
+  document.querySelector("#sidebarTenant") && (document.querySelector("#sidebarTenant").textContent = isPlatformContext ? "Icodeup Enterprise Platform" : tenantName);
   document.querySelector("#sidebarRole") && (document.querySelector("#sidebarRole").textContent = profile);
   document.querySelector("#sidebarPlanBadge") && (document.querySelector("#sidebarPlanBadge").textContent = plan);
-  document.querySelector("#topbarTenant") && (document.querySelector("#topbarTenant").textContent = `${tenantName} · ${audience}`);
+  document.querySelector("#topbarTenant") && (document.querySelector("#topbarTenant").textContent = isPlatformContext ? "IEP · Gobierno SaaS" : `${tenantName} · ${audience}`);
   document.querySelector("#systemStatusPill") && (document.querySelector("#systemStatusPill").textContent = "Sistema operativo");
   const demoBadge = document.querySelector("#demoModeBadge");
   if (demoBadge) demoBadge.classList.toggle("hidden", !isDemoContext());
@@ -625,7 +635,7 @@ function renderPlanCards(selector, plans) {
             <article class="plan-card">
               <span>${escapeHtml(plan.code || "plan")}</span>
               <strong>${escapeHtml(plan.name)}</strong>
-              <p>${escapeHtml(plan.description || "Plan comercial para licenciar capacidades de Icodeup 360.")}</p>
+              <p>${escapeHtml(plan.description || "Plan comercial para licenciar capacidades de IEP.")}</p>
               <div class="plan-limits">
                 <small>Usuarios: ${escapeHtml(limitText(plan.max_users))}</small>
                 <small>Proyectos: ${escapeHtml(limitText(plan.max_projects))}</small>
@@ -635,7 +645,7 @@ function renderPlanCards(selector, plans) {
           `
         )
         .join("")
-    : `<article class="empty-state"><strong>Planes por configurar</strong><p>Los planes comerciales apareceran aqui cuando Icodeup los active para venta.</p></article>`;
+    : `<article class="empty-state"><strong>Planes por configurar</strong><p>Los planes comerciales apareceran aqui cuando IEP los active para venta.</p></article>`;
 }
 
 function applyBranding(source = {}) {
@@ -663,7 +673,7 @@ function renderDynamicMenu() {
         <div class="nav-group">
           <p>${escapeHtml(category)}</p>
           ${groupItems
-            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span class="nav-label">${escapeHtml(item.label)}</span></button>`)
+            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span class="nav-label">${escapeHtml(menuItemLabel(item))}</span></button>`)
             .join("")}
         </div>
       `
@@ -676,7 +686,7 @@ function renderDynamicMenu() {
   });
   const firstSection = items[0]?.section || "dashboard";
   document.querySelector(`#${firstSection}`)?.classList.add("active-section");
-  document.querySelector("#sectionTitle").textContent = titles[firstSection] || items[0]?.label || "Icodeup 360";
+  document.querySelector("#sectionTitle").textContent = titles[firstSection] || items[0]?.label || "IEP";
   renderShellContext();
 }
 
@@ -1101,7 +1111,7 @@ function renderDashboardStacks() {
     : `<p class="empty">Sin productividad disponible por gestor.</p>`;
 
   const governance = [
-    { label: "Aislamiento por empresa", detail: isPlatform() ? "IcodeUp visualiza todo; cada empresa solo ve su operacion." : "Tu sesion esta limitada a la empresa autenticada.", tone: "green" },
+    { label: "Aislamiento por empresa", detail: isPlatform() ? "IEP permite gobierno global; cada empresa solo ve su operacion." : "Tu sesion esta limitada a la empresa autenticada.", tone: "green" },
     { label: "Roles y alcance", detail: "Administrador, coordinador, supervisor de calidad y gestor con permisos diferenciados.", tone: "green" },
     { label: "Trazabilidad", detail: "Gestiones, promesas, pagos y canales quedan asociados a cliente, proyecto y usuario.", tone: "green" },
     { label: "Motor predictivo", detail: `Modelo ${escapeHtml(bi.prediction?.model || "scoring_operativo_v2")} con scoring, semaforos y valor esperado.`, tone: "blue" },
@@ -1137,7 +1147,7 @@ function actionsForAudience(audience) {
     return [
       { label: "Equipo", title: "Cola de gestion", detail: "Prioriza casos por riesgo y SLA.", section: "queue" },
       { label: "Recuperacion", title: "Promesas y pagos", detail: "Controla compromisos y recaudo.", section: "promises" },
-      { label: "Decision", title: "Reportes BI", detail: "Consulta semaforos y oportunidades.", section: "reports" },
+      { label: "Decision", title: "Analytics 360", detail: "Consulta semaforos y oportunidades.", section: "reports" },
     ];
   }
   return [
@@ -1162,7 +1172,7 @@ function renderRoleDashboard() {
     <article class="role-dashboard-head">
       <div>
         <p class="eyebrow">${escapeHtml(audienceLabel(audience))}</p>
-        <h2>${escapeHtml(data.title || "Icodeup 360")}</h2>
+        <h2>${escapeHtml(data.title || "IEP")}</h2>
         <p>Workspace: ${escapeHtml(tenant.name || "Empresa activa")} · Perfil: ${escapeHtml(roleLabel(user.profile_role || user.role))}</p>
       </div>
       <span>${dateOnly(data.generated_at)}</span>
@@ -1544,7 +1554,7 @@ function renderObligationMatrix(obligations = state.selectedObligations) {
 
 function channelHref(kind, customer) {
   if (kind === "whatsapp") {
-    return `https://wa.me/${phoneDigits(customer.phone)}?text=${encodeURIComponent(`Hola ${customer.name}, te contactamos desde IcodeUp CRM para revisar alternativas de normalizacion de tu obligacion.`)}`;
+    return `https://wa.me/${phoneDigits(customer.phone)}?text=${encodeURIComponent(`Hola ${customer.name}, te contactamos desde Collects 360 para revisar alternativas de normalizacion de tu obligacion.`)}`;
   }
   if (kind === "email") {
     return `mailto:${customer.email || ""}?subject=${encodeURIComponent("Alternativas de normalizacion")}`;
@@ -2104,10 +2114,10 @@ function renderModuleInsights() {
   const automationNodes = typifications.filter((node) => node.requires_promise || node.requires_payment || node.channel);
 
   renderCardSet("#tenantInsightCards", [
-    { label: "Empresas", value: tenants.length, detail: "Clientes SaaS registrados por IcodeUp.", tone: tenants.length ? "green" : "yellow", action: "Cada empresa conserva datos, usuarios y proyectos separados." },
+    { label: "Empresas", value: tenants.length, detail: "Clientes SaaS registrados por IEP.", tone: tenants.length ? "green" : "yellow", action: "Cada empresa conserva datos, usuarios y proyectos separados." },
     { label: "Activas", value: countBy(tenants, (tenant) => tenant.status === "active"), detail: "Empresas habilitadas para operar.", tone: "green", action: "Monitorear crecimiento y capacidad." },
     { label: "Proyectos", value: projects.length, detail: "Carteras operativas entre empresas.", tone: projects.length ? "green" : "yellow", action: "Crear proyectos antes de cargar repartos." },
-    { label: "Clientes", value: sumBy(tenants, (tenant) => tenant.customer_count), detail: "Inventario de clientes cargados en tenants.", tone: "blue", action: "IcodeUp puede auditar todo el ecosistema." },
+    { label: "Clientes", value: sumBy(tenants, (tenant) => tenant.customer_count), detail: "Inventario de clientes cargados en tenants.", tone: "blue", action: "IEP permite auditar todo el ecosistema." },
   ]);
   renderAlertSet(
     "#tenantInsightAlerts",
@@ -2132,7 +2142,7 @@ function renderModuleInsights() {
   );
 
   renderCardSet("#userInsightCards", [
-    { label: "Usuarios tenant", value: users.length, detail: "Usuarios de empresas administrados por IcodeUp.", tone: "blue", action: "El superusuario conserva control total." },
+    { label: "Usuarios tenant", value: users.length, detail: "Usuarios de empresas administrados por IEP.", tone: "blue", action: "El superusuario conserva control total." },
     { label: "Agentes", value: agents.length, detail: "Gestores responsables de la cartera.", tone: agents.length ? "green" : "yellow", action: "Asignar a proyectos para activar operacion." },
     { label: "Coordinadores", value: coordinators.length, detail: "Lideres operativos por empresa.", tone: coordinators.length ? "green" : "yellow", action: "Necesarios para seguimiento de equipos." },
     { label: "Calidad", value: qualityUsers.length, detail: "Supervision y auditoria de gestiones.", tone: qualityUsers.length ? "green" : "yellow", action: "Rol clave para gobierno corporativo." },
@@ -2155,7 +2165,7 @@ function renderModuleInsights() {
   renderAlertSet(
     "#typificationInsightAlerts",
     typifications.length
-      ? [{ title: "Motor configurable", body: "Los superusuarios de IcodeUp pueden parametrizar arboles sin tocar base de datos.", value: "Autogestion", action: "Siguiente paso: versionamiento y aprobacion de cambios.", tone: "green" }]
+      ? [{ title: "Motor configurable", body: "Los superusuarios de IEP pueden parametrizar arboles sin tocar base de datos.", value: "Autogestion", action: "Siguiente paso: versionamiento y aprobacion de cambios.", tone: "green" }]
       : [{ title: "Falta arbol de decision", body: "Sin tipificaciones los gestores pierden guia operativa y trazabilidad analitica.", value: "Pendiente", action: "Crear nodos raiz y subtipificaciones por empresa.", tone: "red" }]
   );
 }
@@ -2416,12 +2426,12 @@ function renderGovernanceTables() {
   renderTenantModuleInsights();
   renderCardSet("#governanceCards", [
     { label: "Empresas activas", value: activeTenants, detail: "Tenants cliente con operacion habilitada.", tone: "green" },
-    { label: "Suscripciones", value: governance.subscriptions.length, detail: "Contratos visibles para Icodeup plataforma.", tone: "blue" },
+    { label: "Suscripciones", value: governance.subscriptions.length, detail: "Contratos visibles para IEP SuperAdmin.", tone: "blue" },
     { label: "Modulos activos", value: activeModules, detail: "Capacidades habilitadas en la empresa seleccionada.", tone: "yellow" },
     { label: "Eventos auditoria", value: governance.audit.length, detail: "Acciones recientes trazadas.", tone: "neutral" },
   ]);
   renderAlertSet("#governanceAlerts", [
-    { title: "Gobierno separado", body: "El menu dinamico separa Icodeup, administracion de empresa y operacion final.", tone: "green" },
+    { title: "Gobierno separado", body: "El menu dinamico separa IEP, administracion de empresa y operacion final.", tone: "green" },
     { title: "Permisos por accion", body: "Las rutas criticas validan modulo, tenant y permiso antes de responder.", tone: "blue" },
   ]);
   renderQuickActions(
@@ -2671,7 +2681,7 @@ function renderAlertsCenter() {
     { label: "Alertas abiertas", value: summary.total || alerts.length, detail: "Motor transversal por tenant, modulo y asignacion.", tone: summary.total ? "yellow" : "green", action: "Priorizar por severidad y fecha limite." },
     { label: "Criticas", value: summary.critical || 0, detail: "Requieren intervencion inmediata.", tone: summary.critical ? "red" : "green", action: "Escalar a responsable del modulo." },
     { label: "Altas", value: summary.high || 0, detail: "Riesgos operativos de corto plazo.", tone: summary.high ? "yellow" : "green", action: "Plan diario de control." },
-    { label: "Modulos", value: Object.keys(summary.by_module || {}).length, detail: "Cobertura transversal del motor.", tone: "blue", action: "Cobranzas, juridico, ventas y administracion." },
+    { label: "Modulos", value: Object.keys(summary.by_module || {}).length, detail: "Cobertura transversal del motor.", tone: "blue", action: "Collects 360, juridico, ventas y administracion." },
   ]);
   const rows = alerts.map((item) => `<tr><td><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.message)}</small></td><td>${escapeHtml(item.module)}</td><td><span class="badge ${severityClass(item.severity)}">${escapeHtml(item.severity)}</span></td><td>${dateOnly(item.due_at)}</td><td>${escapeHtml(item.entity_type)} #${escapeHtml(item.entity_id || "-")}</td><td>${escapeHtml(item.action || "-")}</td></tr>`).join("");
   document.querySelector("#alertCenterTable") && (document.querySelector("#alertCenterTable").innerHTML = table(["Alerta", "Modulo", "Severidad", "Fecha", "Entidad", "Accion sugerida"], rows, "Sin alertas abiertas para tu alcance."));
@@ -2748,7 +2758,7 @@ function renderTypificationTrees() {
   renderCardSet("#typificationTreeKpis", [
     { label: "Arboles", value: trees.length, detail: "Configurables por tenant, modulo y cartera.", tone: trees.length ? "green" : "yellow", action: "Administra la logica de gestion sin tocar codigo." },
     { label: "Combinaciones", value: combinations.length, detail: "Rutas validas con campos y efectos.", tone: combinations.length ? "blue" : "yellow", action: "Exige promesa, fecha, comentario o escalamiento." },
-    { label: "Cobranzas", value: trees.filter((item) => item.module === "collections").length, detail: "Producto principal Collection CRM.", tone: "green", action: "Estandarizar resultados por cartera." },
+    { label: "Collects 360", value: trees.filter((item) => item.module === "collections").length, detail: "Producto principal Collects 360.", tone: "green", action: "Estandarizar resultados por cartera." },
     { label: "Activos", value: trees.filter((item) => item.status === "active").length, detail: "Disponibles para operacion.", tone: "blue", action: "Inactivar arboles obsoletos." },
   ]);
   const treeRows = trees.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.project_id || "Global tenant")}</td><td>${escapeHtml(item.status)}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
@@ -2912,7 +2922,7 @@ function renderUploads() {
     ["reparto_cartera", "Reparto / cartera"],
     ["demograficos", "Demograficos"],
     ["telefonos_emails_direcciones", "Telefonos, emails y direcciones"],
-    ["pagos", "Pagos / recaudos"],
+    ["pagos", "PayControl 360"],
     ["novedades_operativas", "Novedades operativas"],
   ];
   const mappingRows = preview
@@ -3763,7 +3773,7 @@ function setupNavigation() {
     button.classList.add("active");
     section.classList.remove("menu-disabled");
     section.classList.add("active-section");
-    document.querySelector("#sectionTitle").textContent = titles[button.dataset.section] || button.textContent || "Icodeup 360";
+    document.querySelector("#sectionTitle").textContent = titles[button.dataset.section] || button.textContent || "IEP";
   });
 }
 
@@ -4362,7 +4372,7 @@ function setupEvents() {
   });
   document.querySelector("#exportCustomers").addEventListener("click", async () => {
     try {
-      await downloadCsv("/api/crm/customers/export", "clientes_icodeup360.csv");
+      await downloadCsv("/api/crm/customers/export", "clientes_iep.csv");
       showToast("success", "Exportacion de clientes iniciada.");
     } catch (error) {
       showToast("error", error.message);
@@ -4390,7 +4400,7 @@ function setupEvents() {
   });
   document.querySelector("#exportPayments").addEventListener("click", async () => {
     try {
-      await downloadCsv("/api/crm/payments/export", "pagos_icodeup360.csv");
+      await downloadCsv("/api/crm/payments/export", "pagos_iep.csv");
       showToast("success", "Exportacion de pagos iniciada.");
     } catch (error) {
       showToast("error", error.message);
