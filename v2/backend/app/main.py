@@ -53,3 +53,11 @@ def frontend():
     if index.exists():
         return FileResponse(index)
     return {"app": settings.app_name, "detail": "Frontend no construido."}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    icon = frontend_dir / "assets" / "favicon.svg"
+    if icon.exists():
+        return FileResponse(icon, media_type="image/svg+xml")
+    return {"detail": "favicon no configurado."}

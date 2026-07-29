@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Example internal PostgreSQL backup for Icodeup 360.
+# Copy this file to a non-versioned script on the server before using it.
+# It reads DATABASE_URL from ENV_FILE and never prints credentials.
+
+ENV_FILE="${ENV_FILE:-/opt/icodeup360/app/v2/.env}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/icodeup360/daily}"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "ENV_FILE not found: $ENV_FILE"
+  exit 1
+fi
+
+DATABASE_URL_LINE="$(grep -E '^[[:space:]]*(export[[:space:]]+)?DATABASE_URL=' "$ENV_FILE" | tail -n 1 || true)"
+if [ -z "$DATABASE_URL_LINE" ]; then
+  echo "DATABASE_URL was not found in ENV_FILE."
+  exit 1
+fi
+
+DATABASE_URL="${DATABASE_URL_LINE#*=}"
+DATABASE_URL="$(printf '%s' "$DATABASE_URL" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+DATABASE_URL="${DATABASE_URL%\"}"
+DATABASE_URL="${DATABASE_URL#\"}"
+DATABASE_URL="${DATABASE_URL%\'}"
+DATABASE_URL="${DATABASE_URL#\'}"
+
+case "$DATABASE_URL" in
+  postgresql+*://*)
+    DUMP_URL="postgresql://${DATABASE_URL#*://}"
+    ;;
+  postgresql://*)
+    DUMP_URL="$DATABASE_URL"
+    ;;
+  *)
+    echo "DATABASE_URL must use postgresql:// or postgresql+driver://."
+    exit 1
+    ;;
+esac
+
+umask 077
+mkdir -p "$BACKUP_DIR"
+
+OUTPUT="$BACKUP_DIR/icodeup360_${STAMP}.dump"
+pg_dump --format=custom --no-owner --no-acl --dbname="$DUMP_URL" --file="$OUTPUT"
+
+if [ ! -s "$OUTPUT" ]; then
+  echo "Backup failed: output file is empty."
+  exit 1
+fi
+
+SIZE_BYTES="$(wc -c < "$OUTPUT" | tr -d ' ')"
+echo "Backup created: $OUTPUT"
+echo "Backup size bytes: $SIZE_BYTES"

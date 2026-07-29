@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Icodeup 360">
+  <rect width="64" height="64" rx="14" fill="#0f241f"/>
+  <ellipse cx="27" cy="31" rx="22" ry="8" transform="rotate(-28 27 31)" fill="#5fd77d"/>
+  <ellipse cx="38" cy="29" rx="20" ry="9" transform="rotate(-28 38 29)" fill="#6f5be8" opacity="0.9"/>
+  <circle cx="34" cy="31" r="10" fill="#3d8dff" opacity="0.75"/>
+  <path d="M18 48h28" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.95"/>
+</svg>
