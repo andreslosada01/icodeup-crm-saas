@@ -373,7 +373,7 @@ button:disabled {
 .brand-topline {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 18px;
 }
 
@@ -403,48 +403,6 @@ button:disabled {
     linear-gradient(135deg, rgba(32, 214, 90, 0.18), rgba(63, 108, 255, 0.12) 50%, rgba(123, 74, 216, 0.16)),
     rgba(15, 23, 42, 0.36);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.brand-logo-shell {
-  position: relative;
-  min-width: 230px;
-  display: inline-grid;
-  align-items: center;
-  overflow: visible;
-  border: 0;
-  border-radius: 8px;
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.brand-logo-shell::before {
-  content: none;
-}
-
-.brand-logo-shell::after {
-  content: none;
-}
-
-.brand-logo-plate {
-  position: relative;
-  min-width: 230px;
-  min-height: 52px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: transparent;
-  box-shadow: none;
-}
-
-.brand-logo {
-  width: 224px;
-  height: auto;
-  display: block;
-  object-fit: contain;
-  image-rendering: auto;
-  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.34));
 }
 
 .eyebrow {
@@ -494,7 +452,9 @@ h2 {
 }
 
 .hero-copy h1 {
-  max-width: 650px;
+  width: max-content;
+  max-width: 100%;
+  display: inline-block;
   margin-bottom: 10px;
   color: #f8fffd;
   background: linear-gradient(100deg, #20d65a 0%, #3f6cff 52%, #7b4ad8 100%);
@@ -997,7 +957,26 @@ h2 {
 }
 
 .login-card-head {
-  margin-bottom: 6px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.login-brand-lockup {
+  width: max-content;
+  max-width: 100%;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+}
+
+.login-brand-logo {
+  width: 238px;
+  max-width: min(100%, 238px);
+  height: auto;
+  display: block;
+  object-fit: contain;
+  filter: contrast(1.06) saturate(1.05);
 }
 
 .login-card p {
@@ -3370,23 +3349,12 @@ tbody tr:hover {
     justify-items: start;
   }
 
-  .brand-logo {
-    width: min(224px, 78vw);
-  }
-
-  .brand-logo-shell {
-    width: auto;
-    max-width: 100%;
-    min-width: 0;
-  }
-
-  .brand-logo-plate {
-    min-width: 0;
-    min-height: 52px;
-  }
-
   .brand-meta {
     justify-items: start;
+  }
+
+  .login-brand-logo {
+    width: min(224px, 100%);
   }
 
   h1 {
