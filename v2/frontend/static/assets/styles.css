@@ -442,27 +442,11 @@ button:disabled {
   box-shadow: inset 0 0 0 1px rgba(15, 191, 134, 0.08);
 }
 
-.icodeup-vector-logo {
-  width: 218px;
+.brand-logo {
+  width: 220px;
   height: auto;
   display: block;
-  overflow: visible;
-}
-
-.icodeup-word {
-  fill: #071424;
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
-  font-size: 42px;
-  font-weight: 950;
-  letter-spacing: 0;
-}
-
-.icodeup-advisors {
-  fill: url("#icodeupAdvisorText");
-  font-family: Inter, "Segoe UI", Arial, sans-serif;
-  font-size: 21px;
-  font-weight: 950;
-  letter-spacing: 0;
+  object-fit: contain;
 }
 
 .eyebrow {
@@ -3382,7 +3366,7 @@ tbody tr:hover {
     justify-items: start;
   }
 
-  .icodeup-vector-logo {
+  .brand-logo {
     width: 202px;
   }
 
