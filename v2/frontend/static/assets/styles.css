@@ -407,7 +407,7 @@ button:disabled {
 
 .brand-logo-shell {
   position: relative;
-  min-width: 238px;
+  min-width: 260px;
   display: inline-grid;
   align-items: center;
   overflow: hidden;
@@ -432,8 +432,8 @@ button:disabled {
 
 .brand-logo-plate {
   position: relative;
-  min-width: 214px;
-  min-height: 76px;
+  min-width: 238px;
+  min-height: 82px;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -442,12 +442,27 @@ button:disabled {
   box-shadow: inset 0 0 0 1px rgba(15, 191, 134, 0.08);
 }
 
-.brand-logo {
-  width: 192px;
+.icodeup-vector-logo {
+  width: 218px;
+  height: auto;
   display: block;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  overflow: visible;
+}
+
+.icodeup-word {
+  fill: #071424;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 42px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.icodeup-advisors {
+  fill: url("#icodeupAdvisorText");
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 21px;
+  font-weight: 950;
+  letter-spacing: 0;
 }
 
 .eyebrow {
@@ -811,7 +826,7 @@ h2 {
 .preview-feed {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
 }
 
 .preview-feed span {
@@ -821,13 +836,23 @@ h2 {
   border-radius: 8px;
   color: #17313b;
   background: rgba(20, 184, 166, 0.1);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
 }
 
 .preview-feed span:nth-child(2) {
   color: #241f5a;
   background: rgba(109, 40, 217, 0.1);
+}
+
+.preview-feed span:nth-child(3) {
+  color: #153365;
+  background: rgba(49, 91, 220, 0.1);
+}
+
+.preview-feed span:nth-child(4) {
+  color: #174136;
+  background: rgba(15, 191, 134, 0.1);
 }
 
 .laptop-base {
@@ -837,49 +862,6 @@ h2 {
   border-radius: 0 0 8px 8px;
   background: linear-gradient(180deg, #d9e2eb, #64748b);
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.36);
-}
-
-.signal-card {
-  position: absolute;
-  z-index: 2;
-  min-width: 154px;
-  display: grid;
-  gap: 4px;
-  border: 1px solid rgba(226, 232, 240, 0.18);
-  border-radius: 8px;
-  padding: 11px 12px;
-  color: #f8fafc;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.13), rgba(15, 23, 42, 0.2)),
-    rgba(4, 15, 29, 0.72);
-  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.signal-card small {
-  color: rgba(190, 214, 218, 0.76);
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-}
-
-.signal-card strong {
-  font-size: 13px;
-  font-weight: 950;
-}
-
-.signal-ai {
-  right: 20%;
-  top: 8px;
-  border-color: rgba(107, 42, 223, 0.28);
-  animation: nodeFloat 8s ease-in-out infinite;
-}
-
-.signal-finance {
-  left: 6%;
-  top: 32px;
-  border-color: rgba(15, 191, 134, 0.3);
-  animation: nodeFloat 8.6s ease-in-out infinite;
-  animation-delay: 800ms;
 }
 
 .phone-mockup {
@@ -3400,8 +3382,8 @@ tbody tr:hover {
     justify-items: start;
   }
 
-  .brand-logo {
-    width: 166px;
+  .icodeup-vector-logo {
+    width: 202px;
   }
 
   .brand-logo-shell {
@@ -3411,8 +3393,8 @@ tbody tr:hover {
   }
 
   .brand-logo-plate {
-    min-width: 196px;
-    min-height: 68px;
+    min-width: 220px;
+    min-height: 76px;
   }
 
   .brand-meta {
@@ -3444,10 +3426,6 @@ tbody tr:hover {
   .laptop-mockup {
     width: 100%;
     bottom: 50px;
-  }
-
-  .signal-card {
-    display: none;
   }
 
   .dashboard-preview {
