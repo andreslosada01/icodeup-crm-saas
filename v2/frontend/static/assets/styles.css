@@ -407,52 +407,30 @@ button:disabled {
 
 .brand-logo-shell {
   position: relative;
-  min-width: 286px;
+  min-width: 230px;
   display: inline-grid;
   align-items: center;
-  overflow: hidden;
-  isolation: isolate;
-  border: 1px solid rgba(125, 160, 190, 0.18);
+  overflow: visible;
+  border: 0;
   border-radius: 8px;
-  padding: 10px 14px 11px;
-  background:
-    linear-gradient(135deg, rgba(8, 22, 37, 0.74), rgba(14, 23, 48, 0.48)),
-    rgba(6, 16, 30, 0.52);
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(10px);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .brand-logo-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: 8px;
-  background:
-    linear-gradient(110deg, rgba(32, 214, 90, 0.18), transparent 34%),
-    linear-gradient(285deg, rgba(123, 74, 216, 0.16), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 46%);
-  opacity: 0.88;
-  pointer-events: none;
+  content: none;
 }
 
 .brand-logo-shell::after {
-  content: "";
-  position: absolute;
-  left: 6px;
-  right: 10px;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(32, 214, 90, 0.58), rgba(63, 108, 255, 0.48), rgba(123, 74, 216, 0.38));
-  opacity: 0.72;
-  pointer-events: none;
+  content: none;
 }
 
 .brand-logo-plate {
   position: relative;
-  z-index: 1;
-  min-width: 258px;
-  min-height: 58px;
+  min-width: 230px;
+  min-height: 52px;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -461,12 +439,12 @@ button:disabled {
 }
 
 .brand-logo {
-  width: 250px;
+  width: 224px;
   height: auto;
   display: block;
   object-fit: contain;
-  transform: translateZ(0);
-  filter: saturate(1.08) contrast(1.1) brightness(1.08) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.42));
+  image-rendering: auto;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.34));
 }
 
 .eyebrow {
@@ -3393,7 +3371,7 @@ tbody tr:hover {
   }
 
   .brand-logo {
-    width: min(260px, 82vw);
+    width: min(224px, 78vw);
   }
 
   .brand-logo-shell {
@@ -3404,7 +3382,7 @@ tbody tr:hover {
 
   .brand-logo-plate {
     min-width: 0;
-    min-height: 68px;
+    min-height: 52px;
   }
 
   .brand-meta {
