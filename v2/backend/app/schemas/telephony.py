@@ -6,26 +6,35 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+PROVIDER_TYPE_PATTERN = "^(sip_trunk|asterisk_ami|pbx_ami|pbx_ari|webrtc_sip|external_api|manual)$"
+
+
 class TelephonyProviderCreate(BaseModel):
     tenant_id: int | None = None
     name: str = Field(min_length=2, max_length=180)
-    provider_type: str = Field(default="manual", pattern="^(pbx_ami|pbx_ari|webrtc_sip|external_api|manual)$")
+    provider_type: str = Field(default="manual", pattern=PROVIDER_TYPE_PATTERN)
     host: str | None = None
     port: int | None = Field(default=None, ge=1, le=65535)
     websocket_url: str | None = None
     api_url: str | None = None
     is_active: bool = True
+    is_primary: bool = False
+    outbound_enabled: bool = True
+    priority: int | None = Field(default=None, ge=1, le=100)
     config: dict[str, Any] = Field(default_factory=dict)
 
 
 class TelephonyProviderPatch(BaseModel):
     name: str | None = None
-    provider_type: str | None = Field(default=None, pattern="^(pbx_ami|pbx_ari|webrtc_sip|external_api|manual)$")
+    provider_type: str | None = Field(default=None, pattern=PROVIDER_TYPE_PATTERN)
     host: str | None = None
     port: int | None = Field(default=None, ge=1, le=65535)
     websocket_url: str | None = None
     api_url: str | None = None
     is_active: bool | None = None
+    is_primary: bool | None = None
+    outbound_enabled: bool | None = None
+    priority: int | None = Field(default=None, ge=1, le=100)
     config: dict[str, Any] | None = None
 
 
@@ -39,6 +48,9 @@ class TelephonyProviderOut(BaseModel):
     websocket_url: str | None = None
     api_url: str | None = None
     is_active: bool
+    is_primary: bool = False
+    outbound_enabled: bool = True
+    priority: int | None = None
     config: dict[str, Any]
     created_at: datetime
     updated_at: datetime

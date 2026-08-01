@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     enable_pilot_icodeup_seed: bool = False
     platform_admin_email: str = ""
     platform_admin_password: str = ""
+    telephony_real_calls_enabled: bool = False
+    asterisk_ami_host: str = ""
+    asterisk_ami_port: int = 5038
+    asterisk_ami_username: str = ""
+    asterisk_ami_secret: str = ""
+    asterisk_ami_originate_context: str = "from-internal"
+    asterisk_ami_originate_timeout_ms: int = 30000
 
     model_config = SettingsConfigDict(env_file=V2_ROOT / ".env", env_file_encoding="utf-8", extra="ignore")
 

@@ -180,6 +180,24 @@ const moduleCopy = {
   industrial: { name: "ProdLine 360", category: "Operacion", description: "Produccion industrial, ordenes, costos, maquinas y operaciones." }
 };
 
+const IPCOM_PROVIDER_PRESET = {
+  name: "IpCom",
+  provider_type: "sip_trunk",
+  host: "35.192.135.117",
+  port: 5060,
+  trunk_name: "IpCom",
+  dtmf_mode: "rfc2833",
+  nat: "force_rport,comedia",
+  codecs: "ulaw,alaw,g729",
+  external_prefix: "0218739#",
+  mobile_prepend: "000157",
+  mobile_match_pattern: "3XXXXXXXXX",
+  country_context: "Colombia",
+  outbound_enabled: true,
+  priority: 1,
+  is_primary: true
+};
+
 const loginView = document.querySelector("#loginView");
 const appView = document.querySelector("#appView");
 const loginResult = document.querySelector("#loginResult");
@@ -2835,11 +2853,13 @@ function renderTelephony() {
   const myExtension = state.ops.myExtension;
   const activeProviders = providers.filter((item) => item.is_active);
   const activeExtensions = extensions.filter((item) => item.is_active);
+  const primaryProvider = activeProviders.find((item) => item.is_primary || item.config?.is_primary);
   renderCardSet("#telephonyKpis", [
-    { label: "Proveedores", value: providers.length, detail: "PBX, WebRTC SIP, API externa o modo manual.", tone: providers.length ? "green" : "yellow", action: providers.length ? "Listos para parametrizacion." : "Configura un proveedor manual para comenzar." },
+    { label: "Proveedores", value: providers.length, detail: "PBX, WebRTC SIP, API externa, troncal SIP o modo manual.", tone: providers.length ? "green" : "yellow", action: providers.length ? "Listos para parametrizacion." : "Configura un proveedor manual para comenzar." },
+    { label: "Principal", value: primaryProvider?.name || "Pendiente", detail: primaryProvider ? "Proveedor activo para llamadas salientes." : "Define un proveedor principal por tenant.", tone: primaryProvider ? "green" : "yellow", action: primaryProvider ? `${primaryProvider.provider_type} · prioridad ${primaryProvider.priority || primaryProvider.config?.priority || "-"}` : "Marcar proveedor principal." },
     { label: "Extensiones", value: activeExtensions.length, detail: "Usuarios con extension activa.", tone: activeExtensions.length ? "green" : "yellow", action: "Asignar extension por usuario y tenant." },
     { label: "Llamadas", value: logs.length, detail: "Historial visible segun rol.", tone: logs.length ? "blue" : "yellow", action: "Click-to-call registra llamadas simuladas." },
-    { label: "Modo", value: activeProviders.some((item) => item.provider_type !== "manual") ? "Simulado" : "Manual", detail: "No se hacen llamadas reales sin integracion PBX/WebRTC.", tone: "blue", action: "Base lista para softphone embebido." },
+    { label: "Modo", value: "Seguro", detail: "No se hacen llamadas reales sin TELEPHONY_REAL_CALLS_ENABLED=true.", tone: "blue", action: "Base lista para PBX/AMI/WebRTC." },
   ]);
   const mineHtml = myExtension
     ? `<article class="workspace-profile-card"><span>Extension</span><strong>${escapeHtml(myExtension.extension_number)}</strong><p>${escapeHtml(myExtension.display_name || myExtension.user_name || "Extension asignada")}</p><small>${escapeHtml(myExtension.status)} - ${escapeHtml(myExtension.provider_name || "Sin proveedor")}</small></article>`
@@ -2854,7 +2874,30 @@ function renderTelephony() {
   const tenantOptions = tenantSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
   const providerOptions = providers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.provider_type)})</option>`).join("");
   const userOptions = userSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} - ${escapeHtml(item.email || "")}</option>`).join("");
-  const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.provider_type)}</small></td><td>${escapeHtml(item.host || item.websocket_url || item.api_url || "Manual/simulado")}</td><td>${item.is_active ? "Activo" : "Inactivo"}</td><td>${dateOnly(item.updated_at)}</td></tr>`).join("");
+  const providerRows = providers.map((item) => {
+    const config = item.config || {};
+    const isPrimary = Boolean(item.is_primary || config.is_primary);
+    const outboundEnabled = item.outbound_enabled !== false && config.outbound_enabled !== false;
+    const priority = item.priority || config.priority || "-";
+    const connection = [item.host, item.port].filter(Boolean).join(":") || item.websocket_url || item.api_url || "Manual/simulado";
+    const dialing = [config.external_prefix, config.mobile_prepend, config.mobile_match_pattern].filter(Boolean).join(" + ") || "Sin regla";
+    const warnings = [
+      !item.is_active ? "Inactivo" : "",
+      !outboundEnabled ? "Salida off" : "",
+      item.provider_type !== "manual" && !item.host && !item.websocket_url && !item.api_url ? "Falta conexion" : "",
+    ].filter(Boolean);
+    return `<tr>
+      <td><strong>${escapeHtml(item.name)}</strong><small>${isPrimary ? "Principal" : "Secundario"}</small></td>
+      <td>${item.is_active ? '<span class="status-pill status-pill-ok">Activo</span>' : '<span class="status-pill status-pill-warn">Inactivo</span>'}</td>
+      <td>${escapeHtml(item.provider_type)}</td>
+      <td><strong>${escapeHtml(connection)}</strong><small>${escapeHtml(config.country_context || "Sin contexto")}</small></td>
+      <td>${escapeHtml(priority)}</td>
+      <td><strong>${escapeHtml(dialing)}</strong><small>${warnings.length ? escapeHtml(warnings.join(" - ")) : "Listo para simulacion segura"}</small></td>
+      <td class="row-actions">
+        ${canManageTelephony() ? `<button type="button" data-edit-telephony-provider="${item.id}">Editar</button><button type="button" data-toggle-telephony-provider="${item.id}">${item.is_active ? "Desactivar" : "Activar"}</button><button type="button" data-primary-telephony-provider="${item.id}" ${isPrimary && item.is_active ? "disabled" : ""}>Principal</button><button type="button" data-test-telephony-provider="${item.id}">Probar</button>` : ""}
+      </td>
+    </tr>`;
+  }).join("");
   const extensionByUser = new Map(extensions.map((item) => [Number(item.user_id), item]));
   const extensionRows = (userSource.length ? userSource : extensions).map((item) => {
     const user = item.email ? item : null;
@@ -2875,17 +2918,32 @@ function renderTelephony() {
   }).join("");
   document.querySelector("#telephonyProviderPanel") && (document.querySelector("#telephonyProviderPanel").innerHTML = `
     ${canManageTelephony() ? `<form id="telephonyProviderForm" class="ops-form form-grid">
+      <input type="hidden" name="provider_id" />
       ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
-      <label>Nombre<input name="name" required placeholder="PBX principal" /></label>
-      <label>Tipo<select name="provider_type"><option value="manual">Manual/simulado</option><option value="pbx_ami">Asterisk AMI</option><option value="pbx_ari">Asterisk ARI</option><option value="webrtc_sip">WebRTC SIP</option><option value="external_api">API externa</option></select></label>
-      <label>Host<input name="host" placeholder="pbx.empresa.local" /></label>
+      <label>Nombre<input name="name" required placeholder="IpCom" /></label>
+      <label>Tipo<select name="provider_type"><option value="manual">Manual/simulado</option><option value="sip_trunk">SIP trunk</option><option value="asterisk_ami">Asterisk AMI</option><option value="pbx_ami">PBX AMI legacy</option><option value="pbx_ari">Asterisk ARI</option><option value="webrtc_sip">WebRTC SIP</option><option value="external_api">API externa</option></select></label>
+      <label>Host<input name="host" placeholder="35.192.135.117" /></label>
       <label>Puerto<input name="port" type="number" min="1" max="65535" /></label>
       <label class="wide">WebSocket URL<input name="websocket_url" placeholder="wss://pbx.empresa/ws" /></label>
       <label class="wide">API URL<input name="api_url" placeholder="https://proveedor/api" /></label>
+      <label>Troncal<input name="trunk_name" placeholder="IpCom" /></label>
+      <label>DTMF<input name="dtmf_mode" placeholder="rfc2833" /></label>
+      <label>NAT<input name="nat" placeholder="force_rport,comedia" /></label>
+      <label>Codecs<input name="codecs" placeholder="ulaw,alaw,g729" /></label>
+      <label>Prefijo externo<input name="external_prefix" placeholder="0218739#" /></label>
+      <label>Prefijo movil<input name="mobile_prepend" placeholder="000157" /></label>
+      <label>Patron movil<input name="mobile_match_pattern" placeholder="3XXXXXXXXX" /></label>
+      <label>Contexto pais<input name="country_context" placeholder="Colombia" /></label>
+      <label>Prioridad<input name="priority" type="number" min="1" max="100" value="1" /></label>
+      <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activo</label>
+      <label class="checkbox-row"><input name="is_primary" type="checkbox" /> Principal saliente</label>
+      <label class="checkbox-row"><input name="outbound_enabled" type="checkbox" checked /> Habilitar llamadas salientes</label>
       <label class="wide">Config JSON sin secretos<textarea name="config" placeholder='{"mode":"simulated"}'></textarea></label>
       <button type="submit">Crear proveedor</button>
+      <button class="secondary-button" data-ipcom-preset type="button">Preset IpCom</button>
+      <button class="secondary-button" data-clear-telephony-provider type="button">Limpiar</button>
     </form>` : `<p class="empty">Solo administradores pueden configurar proveedores.</p>`}
-    ${table(["Proveedor", "Conexion", "Estado", "Actualizado"], providerRows, "Sin proveedores configurados. Click-to-call puede operar en modo manual si existe extension.")}
+    ${table(["Proveedor", "Estado", "Tipo", "Conexion", "Prioridad", "Marcado", "Acciones"], providerRows, "Sin proveedores configurados. Click-to-call puede operar en modo manual si existe extension.")}
   `);
   document.querySelector("#telephonyExtensionPanel") && (document.querySelector("#telephonyExtensionPanel").innerHTML = `
     ${canManageTelephony() ? `<form id="telephonyExtensionForm" class="ops-form form-grid">
@@ -3620,8 +3678,22 @@ function parseJsonField(value, fallback = {}) {
   }
 }
 
+function telephonyProviderConfigFromForm(form) {
+  const config = parseJsonField(form.elements.config.value, {});
+  const fieldNames = ["trunk_name", "dtmf_mode", "nat", "codecs", "external_prefix", "mobile_prepend", "mobile_match_pattern", "country_context"];
+  fieldNames.forEach((field) => {
+    const value = form.elements[field]?.value;
+    if (value) config[field] = value;
+  });
+  config.outbound_enabled = Boolean(form.elements.outbound_enabled?.checked);
+  config.is_primary = Boolean(form.elements.is_primary?.checked);
+  if (form.elements.priority?.value) config.priority = Number(form.elements.priority.value);
+  return config;
+}
+
 async function handleTelephonyProviderSubmit(form) {
-  await submitJson(form, "/api/telephony/providers", (currentForm) => ({
+  const providerId = form.elements.provider_id?.value;
+  await submitJson(form, providerId ? `/api/telephony/providers/${providerId}` : "/api/telephony/providers", (currentForm) => ({
     tenant_id: currentForm.elements.tenant_id?.value ? Number(currentForm.elements.tenant_id.value) : null,
     name: currentForm.elements.name.value,
     provider_type: currentForm.elements.provider_type.value,
@@ -3629,8 +3701,101 @@ async function handleTelephonyProviderSubmit(form) {
     port: currentForm.elements.port.value ? Number(currentForm.elements.port.value) : null,
     websocket_url: currentForm.elements.websocket_url.value || null,
     api_url: currentForm.elements.api_url.value || null,
-    config: parseJsonField(currentForm.elements.config.value, {})
-  }));
+    is_active: Boolean(currentForm.elements.is_active?.checked),
+    is_primary: Boolean(currentForm.elements.is_primary?.checked),
+    outbound_enabled: Boolean(currentForm.elements.outbound_enabled?.checked),
+    priority: currentForm.elements.priority?.value ? Number(currentForm.elements.priority.value) : null,
+    config: telephonyProviderConfigFromForm(currentForm)
+  }), { method: providerId ? "PATCH" : "POST" });
+}
+
+function clearTelephonyProviderForm() {
+  const form = document.querySelector("#telephonyProviderForm");
+  if (!form) return;
+  form.reset();
+  form.elements.provider_id.value = "";
+  if (form.elements.is_active) form.elements.is_active.checked = true;
+  if (form.elements.outbound_enabled) form.elements.outbound_enabled.checked = true;
+  if (form.elements.priority) form.elements.priority.value = "1";
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.textContent = "Crear proveedor";
+}
+
+function fillTelephonyProviderForm(providerId) {
+  const form = document.querySelector("#telephonyProviderForm");
+  const provider = (state.ops.telephonyProviders || []).find((item) => Number(item.id) === Number(providerId));
+  if (!form || !provider) return;
+  const config = provider.config || {};
+  form.elements.provider_id.value = provider.id;
+  if (form.elements.tenant_id) form.elements.tenant_id.value = String(provider.tenant_id);
+  form.elements.name.value = provider.name || "";
+  form.elements.provider_type.value = provider.provider_type || "manual";
+  form.elements.host.value = provider.host || "";
+  form.elements.port.value = provider.port || "";
+  form.elements.websocket_url.value = provider.websocket_url || "";
+  form.elements.api_url.value = provider.api_url || "";
+  ["trunk_name", "dtmf_mode", "nat", "codecs", "external_prefix", "mobile_prepend", "mobile_match_pattern", "country_context"].forEach((field) => {
+    if (form.elements[field]) form.elements[field].value = config[field] || "";
+  });
+  form.elements.priority.value = provider.priority || config.priority || 1;
+  form.elements.is_active.checked = Boolean(provider.is_active);
+  form.elements.is_primary.checked = Boolean(provider.is_primary || config.is_primary);
+  form.elements.outbound_enabled.checked = provider.outbound_enabled !== false && config.outbound_enabled !== false;
+  const visibleConfig = { ...config };
+  ["trunk_name", "dtmf_mode", "nat", "codecs", "external_prefix", "mobile_prepend", "mobile_match_pattern", "country_context", "priority", "is_primary", "outbound_enabled"].forEach((field) => delete visibleConfig[field]);
+  form.elements.config.value = Object.keys(visibleConfig).length ? JSON.stringify(visibleConfig, null, 2) : "";
+  const button = form.querySelector("button[type='submit']");
+  if (button) button.textContent = "Guardar proveedor";
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function applyIpComProviderPreset() {
+  const form = document.querySelector("#telephonyProviderForm");
+  if (!form) return;
+  Object.entries(IPCOM_PROVIDER_PRESET).forEach(([field, value]) => {
+    if (!form.elements[field]) return;
+    if (form.elements[field].type === "checkbox") {
+      form.elements[field].checked = Boolean(value);
+    } else {
+      form.elements[field].value = value;
+    }
+  });
+  form.elements.config.value = JSON.stringify({ mode: "safe_simulation" }, null, 2);
+  showToast("info", "Preset IpCom cargado sin secretos. Revisa y guarda el proveedor.");
+}
+
+async function toggleTelephonyProvider(providerId, button) {
+  const provider = (state.ops.telephonyProviders || []).find((item) => Number(item.id) === Number(providerId));
+  if (!provider) return;
+  await runAction(button, async () => {
+    await api(`/api/telephony/providers/${provider.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: !provider.is_active })
+    });
+    await loadPhase8BData();
+    renderTelephony();
+    showToast("success", !provider.is_active ? "Proveedor activado." : "Proveedor desactivado.");
+  }, "Actualizando...");
+}
+
+async function setPrimaryTelephonyProvider(providerId, button) {
+  await runAction(button, async () => {
+    await api(`/api/telephony/providers/${providerId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: true, is_primary: true, outbound_enabled: true })
+    });
+    await loadPhase8BData();
+    renderTelephony();
+    showToast("success", "Proveedor principal actualizado.");
+  }, "Actualizando...");
+}
+
+async function testTelephonyProvider(providerId, button) {
+  await runAction(button, async () => {
+    const result = await api(`/api/telephony/providers/${providerId}/test`, { method: "POST" });
+    const warnings = (result.warnings || []).length ? ` Alertas: ${(result.warnings || []).join(", ")}` : "";
+    showToast("success", `${result.message || "Prueba segura generada."} Marcado: ${result.dial_string || "-"}${warnings}`);
+  }, "Probando...");
 }
 
 async function handleTelephonyExtensionSubmit(form) {
@@ -3995,6 +4160,36 @@ function setupEvents() {
     const clickToCall = event.target.closest("[data-click-to-call]");
     if (clickToCall) {
       await startClickToCall(clickToCall.dataset.clickToCall, clickToCall);
+      return;
+    }
+    const editProvider = event.target.closest("[data-edit-telephony-provider]");
+    if (editProvider) {
+      fillTelephonyProviderForm(editProvider.dataset.editTelephonyProvider);
+      return;
+    }
+    const toggleProvider = event.target.closest("[data-toggle-telephony-provider]");
+    if (toggleProvider) {
+      await toggleTelephonyProvider(toggleProvider.dataset.toggleTelephonyProvider, toggleProvider);
+      return;
+    }
+    const primaryProvider = event.target.closest("[data-primary-telephony-provider]");
+    if (primaryProvider) {
+      await setPrimaryTelephonyProvider(primaryProvider.dataset.primaryTelephonyProvider, primaryProvider);
+      return;
+    }
+    const testProvider = event.target.closest("[data-test-telephony-provider]");
+    if (testProvider) {
+      await testTelephonyProvider(testProvider.dataset.testTelephonyProvider, testProvider);
+      return;
+    }
+    const ipcomPreset = event.target.closest("[data-ipcom-preset]");
+    if (ipcomPreset) {
+      applyIpComProviderPreset();
+      return;
+    }
+    const clearProvider = event.target.closest("[data-clear-telephony-provider]");
+    if (clearProvider) {
+      clearTelephonyProviderForm();
       return;
     }
     const editTelephony = event.target.closest("[data-edit-telephony-extension]");

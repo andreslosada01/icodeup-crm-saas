@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.api.routes.crm.access import customer_for_access
 from app.api.routes.crm.obligations import obligation_for_access
+from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, TENANT_ADMIN
 from app.db.session import get_db
 from app.models import CallLog, Customer, CustomerObligation, ManagementActivity, TelephonyExtension, TelephonyProvider, User
@@ -33,10 +35,172 @@ from app.services.audit_service import record_audit
 router = APIRouter()
 
 SENSITIVE_CONFIG_FRAGMENTS = ("password", "secret", "token", "api_key", "private_key", "credential")
+DEFAULT_MOBILE_MATCH_PATTERN = "3XXXXXXXXX"
+DEFAULT_SAFE_TEST_PHONE = "3000000000"
 
 
 def _json(value: str | None) -> dict[str, Any]:
     return json.loads(value or "{}")
+
+
+def _provider_config(item: TelephonyProvider) -> dict[str, Any]:
+    config = _json(item.config_json)
+    config.setdefault("is_primary", False)
+    config.setdefault("outbound_enabled", True)
+    return config
+
+
+def _config_bool(config: dict[str, Any], key: str, default: bool = False) -> bool:
+    value = config.get(key, default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "si", "on"}
+    return bool(value)
+
+
+def _config_int(config: dict[str, Any], key: str) -> int | None:
+    value = config.get(key)
+    if value in (None, ""):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _apply_provider_runtime_config(
+    base_config: dict[str, Any],
+    *,
+    is_primary: bool | None = None,
+    outbound_enabled: bool | None = None,
+    priority: int | None = None,
+) -> dict[str, Any]:
+    config = dict(base_config)
+    if is_primary is not None:
+        config["is_primary"] = bool(is_primary)
+    if outbound_enabled is not None:
+        config["outbound_enabled"] = bool(outbound_enabled)
+    if priority is not None:
+        config["priority"] = priority
+    config.setdefault("is_primary", False)
+    config.setdefault("outbound_enabled", True)
+    return config
+
+
+def _provider_payload_config(payload: TelephonyProviderCreate | TelephonyProviderPatch, current: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = dict(current or {})
+    payload_config = getattr(payload, "config", None)
+    if payload_config is not None:
+        config.update(payload_config)
+    return _apply_provider_runtime_config(
+        config,
+        is_primary=getattr(payload, "is_primary", None),
+        outbound_enabled=getattr(payload, "outbound_enabled", None),
+        priority=getattr(payload, "priority", None),
+    )
+
+
+def _set_provider_config(item: TelephonyProvider, config: dict[str, Any]) -> None:
+    item.config_json = json.dumps(config, ensure_ascii=True)
+
+
+def _provider_is_primary(item: TelephonyProvider) -> bool:
+    return _config_bool(_provider_config(item), "is_primary")
+
+
+def _provider_outbound_enabled(item: TelephonyProvider) -> bool:
+    return _config_bool(_provider_config(item), "outbound_enabled", True)
+
+
+def _provider_priority(item: TelephonyProvider) -> int:
+    return _config_int(_provider_config(item), "priority") or 999
+
+
+def _demote_other_primary_providers(db: Session, tenant_id: int, provider_id: int) -> None:
+    providers = db.scalars(select(TelephonyProvider).where(TelephonyProvider.tenant_id == tenant_id, TelephonyProvider.id != provider_id))
+    for provider in providers:
+        config = _provider_config(provider)
+        if _config_bool(config, "is_primary"):
+            config["is_primary"] = False
+            _set_provider_config(provider, config)
+
+
+def _validate_primary_provider(item: TelephonyProvider, config: dict[str, Any]) -> None:
+    if _config_bool(config, "is_primary") and (not item.is_active or not _config_bool(config, "outbound_enabled", True)):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El proveedor principal debe estar activo y habilitado para salida.")
+
+
+def _clean_mobile_phone(value: str) -> str:
+    digits = re.sub(r"\D", "", value or "")
+    if digits.startswith("57") and len(digits) == 12:
+        digits = digits[2:]
+    if not re.fullmatch(r"3\d{9}", digits):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Numero destino invalido. Usa un celular colombiano de 10 digitos que inicie por 3.")
+    return digits
+
+
+def _pattern_matches(pattern: str, phone: str) -> bool:
+    pattern = pattern or DEFAULT_MOBILE_MATCH_PATTERN
+    regex = "^" + "".join(r"\d" if char.upper() == "X" else re.escape(char) for char in pattern) + "$"
+    return re.fullmatch(regex, phone) is not None
+
+
+def _dial_string_for_provider(provider: TelephonyProvider | None, phone_number: str) -> dict[str, Any]:
+    normalized_phone = _clean_mobile_phone(phone_number)
+    config = _provider_config(provider) if provider else {}
+    mobile_pattern = str(config.get("mobile_match_pattern") or DEFAULT_MOBILE_MATCH_PATTERN)
+    if not _pattern_matches(mobile_pattern, normalized_phone):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El numero no coincide con la regla de marcado movil del proveedor.")
+    external_prefix = str(config.get("external_prefix") or "")
+    mobile_prepend = str(config.get("mobile_prepend") or "")
+    return {
+        "original_phone": phone_number,
+        "normalized_phone": normalized_phone,
+        "dial_string": f"{external_prefix}{mobile_prepend}{normalized_phone}",
+        "mobile_match_pattern": mobile_pattern,
+        "external_prefix": external_prefix,
+        "mobile_prepend": mobile_prepend,
+    }
+
+
+def _primary_outbound_provider(db: Session, tenant_id: int) -> TelephonyProvider | None:
+    providers = list(db.scalars(select(TelephonyProvider).where(TelephonyProvider.tenant_id == tenant_id, TelephonyProvider.is_active.is_(True))))
+    eligible = [item for item in providers if _provider_is_primary(item) and _provider_outbound_enabled(item)]
+    return sorted(eligible, key=_provider_priority)[0] if eligible else None
+
+
+def _provider_for_call(db: Session, tenant_id: int, extension: TelephonyExtension) -> TelephonyProvider | None:
+    primary = _primary_outbound_provider(db, tenant_id)
+    if primary:
+        return primary
+    if extension.provider_id:
+        provider = db.get(TelephonyProvider, extension.provider_id)
+        if provider and provider.tenant_id == tenant_id and provider.is_active and _provider_outbound_enabled(provider):
+            return provider
+    return None
+
+
+def _call_mode(provider: TelephonyProvider | None) -> str:
+    if not settings.telephony_real_calls_enabled:
+        return "simulated"
+    if provider is None or provider.provider_type == "manual":
+        return "manual"
+    if provider.provider_type in {"asterisk_ami", "pbx_ami", "sip_trunk"}:
+        return "ami"
+    if provider.provider_type == "webrtc_sip":
+        return "webrtc"
+    if provider.provider_type in {"external_api", "pbx_ari"}:
+        return "api"
+    return "simulated"
+
+
+def _call_message(mode: str) -> str:
+    if not settings.telephony_real_calls_enabled:
+        return "Llamada registrada en modo simulado. Para marcación real, active integración PBX/AMI/WebRTC."
+    if mode in {"ami", "webrtc", "api"}:
+        return "Llamada preparada para integracion real. El conector PBX/AMI/WebRTC queda listo para la siguiente fase."
+    return "Llamada registrada en modo manual."
 
 
 def _assert_safe_config(value: Any, path: str = "config") -> None:
@@ -133,6 +297,7 @@ def _call_log_query(db: Session, user: User, tenant_id: int | None = None):
 
 
 def _provider_to_out(item: TelephonyProvider) -> TelephonyProviderOut:
+    config = _provider_config(item)
     return TelephonyProviderOut(
         id=item.id,
         tenant_id=item.tenant_id,
@@ -143,7 +308,10 @@ def _provider_to_out(item: TelephonyProvider) -> TelephonyProviderOut:
         websocket_url=item.websocket_url,
         api_url=item.api_url,
         is_active=item.is_active,
-        config=_json(item.config_json),
+        is_primary=_config_bool(config, "is_primary"),
+        outbound_enabled=_config_bool(config, "outbound_enabled", True),
+        priority=_config_int(config, "priority"),
+        config=config,
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
@@ -218,7 +386,8 @@ def list_providers(tenant_id: int | None = None, db: Session = Depends(get_db), 
 def create_provider(payload: TelephonyProviderCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> TelephonyProviderOut:
     _require_manage(db, user)
     tenant_id = _tenant_id_for_payload(db, user, payload.tenant_id)
-    _assert_safe_config(payload.config)
+    config = _provider_payload_config(payload)
+    _assert_safe_config(config)
     item = TelephonyProvider(
         tenant_id=tenant_id,
         name=payload.name.strip(),
@@ -228,11 +397,14 @@ def create_provider(payload: TelephonyProviderCreate, request: Request, db: Sess
         websocket_url=payload.websocket_url,
         api_url=payload.api_url,
         is_active=payload.is_active,
-        config_json=json.dumps(payload.config, ensure_ascii=True),
+        config_json=json.dumps(config, ensure_ascii=True),
     )
+    _validate_primary_provider(item, config)
     db.add(item)
     db.flush()
-    record_audit(db, user, "telephony_provider", "create", item.id, tenant_id, module="telephony", after={"name": item.name, "provider_type": item.provider_type}, request=request)
+    if _config_bool(config, "is_primary"):
+        _demote_other_primary_providers(db, tenant_id, item.id)
+    record_audit(db, user, "telephony_provider", "create", item.id, tenant_id, module="telephony", after={"name": item.name, "provider_type": item.provider_type, "is_primary": _config_bool(config, "is_primary")}, request=request)
     db.commit()
     db.refresh(item)
     return _provider_to_out(item)
@@ -244,15 +416,68 @@ def update_provider(provider_id: int, payload: TelephonyProviderPatch, request: 
     item = _provider_for_access(db, provider_id, user)
     require_module(db, user, "telephony", item.tenant_id)
     updates = payload.model_dump(exclude_unset=True)
-    if "config" in updates and updates["config"] is not None:
-        _assert_safe_config(updates["config"])
-        item.config_json = json.dumps(updates.pop("config"), ensure_ascii=True)
+    config = _provider_config(item)
+    if "config" in updates:
+        payload_config = updates.pop("config")
+        if payload_config is not None:
+            config.update(payload_config)
+    runtime_updates = {}
+    for runtime_field in ("is_primary", "outbound_enabled", "priority"):
+        if runtime_field in updates:
+            runtime_updates[runtime_field] = updates.pop(runtime_field)
     for field, value in updates.items():
         setattr(item, field, value.strip() if isinstance(value, str) else value)
-    record_audit(db, user, "telephony_provider", "update", item.id, item.tenant_id, module="telephony", after=payload.model_dump(exclude_unset=True), request=request)
+    config = _apply_provider_runtime_config(config, **runtime_updates)
+    if item.is_active is False:
+        config["is_primary"] = False
+    _assert_safe_config(config)
+    _validate_primary_provider(item, config)
+    _set_provider_config(item, config)
+    if _config_bool(config, "is_primary"):
+        _demote_other_primary_providers(db, item.tenant_id, item.id)
+    record_audit(db, user, "telephony_provider", "update", item.id, item.tenant_id, module="telephony", after={**payload.model_dump(exclude_unset=True), "config": config}, request=request)
     db.commit()
     db.refresh(item)
     return _provider_to_out(item)
+
+
+@router.post("/providers/{provider_id}/test")
+def test_provider_configuration(provider_id: int, request: Request, phone_number: str = DEFAULT_SAFE_TEST_PHONE, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+    _require_manage(db, user)
+    provider = _provider_for_access(db, provider_id, user)
+    require_module(db, user, "telephony", provider.tenant_id)
+    dialing = _dial_string_for_provider(provider, phone_number)
+    config = _provider_config(provider)
+    warnings = []
+    if not provider.is_active:
+        warnings.append("Proveedor inactivo.")
+    if not _config_bool(config, "outbound_enabled", True):
+        warnings.append("Salida deshabilitada.")
+    if not _config_bool(config, "is_primary"):
+        warnings.append("No es proveedor principal.")
+    record_audit(
+        db,
+        user,
+        "telephony_provider",
+        "safe_test",
+        provider.id,
+        provider.tenant_id,
+        module="telephony",
+        after={"phone_number": phone_number, "dial_string": dialing["dial_string"], "warnings": warnings},
+        request=request,
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "mode": "safe_simulation",
+        "provider_id": provider.id,
+        "provider_name": provider.name,
+        "dial_string": dialing["dial_string"],
+        "normalized_phone": dialing["normalized_phone"],
+        "real_call_executed": False,
+        "warnings": warnings,
+        "message": "Prueba segura generada sin ejecutar llamada real.",
+    }
 
 
 @router.get("/extensions", response_model=list[TelephonyExtensionOut])
@@ -359,12 +584,11 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
     phone_number = (payload.phone_number or customer.phone or "").strip()
     if not phone_number:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El cliente no tiene telefono disponible para llamar.")
-    provider = db.get(TelephonyProvider, extension.provider_id) if extension.provider_id else None
-    mode = "manual"
-    message = "Llamada registrada en modo simulado."
-    if provider and provider.is_active and provider.provider_type != "manual":
-        mode = "simulated"
-        message = "Llamada registrada en modo simulado. El proveedor esta configurado, pero la marcacion real queda pendiente de la integracion PBX/WebRTC."
+    provider = _provider_for_call(db, customer.tenant_id, extension)
+    dialing = _dial_string_for_provider(provider, phone_number)
+    mode = _call_mode(provider)
+    message = _call_message(mode)
+    provider_config = _provider_config(provider) if provider else {}
     now = datetime.now(timezone.utc)
     call = CallLog(
         tenant_id=customer.tenant_id,
@@ -382,7 +606,21 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
                 "extension_id": extension.id,
                 "extension_number": extension.extension_number,
                 "provider_type": provider.provider_type if provider else "manual",
+                "provider_name": provider.name if provider else None,
+                "provider_is_primary": _config_bool(provider_config, "is_primary") if provider else False,
+                "outbound_enabled": _config_bool(provider_config, "outbound_enabled", True) if provider else True,
+                "original_phone": dialing["original_phone"],
+                "normalized_phone": dialing["normalized_phone"],
+                "dial_string": dialing["dial_string"],
+                "mobile_match_pattern": dialing["mobile_match_pattern"],
+                "external_prefix": dialing["external_prefix"],
+                "mobile_prepend": dialing["mobile_prepend"],
                 "real_call_executed": False,
+                "real_calls_enabled": settings.telephony_real_calls_enabled,
+                "real_call_connector": "pending",
+                "asterisk_ami_host_configured": bool(settings.asterisk_ami_host),
+                "asterisk_ami_context": settings.asterisk_ami_originate_context,
+                "error": None,
                 "source": payload.source or "crm_customer_drawer",
             },
             ensure_ascii=True,
