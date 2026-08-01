@@ -925,7 +925,7 @@ async function loadPhase8Data() {
 
 async function loadPhase8BData() {
   const allowed = (...sections) => menuHasSection(...sections);
-  const [trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events] = await Promise.all([
+  const [trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events, telephonyTenants] = await Promise.all([
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/trees", []) : [],
     allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/combinations", []) : [],
     allowed("recordings") ? apiMaybe("/api/recordings", []) : [],
@@ -943,8 +943,12 @@ async function loadPhase8BData() {
     allowed("integrations", "channels") ? apiMaybe("/api/integrations/channels", []) : [],
     allowed("integrations") ? apiMaybe("/api/integrations/templates", []) : [],
     allowed("integrations") ? apiMaybe("/api/integrations/webhooks", []) : [],
-    allowed("integrations") ? apiMaybe("/api/integrations/events", []) : []
+    allowed("integrations") ? apiMaybe("/api/integrations/events", []) : [],
+    allowed("telephony") && isPlatform() && !state.admin.tenants.length ? apiMaybe("/api/admin/tenants", []) : []
   ]);
+  if (telephonyTenants.length && !state.admin.tenants.length) {
+    state.admin = { ...state.admin, tenants: telephonyTenants };
+  }
   state.ops = { ...state.ops, trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult: state.ops.excelResult || excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events };
 }
 
@@ -976,7 +980,51 @@ function optionList(items, valueKey = "id", labelKey = "name", selected = "") {
   return items
     .map((item) => {
       const value = item[valueKey];
-      const label = item[labelKey] || item.name;
+      const label = item[labelKey] || item.name || item.label || item.display_name || item.slug || value;
+      return `<option value="${escapeHtml(value)}" ${String(value) === String(selected) ? "selected" : ""}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+}
+
+function tenantOptionValue(item) {
+  return item?.id ?? item?.tenant_id ?? item?.value ?? "";
+}
+
+function tenantOptionLabel(item) {
+  return item?.label || item?.name || item?.display_name || item?.company_name || item?.slug || `Empresa ${tenantOptionValue(item)}`;
+}
+
+function telephonyTenantSource() {
+  const tenants = [];
+  const currentTenant = activeTenant();
+  if (currentTenant?.id) tenants.push(currentTenant);
+  tenants.push(...(state.admin.tenants || []), ...(state.crm.options.tenants || []));
+
+  const byId = new Map();
+  tenants.forEach((item) => {
+    const value = tenantOptionValue(item);
+    if (!value) return;
+    const key = String(value);
+    const existing = byId.get(key) || {};
+    byId.set(key, { ...existing, ...item, id: value, name: tenantOptionLabel({ ...existing, ...item }) });
+  });
+  return Array.from(byId.values()).sort((a, b) => tenantOptionLabel(a).localeCompare(tenantOptionLabel(b), "es"));
+}
+
+function defaultTelephonyTenantId(tenants, currentValue = "") {
+  const values = new Set((tenants || []).map((item) => String(tenantOptionValue(item))));
+  if (currentValue && values.has(String(currentValue))) return String(currentValue);
+  const activeId = tenantOptionValue(activeTenant()) || currentUser?.tenant_id;
+  if (activeId && values.has(String(activeId))) return String(activeId);
+  if ((tenants || []).length === 1) return String(tenantOptionValue(tenants[0]));
+  return "";
+}
+
+function telephonyTenantOptions(tenants, selected = "") {
+  return (tenants || [])
+    .map((item) => {
+      const value = tenantOptionValue(item);
+      const label = tenantOptionLabel(item);
       return `<option value="${escapeHtml(value)}" ${String(value) === String(selected) ? "selected" : ""}>${escapeHtml(label)}</option>`;
     })
     .join("");
@@ -2869,9 +2917,19 @@ function renderTelephony() {
   const logRows = logs.slice(0, 30).map((item) => `<tr><td><strong>${escapeHtml(item.customer_name || "Cliente")}</strong><small>${escapeHtml(item.phone_number)}</small></td><td>${escapeHtml(item.user_name || "-")}</td><td>${escapeHtml(item.call_status)}</td><td>${escapeHtml(item.metadata?.mode || item.direction)}</td><td>${Math.round((item.duration_seconds || 0) / 60)} min</td><td>${dateOnly(item.started_at)}</td></tr>`).join("");
   document.querySelector("#telephonyCallLogTable") && (document.querySelector("#telephonyCallLogTable").innerHTML = table(["Cliente", "Usuario", "Estado", "Modo", "Duracion", "Inicio"], logRows, "Sin llamadas registradas para tu alcance."));
 
-  const tenantSource = state.crm.options.tenants?.length ? state.crm.options.tenants : (state.admin.tenants || []);
+  const tenantSource = telephonyTenantSource();
   const userSource = state.crm.options.users?.length ? state.crm.options.users : (state.admin.users || []);
-  const tenantOptions = tenantSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join("");
+  const currentTenantSelection = document.querySelector('#telephonyProviderForm select[name="tenant_id"]')?.value
+    || document.querySelector('#telephonyExtensionForm select[name="tenant_id"]')?.value
+    || "";
+  const selectedTenantId = defaultTelephonyTenantId(tenantSource, currentTenantSelection);
+  const tenantOptions = telephonyTenantOptions(tenantSource, selectedTenantId);
+  const tenantSelector = isPlatform()
+    ? `<label>Empresa<select name="tenant_id" required ${tenantSource.length ? "" : "disabled"}><option value="">Selecciona empresa</option>${tenantOptions}</select><small class="field-hint">Tenant donde quedara configurado el proveedor.</small></label>`
+    : "";
+  const tenantEmptyMessage = isPlatform() && !tenantSource.length
+    ? `<article class="empty-state compact"><strong>No hay empresas disponibles</strong><p>No hay empresas disponibles para configurar proveedores. Crea una empresa primero o valida el tenant actual.</p></article>`
+    : "";
   const providerOptions = providers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.provider_type)})</option>`).join("");
   const userOptions = userSource.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} - ${escapeHtml(item.email || "")}</option>`).join("");
   const providerRows = providers.map((item) => {
@@ -2917,9 +2975,10 @@ function renderTelephony() {
     </tr>`;
   }).join("");
   document.querySelector("#telephonyProviderPanel") && (document.querySelector("#telephonyProviderPanel").innerHTML = `
+    ${tenantEmptyMessage}
     ${canManageTelephony() ? `<form id="telephonyProviderForm" class="ops-form form-grid">
       <input type="hidden" name="provider_id" />
-      ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
+      ${tenantSelector}
       <label>Nombre<input name="name" required placeholder="IpCom" /></label>
       <label>Tipo<select name="provider_type"><option value="manual">Manual/simulado</option><option value="sip_trunk">SIP trunk</option><option value="asterisk_ami">Asterisk AMI</option><option value="pbx_ami">PBX AMI legacy</option><option value="pbx_ari">Asterisk ARI</option><option value="webrtc_sip">WebRTC SIP</option><option value="external_api">API externa</option></select></label>
       <label>Host<input name="host" placeholder="35.192.135.117" /></label>
@@ -2939,7 +2998,7 @@ function renderTelephony() {
       <label class="checkbox-row"><input name="is_primary" type="checkbox" /> Principal saliente</label>
       <label class="checkbox-row"><input name="outbound_enabled" type="checkbox" checked /> Habilitar llamadas salientes</label>
       <label class="wide">Config JSON sin secretos<textarea name="config" placeholder='{"mode":"simulated"}'></textarea></label>
-      <button type="submit">Crear proveedor</button>
+      <button type="submit" ${isPlatform() && !tenantSource.length ? "disabled" : ""}>Crear proveedor</button>
       <button class="secondary-button" data-ipcom-preset type="button">Preset IpCom</button>
       <button class="secondary-button" data-clear-telephony-provider type="button">Limpiar</button>
     </form>` : `<p class="empty">Solo administradores pueden configurar proveedores.</p>`}
@@ -2948,7 +3007,7 @@ function renderTelephony() {
   document.querySelector("#telephonyExtensionPanel") && (document.querySelector("#telephonyExtensionPanel").innerHTML = `
     ${canManageTelephony() ? `<form id="telephonyExtensionForm" class="ops-form form-grid">
       <input type="hidden" name="extension_id" />
-      ${isPlatform() ? `<label>Empresa<select name="tenant_id">${tenantOptions}</select></label>` : ""}
+      ${tenantSelector}
       <label>Usuario<select name="user_id" required>${userOptions}</select></label>
       <label>Proveedor<select name="provider_id"><option value="">Manual/sin proveedor</option>${providerOptions}</select></label>
       <label>Extension<input name="extension_number" required placeholder="1001" /></label>
@@ -3693,6 +3752,11 @@ function telephonyProviderConfigFromForm(form) {
 
 async function handleTelephonyProviderSubmit(form) {
   const providerId = form.elements.provider_id?.value;
+  if (isPlatform() && !form.elements.tenant_id?.value) {
+    showToast("warning", "Selecciona una empresa para configurar el proveedor.");
+    form.elements.tenant_id?.focus();
+    return;
+  }
   await submitJson(form, providerId ? `/api/telephony/providers/${providerId}` : "/api/telephony/providers", (currentForm) => ({
     tenant_id: currentForm.elements.tenant_id?.value ? Number(currentForm.elements.tenant_id.value) : null,
     name: currentForm.elements.name.value,
@@ -3800,6 +3864,11 @@ async function testTelephonyProvider(providerId, button) {
 
 async function handleTelephonyExtensionSubmit(form) {
   const extensionId = form.elements.extension_id?.value;
+  if (isPlatform() && !form.elements.tenant_id?.value) {
+    showToast("warning", "Selecciona una empresa para configurar la extension.");
+    form.elements.tenant_id?.focus();
+    return;
+  }
   await submitJson(form, extensionId ? `/api/telephony/extensions/${extensionId}` : "/api/telephony/extensions", (currentForm) => ({
     tenant_id: currentForm.elements.tenant_id?.value ? Number(currentForm.elements.tenant_id.value) : null,
     user_id: Number(currentForm.elements.user_id.value),
