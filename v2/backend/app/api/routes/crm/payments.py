@@ -10,22 +10,25 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.db.session import get_db
-from app.models import ManagementActivity, Payment, User
+from app.models import Customer, ManagementActivity, Payment, User
 from app.schemas.crm import PaymentCreate, PaymentOut
 from app.services.audit_service import record_audit
 from app.services.access_control import require_permission
 
-from .access import customer_for_access, customer_query, ensure_read_access
+from .access import customer_for_access, customer_query, ensure_read_access, is_platform
 
 
 router = APIRouter()
 
 
 @router.get("/payments", response_model=list[PaymentOut])
-def list_payments(limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentOut]:
+def list_payments(tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentOut]:
     require_permission(db, user, "collections.payments.view")
     ensure_read_access(user)
-    customers = list(db.scalars(customer_query(db, user)))
+    query = customer_query(db, user)
+    if tenant_id and is_platform(user):
+        query = query.where(Customer.tenant_id == tenant_id)
+    customers = list(db.scalars(query))
     customer_map = {customer.id: customer for customer in customers}
     payments = list(db.scalars(select(Payment).where(Payment.customer_id.in_(customer_map.keys())).order_by(Payment.paid_at.desc()).limit(limit))) if customer_map else []
     return [
@@ -35,9 +38,12 @@ def list_payments(limit: int = Query(default=20, ge=1, le=20), db: Session = Dep
 
 
 @router.get("/payments/export")
-def export_payments(db: Session = Depends(get_db), user: User = Depends(current_user)) -> StreamingResponse:
+def export_payments(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> StreamingResponse:
     require_permission(db, user, "collections.payments.export")
-    customers = list(db.scalars(customer_query(db, user)))
+    query = customer_query(db, user)
+    if tenant_id and is_platform(user):
+        query = query.where(Customer.tenant_id == tenant_id)
+    customers = list(db.scalars(query))
     customer_map = {customer.id: customer for customer in customers}
     payments = list(db.scalars(select(Payment).where(Payment.customer_id.in_(customer_map.keys())).order_by(Payment.paid_at.desc()))) if customer_map else []
     output = StringIO()

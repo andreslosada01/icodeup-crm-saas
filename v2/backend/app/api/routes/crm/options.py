@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,9 +18,15 @@ router = APIRouter()
 
 
 @router.get("/options", response_model=CrmOptions)
-def options(db: Session = Depends(get_db), user: User = Depends(current_user)) -> CrmOptions:
+def options(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> CrmOptions:
     ensure_read_access(user)
-    tenants = list(db.scalars(business_tenant_query(db))) if is_platform(user) else [db.get(Tenant, user.tenant_id)]
+    if is_platform(user) and tenant_id:
+        tenant = db.get(Tenant, tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada.")
+        tenants = [tenant]
+    else:
+        tenants = list(db.scalars(business_tenant_query(db))) if is_platform(user) else [db.get(Tenant, user.tenant_id)]
     tenant_ids = [tenant.id for tenant in tenants if tenant]
     projects = list(db.scalars(select(Project).where(Project.tenant_id.in_(tenant_ids)).order_by(Project.name))) if tenant_ids else []
     users = list(db.scalars(select(User).where(User.tenant_id.in_(tenant_ids), User.role != PLATFORM_ADMIN).order_by(User.name))) if tenant_ids else []

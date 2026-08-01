@@ -13,8 +13,13 @@ router = APIRouter()
 
 
 @router.get("/me")
-def my_menu(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
-    return build_menu(db, user)
+def my_menu(
+    operational_tenant_id: int | None = None,
+    operational_audience: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    return build_menu(db, user, operational_tenant_id=operational_tenant_id, operational_audience=operational_audience)
 
 
 @router.get("/branding")

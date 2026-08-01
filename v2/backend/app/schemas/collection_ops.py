@@ -242,6 +242,7 @@ class RecordingLinkRequest(BaseModel):
 
 
 class SavedDataViewCreate(BaseModel):
+    tenant_id: int | None = None
     name: str
     source: str
     columns: list[str] = Field(default_factory=list)
@@ -278,6 +279,7 @@ class ExcelWebQueryResult(BaseModel):
 
 
 class OperationalSheetRowCreate(BaseModel):
+    tenant_id: int | None = None
     project_id: int | None = None
     customer_id: int | None = None
     obligation_id: int | None = None

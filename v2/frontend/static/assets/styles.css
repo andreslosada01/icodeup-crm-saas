@@ -1373,6 +1373,53 @@ nav {
   gap: 10px;
 }
 
+.support-mode-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px;
+  border: 1px solid rgba(32, 214, 90, 0.2);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(32, 214, 90, 0.1), rgba(63, 108, 255, 0.08) 55%, rgba(123, 74, 216, 0.08)),
+    rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 28px rgba(11, 24, 36, 0.06);
+}
+
+.support-mode-controls span {
+  padding: 0 4px;
+  color: #0b3342;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.support-mode-controls select,
+.support-mode-controls button {
+  min-height: 30px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.support-mode-controls select {
+  width: auto;
+  min-width: 150px;
+  padding: 0 28px 0 10px;
+  border-color: rgba(63, 108, 255, 0.18);
+  background-color: rgba(255, 255, 255, 0.94);
+}
+
+.support-mode-controls button {
+  padding: 0 12px;
+  border: 1px solid rgba(63, 108, 255, 0.2);
+  color: #ffffff;
+  background: var(--iep-gradient);
+  box-shadow: 0 10px 22px rgba(32, 214, 90, 0.16);
+}
+
 .status-pill {
   display: inline-grid;
   min-height: 34px;

@@ -1,5 +1,7 @@
 let token = localStorage.getItem("icodeup_v2_token") || "";
 let currentUser = JSON.parse(localStorage.getItem("icodeup_v2_user") || "null");
+const SUPPORT_TENANT_STORAGE_KEY = "icodeup_support_tenant_id";
+const SUPPORT_AUDIENCE_STORAGE_KEY = "icodeup_support_audience";
 const recentToasts = new Map();
 const pendingClickToCallCustomers = new Set();
 
@@ -463,11 +465,18 @@ function isPlatform() {
 }
 
 function canManageCrm() {
+  if (isOperationalSupportMode()) return ["company_admin", "operational_leader"].includes(menuUser().audience);
   return ["platform_admin", "tenant_admin", "coordinator"].includes(currentUser?.role);
 }
 
 function menuUser() {
   return state.core.menu?.user || currentUser || {};
+}
+
+function canExportCrmData() {
+  const audience = state.core.menu?.user?.audience;
+  if (audience) return ["platform_admin", "company_admin", "operational_leader"].includes(audience);
+  return ["platform_admin", "tenant_admin", "coordinator"].includes(currentUser?.role);
 }
 
 function canExportExcelWeb() {
@@ -479,6 +488,33 @@ function activeTenant() {
   return state.core.menu?.tenant || currentUser || {};
 }
 
+function supportContext() {
+  return state.core.menu?.support_context || {};
+}
+
+function isOperationalSupportMode() {
+  return Boolean(supportContext().enabled);
+}
+
+function storedOperationalSupport() {
+  if (!isPlatform()) return null;
+  const tenantId = localStorage.getItem(SUPPORT_TENANT_STORAGE_KEY);
+  if (!tenantId) return null;
+  return {
+    tenant_id: tenantId,
+    audience: localStorage.getItem(SUPPORT_AUDIENCE_STORAGE_KEY) || "company_admin"
+  };
+}
+
+function operationalTenantId() {
+  return isOperationalSupportMode() ? supportContext().tenant_id : "";
+}
+
+function scopedTenantParams(params = {}) {
+  const tenantId = operationalTenantId();
+  return tenantId ? { ...params, tenant_id: tenantId } : params;
+}
+
 function roleLabel(role = menuUser().profile_role || menuUser().role) {
   return roleLabels[role] || role || "Usuario";
 }
@@ -488,6 +524,7 @@ function audienceLabel(audience = menuUser().audience) {
 }
 
 function activePlanLabel() {
+  if (isOperationalSupportMode()) return "Soporte operativo";
   const tenant = activeTenant();
   if (tenant.is_platform || menuUser().is_platform_admin || isPlatform()) return "IEP";
   const subscription = (state.governance.subscriptions || []).find((item) => Number(item.tenant_id) === Number(tenant.id));
@@ -563,21 +600,28 @@ function limitText(value) {
 function renderShellContext() {
   const tenant = activeTenant();
   const user = menuUser();
-  const isPlatformContext = Boolean(tenant.is_platform || user.is_platform_admin || currentUser?.role === "platform_admin");
+  const supportMode = isOperationalSupportMode();
+  const isPlatformContext = !supportMode && Boolean(tenant.is_platform || user.is_platform_admin || currentUser?.role === "platform_admin");
   const tenantName = tenant.name || currentUser?.tenant_name || "Workspace activo";
   const profile = roleLabel(user.profile_role || user.role || currentUser?.role);
   const audience = audienceLabel(user.audience);
   const plan = activePlanLabel();
   const displayName = isPlatformContext ? "Icodeup Enterprise Platform" : user.name || currentUser?.name;
-  const sessionText = displayName ? `${displayName} · ${profile}` : "Sesion activa";
+  const sessionText = supportMode
+    ? `${currentUser?.name || "SuperAdmin"} - Soporte operativo`
+    : displayName ? `${displayName} - ${profile}` : "Sesion activa";
   document.querySelector("#sessionUser") && (document.querySelector("#sessionUser").textContent = sessionText);
   document.querySelector("#sidebarTenant") && (document.querySelector("#sidebarTenant").textContent = isPlatformContext ? "Icodeup Enterprise Platform" : tenantName);
-  document.querySelector("#sidebarRole") && (document.querySelector("#sidebarRole").textContent = profile);
+  document.querySelector("#sidebarRole") && (document.querySelector("#sidebarRole").textContent = supportMode ? `Soporte - ${audience}` : profile);
   document.querySelector("#sidebarPlanBadge") && (document.querySelector("#sidebarPlanBadge").textContent = plan);
-  document.querySelector("#topbarTenant") && (document.querySelector("#topbarTenant").textContent = isPlatformContext ? "IEP · Gobierno SaaS" : `${tenantName} · ${audience}`);
+  document.querySelector("#topbarTenant") && (document.querySelector("#topbarTenant").textContent = isPlatformContext ? "IEP - Gobierno SaaS" : `${tenantName} - ${supportMode ? "Soporte operativo" : audience}`);
   document.querySelector("#systemStatusPill") && (document.querySelector("#systemStatusPill").textContent = "Sistema operativo");
   const demoBadge = document.querySelector("#demoModeBadge");
   if (demoBadge) demoBadge.classList.toggle("hidden", !isDemoContext());
+  document.querySelectorAll(".platform-only").forEach((item) => item.classList.toggle("hidden", !isPlatform() || isOperationalSupportMode()));
+  document.querySelectorAll(".manager-only").forEach((item) => item.classList.toggle("hidden", !canManageCrm()));
+  document.querySelectorAll("#exportCustomers, #exportPayments").forEach((item) => item.classList.toggle("hidden", !canExportCrmData()));
+  renderOperationalSupportControls();
 }
 
 function menuModules() {
@@ -726,10 +770,9 @@ function showApp() {
   appView.classList.remove("hidden");
   renderShellContext();
   applyBranding(currentUser || {});
-  document.querySelectorAll(".platform-only").forEach((item) => item.classList.toggle("hidden", !isPlatform()));
+  document.querySelectorAll(".platform-only").forEach((item) => item.classList.toggle("hidden", !isPlatform() || isOperationalSupportMode()));
   document.querySelectorAll(".manager-only").forEach((item) => item.classList.toggle("hidden", !canManageCrm()));
-  const canExport = ["platform_admin", "tenant_admin", "coordinator"].includes(currentUser?.role);
-  document.querySelectorAll("#exportCustomers, #exportPayments").forEach((item) => item.classList.toggle("hidden", !canExport));
+  document.querySelectorAll("#exportCustomers, #exportPayments").forEach((item) => item.classList.toggle("hidden", !canExportCrmData()));
 }
 
 function showLogin() {
@@ -742,6 +785,8 @@ function logout() {
   currentUser = null;
   localStorage.removeItem("icodeup_v2_token");
   localStorage.removeItem("icodeup_v2_user");
+  localStorage.removeItem(SUPPORT_TENANT_STORAGE_KEY);
+  localStorage.removeItem(SUPPORT_AUDIENCE_STORAGE_KEY);
   showLogin();
 }
 
@@ -781,24 +826,25 @@ async function loadAdminData() {
 
 async function loadGovernanceData() {
   const allowed = (...sections) => menuHasSection(...sections);
-  const selectedModuleTenant = isPlatform() ? (document.querySelector("#moduleTenantFilter")?.value || state.admin.tenants[0]?.id || "") : "";
+  const selectedModuleTenant = isPlatform() ? (operationalTenantId() || document.querySelector("#moduleTenantFilter")?.value || state.admin.tenants[0]?.id || "") : "";
   const moduleTenant = selectedModuleTenant ? `?tenant_id=${selectedModuleTenant}` : "";
   const auditParams = queryParams({
-    tenant_id: isPlatform() ? document.querySelector("#auditTenantFilter")?.value || "" : "",
+    tenant_id: isPlatform() ? operationalTenantId() || document.querySelector("#auditTenantFilter")?.value || "" : "",
     module: document.querySelector("#auditModuleFilter")?.value || ""
   });
+  const scope = scopedQuery();
   const [permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health, securityInsights] = await Promise.all([
     allowed("roles-permissions") ? apiMaybe("/api/governance/permissions", []) : [],
-    allowed("roles-permissions") ? apiMaybe("/api/governance/roles", []) : [],
-    allowed("company-users", "roles-permissions") ? apiMaybe("/api/governance/users", []) : [],
+    allowed("roles-permissions") ? apiMaybe(`/api/governance/roles${scope}`, []) : [],
+    allowed("company-users", "roles-permissions") ? apiMaybe(`/api/governance/users${scope}`, []) : [],
     allowed("modules", "tenant-modules") ? apiMaybe(`/api/governance/modules${moduleTenant}`, []) : [],
-    allowed("tenant-settings", "branding") ? apiMaybe("/api/governance/settings", null) : null,
+    allowed("tenant-settings", "branding") ? apiMaybe(`/api/governance/settings${scope}`, null) : null,
     allowed("audit", "governance") ? apiMaybe(`/api/governance/audit-logs?${auditParams}`, []) : [],
-    allowed("parties") ? apiMaybe("/api/governance/parties", []) : [],
+    allowed("parties") ? apiMaybe(`/api/governance/parties${scope}`, []) : [],
     allowed("plans") ? apiMaybe("/api/subscriptions/plans", []) : [],
     allowed("subscriptions", "governance") ? apiMaybe("/api/governance/subscriptions", []) : [],
     allowed("system-health", "governance") ? apiMaybe("/api/health", null) : null,
-    allowed("company-users", "roles-permissions", "tenant-modules") ? apiMaybe("/api/governance/security-insights", []) : []
+    allowed("company-users", "roles-permissions", "tenant-modules") ? apiMaybe(`/api/governance/security-insights${scope}`, []) : []
   ]);
   const selectedAccessId = state.governance.effectiveAccess?.user?.id;
   state.governance = { permissions, roles, users, modules, settings, audit, parties, plans, subscriptions, health, securityInsights, effectiveAccess: state.governance.effectiveAccess };
@@ -810,10 +856,19 @@ async function loadGovernanceData() {
 }
 
 async function loadCoreData() {
-  const [menu, roleDashboard] = await Promise.all([
-    api("/api/menu/me"),
-    api("/api/dashboard/me")
-  ]);
+  const support = storedOperationalSupport();
+  const menuParams = support ? queryParams({ operational_tenant_id: support.tenant_id, operational_audience: support.audience }) : "";
+  let menu;
+  try {
+    menu = await api(`/api/menu/me${menuParams ? `?${menuParams}` : ""}`);
+  } catch (error) {
+    if (!support) throw error;
+    localStorage.removeItem(SUPPORT_TENANT_STORAGE_KEY);
+    localStorage.removeItem(SUPPORT_AUDIENCE_STORAGE_KEY);
+    showToast("warning", error.message || "No fue posible entrar a operacion tenant.");
+    menu = await api("/api/menu/me");
+  }
+  const roleDashboard = menu.support_context?.enabled ? null : await api("/api/dashboard/me");
   state.core.menu = menu;
   state.core.roleDashboard = roleDashboard;
   applyBranding(menu.tenant || {});
@@ -822,10 +877,11 @@ async function loadCoreData() {
 
 async function loadTeamsData() {
   if (!menuHasSection("teams")) return;
+  const scope = scopedQuery();
   const [projects, leaders, agents] = await Promise.all([
-    apiMaybe("/api/teams/projects", []),
-    apiMaybe("/api/teams/leaders", []),
-    apiMaybe("/api/teams/agents", [])
+    apiMaybe(`/api/teams/projects${scope}`, []),
+    apiMaybe(`/api/teams/leaders${scope}`, []),
+    apiMaybe(`/api/teams/agents${scope}`, [])
   ]);
   const selectedProjectId = state.teams.selectedProjectId || projects[0]?.id || null;
   const selectedLeaderId = state.teams.selectedLeaderId || leaders[0]?.id || null;
@@ -839,7 +895,7 @@ async function loadTeamsData() {
 
 async function loadTypifications() {
   if (!isPlatform()) return;
-  const tenantId = document.querySelector('#typificationForm select[name="tenant_id"]')?.value || state.admin.tenants[0]?.id;
+  const tenantId = operationalTenantId() || document.querySelector('#typificationForm select[name="tenant_id"]')?.value || state.admin.tenants[0]?.id;
   state.admin.typifications = tenantId ? await api(`/api/typifications?tenant_id=${tenantId}`) : [];
 }
 
@@ -851,15 +907,25 @@ function queryParams(params) {
   return search.toString();
 }
 
+function scopedQuery(params = {}) {
+  const text = queryParams(scopedTenantParams(params));
+  return text ? `?${text}` : "";
+}
+
+function scopedExcelFilters(filters = {}) {
+  const tenantId = operationalTenantId();
+  return tenantId ? { ...filters, tenant_id: Number(tenantId) } : filters;
+}
+
 async function loadCrmData() {
   const allowed = (...sections) => menuHasSection(...sections);
   const [options, dashboard, promises, payments, channels, typifications] = await Promise.all([
-    apiMaybe("/api/crm/options", { tenants: [], projects: [], users: [], channels: [] }),
-    allowed("dashboard", "queue", "customers", "reports") ? apiMaybe("/api/crm/dashboard", null) : null,
-    allowed("promises") ? apiMaybe("/api/crm/promises", []) : [],
-    allowed("payments") ? apiMaybe("/api/crm/payments", []) : [],
+    apiMaybe(`/api/crm/options${scopedQuery()}`, { tenants: [], projects: [], users: [], channels: [] }),
+    allowed("dashboard", "queue", "customers", "reports") ? apiMaybe(`/api/crm/dashboard${scopedQuery()}`, null) : null,
+    allowed("promises") ? apiMaybe(`/api/crm/promises${scopedQuery()}`, []) : [],
+    allowed("payments") ? apiMaybe(`/api/crm/payments${scopedQuery()}`, []) : [],
     allowed("channels") ? apiMaybe("/api/crm/channels", []) : [],
-    canManageCrm() || allowed("queue", "customers") ? apiMaybe("/api/crm/typifications", []) : []
+    canManageCrm() || allowed("queue", "customers") ? apiMaybe(`/api/crm/typifications${scopedQuery()}`, []) : []
   ]);
   state.crm.options = options;
   state.crm.dashboard = dashboard;
@@ -871,51 +937,52 @@ async function loadCrmData() {
 }
 
 async function loadQueue() {
-  const params = queryParams({
+  const params = queryParams(scopedTenantParams({
     page: state.queuePage,
     page_size: 10,
     q: document.querySelector("#queueSearch")?.value || "",
     status: document.querySelector("#queueStatus")?.value || "",
     risk: document.querySelector("#queueRisk")?.value || ""
-  });
+  }));
   state.crm.queue = await api(`/api/crm/customers?${params}`);
 }
 
 async function loadCustomers() {
-  const params = queryParams({
+  const params = queryParams(scopedTenantParams({
     page: state.customerPage,
     page_size: 10,
     q: document.querySelector("#customerSearch")?.value || ""
-  });
+  }));
   state.crm.customers = await api(`/api/crm/customers?${params}`);
 }
 
 async function loadBi() {
-  const params = queryParams({
-    tenant_id: document.querySelector("#biTenant")?.value || "",
+  const params = queryParams(scopedTenantParams({
+    tenant_id: operationalTenantId() || document.querySelector("#biTenant")?.value || "",
     project_id: document.querySelector("#biProject")?.value || "",
     horizon_days: document.querySelector("#biHorizon")?.value || 30
-  });
+  }));
   state.crm.bi = await api(`/api/crm/bi?${params}`);
 }
 
 async function loadPhase8Data() {
   const allowed = (...sections) => menuHasSection(...sections);
+  const scope = scopedQuery();
   const [catalogs, rules, alertRules, workflows, alertItems, alertSummary, legalDashboard, legalKanban, legalCases, salesDashboard, salesPipeline, salesKanban, leads, opportunities] = await Promise.all([
-    allowed("configuration") ? apiMaybe("/api/configuration/catalogs", []) : [],
-    allowed("configuration") ? apiMaybe("/api/configuration/rules", []) : [],
-    allowed("configuration") ? apiMaybe("/api/configuration/alert-rules", []) : [],
-    allowed("configuration") ? apiMaybe("/api/configuration/workflows", []) : [],
-    allowed("alerts", "dashboard", "reports") ? apiMaybe("/api/alerts?limit=50", []) : [],
-    allowed("alerts", "dashboard", "reports") ? apiMaybe("/api/alerts/summary", null) : null,
-    allowed("legal") ? apiMaybe("/api/legal/dashboard", null) : null,
-    allowed("legal") ? apiMaybe("/api/legal/kanban", null) : null,
-    allowed("legal") ? apiMaybe("/api/legal/cases", []) : [],
-    allowed("sales") ? apiMaybe("/api/sales/dashboard", null) : null,
-    allowed("sales") ? apiMaybe("/api/sales/pipeline", null) : null,
-    allowed("sales") ? apiMaybe("/api/sales/kanban", null) : null,
-    allowed("sales") ? apiMaybe("/api/sales/leads", []) : [],
-    allowed("sales") ? apiMaybe("/api/sales/opportunities", []) : []
+    allowed("configuration") ? apiMaybe(`/api/configuration/catalogs${scope}`, []) : [],
+    allowed("configuration") ? apiMaybe(`/api/configuration/rules${scope}`, []) : [],
+    allowed("configuration") ? apiMaybe(`/api/configuration/alert-rules${scope}`, []) : [],
+    allowed("configuration") ? apiMaybe(`/api/configuration/workflows${scope}`, []) : [],
+    allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts${scopedQuery({ limit: 50 })}`, []) : [],
+    allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts/summary${scope}`, null) : null,
+    allowed("legal") ? apiMaybe(`/api/legal/dashboard${scope}`, null) : null,
+    allowed("legal") ? apiMaybe(`/api/legal/kanban${scope}`, null) : null,
+    allowed("legal") ? apiMaybe(`/api/legal/cases${scope}`, []) : [],
+    allowed("sales") ? apiMaybe(`/api/sales/dashboard${scope}`, null) : null,
+    allowed("sales") ? apiMaybe(`/api/sales/pipeline${scope}`, null) : null,
+    allowed("sales") ? apiMaybe(`/api/sales/kanban${scope}`, null) : null,
+    allowed("sales") ? apiMaybe(`/api/sales/leads${scope}`, []) : [],
+    allowed("sales") ? apiMaybe(`/api/sales/opportunities${scope}`, []) : []
   ]);
   state.configuration = { catalogs, rules, alertRules, workflows };
   state.alerts = { items: alertItems, summary: alertSummary };
@@ -925,25 +992,26 @@ async function loadPhase8Data() {
 
 async function loadPhase8BData() {
   const allowed = (...sections) => menuHasSection(...sections);
+  const scope = scopedQuery();
   const [trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events, telephonyTenants] = await Promise.all([
-    allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/trees", []) : [],
-    allowed("typification-trees", "typifications") ? apiMaybe("/api/typifications/combinations", []) : [],
-    allowed("recordings") ? apiMaybe("/api/recordings", []) : [],
-    allowed("telephony") ? apiMaybe("/api/telephony/providers", []) : [],
-    allowed("telephony") ? apiMaybe("/api/telephony/extensions", []) : [],
-    allowed("telephony") ? apiMaybe("/api/telephony/call-logs", []) : [],
+    allowed("typification-trees", "typifications") ? apiMaybe(`/api/typifications/trees${scope}`, []) : [],
+    allowed("typification-trees", "typifications") ? apiMaybe(`/api/typifications/combinations${scope}`, []) : [],
+    allowed("recordings") ? apiMaybe(`/api/recordings${scope}`, []) : [],
+    allowed("telephony") ? apiMaybe(`/api/telephony/providers${scope}`, []) : [],
+    allowed("telephony") ? apiMaybe(`/api/telephony/extensions${scope}`, []) : [],
+    allowed("telephony") ? apiMaybe(`/api/telephony/call-logs${scope}`, []) : [],
     allowed("telephony") ? apiMaybe("/api/telephony/my-extension", null) : null,
-    allowed("uploads") ? apiMaybe("/api/uploads/batches", []) : [],
-    allowed("uploads", "queue", "customers") ? apiMaybe("/api/uploads/demographics?page_size=20", []) : [],
+    allowed("uploads") ? apiMaybe(`/api/uploads/batches${scopedQuery({ page_size: 20 })}`, []) : [],
+    allowed("uploads", "queue", "customers") ? apiMaybe(`/api/uploads/demographics${scopedQuery({ page_size: 20 })}`, []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/sources", []) : [],
-    allowed("excel-web") ? apiMaybe("/api/excel-web/views", []) : [],
-    allowed("excel-web") ? apiMaybe("/api/excel-web/query", null, { method: "POST", body: JSON.stringify({ source: "customers", page: 1, page_size: 20, filters: {}, columns: [] }) }) : null,
-    allowed("excel-web") ? apiMaybe("/api/excel-web/sheet-rows?page_size=20", { items: [], page: 1, total_pages: 0, total: 0 }) : null,
-    allowed("integrations", "channels") ? apiMaybe("/api/integrations/providers", []) : [],
-    allowed("integrations", "channels") ? apiMaybe("/api/integrations/channels", []) : [],
-    allowed("integrations") ? apiMaybe("/api/integrations/templates", []) : [],
-    allowed("integrations") ? apiMaybe("/api/integrations/webhooks", []) : [],
-    allowed("integrations") ? apiMaybe("/api/integrations/events", []) : [],
+    allowed("excel-web") ? apiMaybe(`/api/excel-web/views${scope}`, []) : [],
+    allowed("excel-web") ? apiMaybe("/api/excel-web/query", null, { method: "POST", body: JSON.stringify({ source: "customers", page: 1, page_size: 20, filters: scopedExcelFilters({}), columns: [] }) }) : null,
+    allowed("excel-web") ? apiMaybe(`/api/excel-web/sheet-rows${scopedQuery({ page_size: 20 })}`, { items: [], page: 1, total_pages: 0, total: 0 }) : null,
+    allowed("integrations", "channels") ? apiMaybe(`/api/integrations/providers${scope}`, []) : [],
+    allowed("integrations", "channels") ? apiMaybe(`/api/integrations/channels${scope}`, []) : [],
+    allowed("integrations") ? apiMaybe(`/api/integrations/templates${scope}`, []) : [],
+    allowed("integrations") ? apiMaybe(`/api/integrations/webhooks${scope}`, []) : [],
+    allowed("integrations") ? apiMaybe(`/api/integrations/events${scope}`, []) : [],
     allowed("telephony") && isPlatform() && !state.admin.tenants.length ? apiMaybe("/api/admin/tenants", []) : []
   ]);
   if (telephonyTenants.length && !state.admin.tenants.length) {
@@ -1030,6 +1098,92 @@ function telephonyTenantOptions(tenants, selected = "") {
     .join("");
 }
 
+function businessTenantSource() {
+  const source = [...(state.admin.tenants || []), ...(state.crm.options.tenants || [])];
+  const byId = new Map();
+  source.forEach((item) => {
+    const value = tenantOptionValue(item);
+    if (!value || item?.is_platform || item?.slug === "icodeup-platform") return;
+    byId.set(String(value), { ...item, id: value, name: tenantOptionLabel(item) });
+  });
+  return Array.from(byId.values()).sort((a, b) => tenantOptionLabel(a).localeCompare(tenantOptionLabel(b), "es"));
+}
+
+function supportAudienceOptions(selected = "company_admin") {
+  const options = [
+    ["company_admin", "Admin empresa"],
+    ["operational_leader", "Lider cobranzas"],
+    ["operational_user", "Gestor"]
+  ];
+  return options.map(([value, label]) => `<option value="${value}" ${value === selected ? "selected" : ""}>${label}</option>`).join("");
+}
+
+function renderOperationalSupportControls() {
+  const topbarMeta = document.querySelector(".topbar-meta");
+  if (!topbarMeta) return;
+  let container = document.querySelector("#supportModeControls");
+  if (!isPlatform()) {
+    if (container) container.remove();
+    return;
+  }
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "supportModeControls";
+    container.className = "support-mode-controls";
+    topbarMeta.prepend(container);
+  }
+  const tenants = businessTenantSource();
+  const stored = storedOperationalSupport();
+  const context = supportContext();
+  const selectedTenantId = operationalTenantId() || stored?.tenant_id || (tenants.length === 1 ? tenantOptionValue(tenants[0]) : "");
+  const selectedAudience = context.audience || stored?.audience || "company_admin";
+  const tenantOptions = tenants.map((item) => `<option value="${escapeHtml(tenantOptionValue(item))}" ${String(tenantOptionValue(item)) === String(selectedTenantId) ? "selected" : ""}>${escapeHtml(tenantOptionLabel(item))}</option>`).join("");
+  container.innerHTML = `
+    <span>${isOperationalSupportMode() ? "Operacion tenant" : "Gobierno SaaS"}</span>
+    <select id="supportTenantSelect" aria-label="Empresa operativa" ${tenants.length ? "" : "disabled"}>
+      <option value="">Empresa operativa</option>${tenantOptions}
+    </select>
+    <select id="supportAudienceSelect" aria-label="Vista operativa">
+      ${supportAudienceOptions(selectedAudience)}
+    </select>
+    <button type="button" data-enter-support-mode>${isOperationalSupportMode() ? "Aplicar" : "Entrar a operacion"}</button>
+    ${isOperationalSupportMode() ? `<button type="button" data-exit-support-mode>Gobierno SaaS</button>` : ""}
+  `;
+}
+
+async function enterOperationalSupportMode(button) {
+  const tenantSelect = document.querySelector("#supportTenantSelect");
+  const audienceSelect = document.querySelector("#supportAudienceSelect");
+  const tenantId = tenantSelect?.value;
+  if (!tenantId) {
+    showToast("warning", "Selecciona una empresa operativa para entrar a soporte.");
+    tenantSelect?.focus();
+    return;
+  }
+  await runAction(button, async () => {
+    localStorage.setItem(SUPPORT_TENANT_STORAGE_KEY, tenantId);
+    localStorage.setItem(SUPPORT_AUDIENCE_STORAGE_KEY, audienceSelect?.value || "company_admin");
+    state.queuePage = 1;
+    state.customerPage = 1;
+    state.selectedCustomer = null;
+    await refreshAll();
+    showToast("success", "Modo soporte operativo activado.");
+  }, "Entrando...");
+}
+
+async function exitOperationalSupportMode(button) {
+  await runAction(button, async () => {
+    localStorage.removeItem(SUPPORT_TENANT_STORAGE_KEY);
+    localStorage.removeItem(SUPPORT_AUDIENCE_STORAGE_KEY);
+    state.queuePage = 1;
+    state.customerPage = 1;
+    state.selectedCustomer = null;
+    closeManagementDrawer();
+    await refreshAll();
+    showToast("success", "Volviste a Gobierno SaaS.");
+  }, "Saliendo...");
+}
+
 function fillSelects() {
   const adminTenantOptions = optionList(state.admin.tenants);
   const crmTenantOptions = optionList(state.crm.options.tenants);
@@ -1042,7 +1196,8 @@ function fillSelects() {
     const current = select.value;
     const options = isPlatform() ? adminTenantOptions || crmTenantOptions : crmTenantOptions;
     select.innerHTML = `<option value="">Selecciona empresa</option>${options}`;
-    if (current) select.value = current;
+    if (isOperationalSupportMode() && operationalTenantId()) select.value = String(operationalTenantId());
+    else if (current) select.value = current;
   });
   document.querySelectorAll('select[name="project_id"]').forEach((select) => {
     const current = select.value;
@@ -1229,6 +1384,8 @@ function renderRoleDashboard() {
   const data = state.core.roleDashboard;
   if (!data) {
     container.innerHTML = "";
+    document.querySelector("#experienceActions") && (document.querySelector("#experienceActions").innerHTML = "");
+    document.querySelector("#experienceModules") && (document.querySelector("#experienceModules").innerHTML = "");
     return;
   }
   const user = menuUser();
@@ -2645,7 +2802,7 @@ function renderConfigurationCenter() {
     { label: "Alertas", value: alertRules.length, detail: "Condiciones activas para motor transversal.", tone: alertRules.length ? "green" : "yellow", action: "Severidad, rol destino y mensaje." },
     { label: "Workflows", value: workflows.length, detail: "Flujos de etapas por modulo.", tone: workflows.length ? "blue" : "yellow", action: "Juridico y ventas ya usan esta base." },
   ]);
-  const tenantField = isPlatform() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Opcional para alcance global" /></label>` : "";
+  const tenantField = isPlatform() && !isOperationalSupportMode() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Opcional para alcance global" /></label>` : "";
   const catalogRows = catalogs.slice(0, 20).map((item) => `<tr><td><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.module)}</td><td>${escapeHtml(item.catalog_type)}</td><td><span class="workflow-dot" style="background:${escapeHtml(item.color || "#94a3b8")}"></span>${item.is_active ? "Activo" : "Inactivo"}</td><td>${item.tenant_id ? "Tenant" : "Global"}</td><td><button class="table-button" data-config-edit="catalog" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
   document.querySelector("#configurationCatalogs") && (document.querySelector("#configurationCatalogs").innerHTML = `
     <form id="catalogConfigForm" class="ops-form form-grid">
@@ -3478,7 +3635,7 @@ function renderIntegrations() {
     { label: "Plantillas", value: templates.length, detail: "Mensajes por canal.", tone: templates.length ? "green" : "yellow", action: "Estandarizar comunicacion." },
     { label: "Eventos", value: events.length, detail: "Logs de pruebas y webhooks.", tone: "blue", action: "Auditoria de integraciones." },
   ]);
-  const tenantField = isPlatform() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Tenant destino" /></label>` : "";
+  const tenantField = isPlatform() && !isOperationalSupportMode() ? `<label>Tenant ID<input name="tenant_id" type="number" placeholder="Tenant destino" /></label>` : "";
   const providerOptions = providers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.provider_type)})</option>`).join("");
   const providerRows = providers.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code)}</small></td><td>${escapeHtml(item.provider_type)}</td><td>${escapeHtml(item.status)}</td><td>${escapeHtml(item.secret_mask || "Sin secreto visible")}</td><td><button class="table-button" data-integration-edit="provider" data-id="${item.id}" type="button">Editar</button></td></tr>`).join("");
   document.querySelector("#providerTable") && (document.querySelector("#providerTable").innerHTML = `
@@ -3983,7 +4140,10 @@ function optionalNumber(value) {
 }
 
 function platformTenantValue(form) {
-  return isPlatform() && form.elements.tenant_id?.value ? Number(form.elements.tenant_id.value) : null;
+  if (!isPlatform()) return null;
+  const supportTenant = operationalTenantId();
+  if (supportTenant) return Number(supportTenant);
+  return form.elements.tenant_id?.value ? Number(form.elements.tenant_id.value) : null;
 }
 
 async function submitJson(form, endpoint, buildPayload, options = {}) {
@@ -4215,6 +4375,16 @@ function setupEvents() {
     }
   });
   document.addEventListener("click", async (event) => {
+    const enterSupportMode = event.target.closest("[data-enter-support-mode]");
+    if (enterSupportMode) {
+      await enterOperationalSupportMode(enterSupportMode);
+      return;
+    }
+    const exitSupportMode = event.target.closest("[data-exit-support-mode]");
+    if (exitSupportMode) {
+      await exitOperationalSupportMode(exitSupportMode);
+      return;
+    }
     const tablePage = event.target.closest("[data-table-page]");
     if (tablePage) {
       state.ui.tablePages[tablePage.dataset.tablePage] = Number(tablePage.dataset.page || 1);
@@ -4394,7 +4564,7 @@ function setupEvents() {
     const excelSource = event.target.closest("[data-excel-source]");
     if (excelSource) {
       const source = state.ops.excelSources.find((item) => item.code === excelSource.dataset.excelSource);
-      state.ops.excelDraft = { source: excelSource.dataset.excelSource, filters: {}, columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 20 };
+      state.ops.excelDraft = { source: excelSource.dataset.excelSource, filters: scopedExcelFilters({}), columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 20 };
       state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
@@ -4403,7 +4573,7 @@ function setupEvents() {
     if (excelView) {
       const view = state.ops.excelViews.find((item) => String(item.id) === String(excelView.dataset.excelView));
       if (view) {
-        state.ops.excelDraft = { source: view.source, filters: view.filters || {}, columns: view.columns || [], page: 1, page_size: 20 };
+        state.ops.excelDraft = { source: view.source, filters: scopedExcelFilters(view.filters || {}), columns: view.columns || [], page: 1, page_size: 20 };
         state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
         showToast("success", "Vista cargada correctamente.");
         renderExcelWeb();
@@ -4423,8 +4593,8 @@ function setupEvents() {
     }
     const excelPage = event.target.closest("[data-excel-page]");
     if (excelPage) {
-      const payload = state.ops.excelDraft || { source: state.ops.excelSources[0]?.code || "customers", filters: {}, columns: [], page: 1, page_size: 20 };
-      state.ops.excelDraft = { ...payload, page: Math.max(1, Number(excelPage.dataset.excelPage || 1)), page_size: 20 };
+      const payload = state.ops.excelDraft || { source: state.ops.excelSources[0]?.code || "customers", filters: scopedExcelFilters({}), columns: [], page: 1, page_size: 20 };
+      state.ops.excelDraft = { ...payload, filters: scopedExcelFilters(payload.filters || {}), page: Math.max(1, Number(excelPage.dataset.excelPage || 1)), page_size: 20 };
       state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
@@ -4432,7 +4602,7 @@ function setupEvents() {
     const excelClear = event.target.closest("[data-excel-clear]");
     if (excelClear) {
       const source = state.ops.excelSources.find((item) => item.code === (state.ops.excelDraft?.source || state.ops.excelResult?.source)) || state.ops.excelSources[0];
-      state.ops.excelDraft = { source: source?.code || "customers", filters: {}, columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 20 };
+      state.ops.excelDraft = { source: source?.code || "customers", filters: scopedExcelFilters({}), columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 20 };
       state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
@@ -4636,7 +4806,7 @@ function setupEvents() {
   });
   document.querySelector("#exportCustomers").addEventListener("click", async () => {
     try {
-      await downloadCsv("/api/crm/customers/export", "clientes_iep.csv");
+      await downloadCsv(`/api/crm/customers/export${scopedQuery()}`, "clientes_iep.csv");
       showToast("success", "Exportacion de clientes iniciada.");
     } catch (error) {
       showToast("error", error.message);
@@ -4664,7 +4834,7 @@ function setupEvents() {
   });
   document.querySelector("#exportPayments").addEventListener("click", async () => {
     try {
-      await downloadCsv("/api/crm/payments/export", "pagos_iep.csv");
+      await downloadCsv(`/api/crm/payments/export${scopedQuery()}`, "pagos_iep.csv");
       showToast("success", "Exportacion de pagos iniciada.");
     } catch (error) {
       showToast("error", error.message);
@@ -5005,7 +5175,7 @@ function excelPayloadFromForm(form) {
   };
   return {
     source: form.elements.source.value,
-    filters,
+    filters: scopedExcelFilters(filters),
     columns,
     page: Number(form.elements.page.value || 1),
     page_size: 20,
@@ -5034,6 +5204,7 @@ async function saveExcelView(form) {
     await api("/api/excel-web/views", {
       method: "POST",
       body: JSON.stringify({
+        tenant_id: platformTenantValue(form),
         name: form.elements.name.value,
         source: payload.source,
         columns: payload.columns,
@@ -5053,7 +5224,7 @@ async function saveExcelView(form) {
 async function loadExcelSheetRows(page = 1) {
   const filters = state.ops.excelSheetFilters || {};
   state.ops.excelSheetRows = await api(`/api/excel-web/sheet-rows?${queryParams({
-    page,
+    ...scopedTenantParams({ page }),
     page_size: 20,
     q: filters.q || "",
     status: filters.status || "",
@@ -5171,6 +5342,8 @@ function validateSheetData(data, isNew = false) {
 
 function sheetApiPayload(data) {
   const payload = { ...data };
+  const supportTenant = operationalTenantId();
+  if (supportTenant && !payload.tenant_id) payload.tenant_id = Number(supportTenant);
   if (Object.prototype.hasOwnProperty.call(payload, "amount")) payload.amount = Number(payload.amount || 0);
   if (Object.prototype.hasOwnProperty.call(payload, "project_id")) payload.project_id = optionalNumber(payload.project_id);
   if (Object.prototype.hasOwnProperty.call(payload, "next_action_at")) payload.next_action_at = toDateTime(payload.next_action_at);
@@ -5238,6 +5411,7 @@ function focusRelativeSheetCell(target, direction = "down") {
 
 function excelSheetPayloadFromForm(form) {
   return {
+    tenant_id: operationalTenantId() ? Number(operationalTenantId()) : null,
     project_id: optionalNumber(form.elements.project_id.value),
     date: form.elements.date.value || null,
     portfolio: form.elements.project_id.selectedOptions[0]?.text || "",

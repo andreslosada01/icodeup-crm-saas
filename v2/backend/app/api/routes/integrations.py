@@ -107,10 +107,13 @@ def update_provider(provider_id: int, payload: IntegrationProviderCreate, reques
 
 
 @router.get("/channels", response_model=list[ChannelConfigurationOut])
-def list_channels(channel_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelConfigurationOut]:
+def list_channels(tenant_id: int | None = None, channel_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelConfigurationOut]:
     require_permission(db, user, "integrations.channels.view")
     query = select(ChannelConfiguration).order_by(ChannelConfiguration.channel_type, ChannelConfiguration.name)
-    if not is_platform_admin(db, user):
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(ChannelConfiguration.tenant_id == tenant_id)
+    else:
         query = query.where(ChannelConfiguration.tenant_id == user.tenant_id)
     if channel_type:
         query = query.where(ChannelConfiguration.channel_type == channel_type)
@@ -162,10 +165,13 @@ def test_channel(channel_id: int, request: Request, db: Session = Depends(get_db
 
 
 @router.get("/templates", response_model=list[CommunicationTemplateOut])
-def list_templates(channel_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CommunicationTemplate]:
+def list_templates(tenant_id: int | None = None, channel_type: str | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CommunicationTemplate]:
     require_permission(db, user, "integrations.templates.view")
     query = select(CommunicationTemplate).order_by(CommunicationTemplate.channel_type, CommunicationTemplate.name)
-    if not is_platform_admin(db, user):
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(CommunicationTemplate.tenant_id == tenant_id)
+    else:
         query = query.where(CommunicationTemplate.tenant_id == user.tenant_id)
     if channel_type:
         query = query.where(CommunicationTemplate.channel_type == channel_type)
@@ -196,10 +202,13 @@ def update_template(template_id: int, payload: CommunicationTemplateCreate, db: 
 
 
 @router.get("/webhooks", response_model=list[WebhookConfigurationOut])
-def list_webhooks(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[WebhookConfigurationOut]:
+def list_webhooks(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[WebhookConfigurationOut]:
     require_permission(db, user, "integrations.webhooks.view")
     query = select(WebhookConfiguration).order_by(WebhookConfiguration.name)
-    if not is_platform_admin(db, user):
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(WebhookConfiguration.tenant_id == tenant_id)
+    else:
         query = query.where(WebhookConfiguration.tenant_id == user.tenant_id)
     return [_webhook_out(item) for item in db.scalars(query)]
 
@@ -243,11 +252,14 @@ def test_webhook(webhook_id: int, db: Session = Depends(get_db), user: User = De
 
 
 @router.get("/events", response_model=list[ChannelEventOut])
-def list_events(channel_type: str | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelEventOut]:
+def list_events(tenant_id: int | None = None, channel_type: str | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelEventOut]:
     require_permission(db, user, "integrations.events.view")
-    query = select(ChannelEventLog).order_by(ChannelEventLog.created_at.desc()).limit(limit)
-    if not is_platform_admin(db, user):
+    query = select(ChannelEventLog)
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(ChannelEventLog.tenant_id == tenant_id)
+    else:
         query = query.where(ChannelEventLog.tenant_id == user.tenant_id)
     if channel_type:
         query = query.where(ChannelEventLog.channel_type == channel_type)
-    return [_event_out(item) for item in db.scalars(query)]
+    return [_event_out(item) for item in db.scalars(query.order_by(ChannelEventLog.created_at.desc()).limit(limit))]

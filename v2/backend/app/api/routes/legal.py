@@ -134,10 +134,10 @@ def customer_for_legal_create(db: Session, customer_id: int, user: User) -> Cust
 
 
 @router.get("/dashboard")
-def legal_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+def legal_dashboard(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
-    cases = list_cases(db, user, limit=20)
+    cases = list_cases(tenant_id=tenant_id, db=db, user=user, limit=20)
     case_ids = [item.id for item in cases]
     deadlines = list(db.scalars(select(LegalDeadline).where(LegalDeadline.legal_case_id.in_(case_ids)).order_by(LegalDeadline.due_at.asc()).limit(20))) if case_ids else []
     hearings = list(db.scalars(select(LegalHearing).where(LegalHearing.legal_case_id.in_(case_ids)).order_by(LegalHearing.scheduled_at.asc()).limit(20))) if case_ids else []
@@ -174,11 +174,11 @@ def legal_dashboard(db: Session = Depends(get_db), user: User = Depends(current_
 
 
 @router.get("/kanban")
-def legal_kanban(db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
+def legal_kanban(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
-    cases = list_cases(db, user, limit=20)
-    stages = legal_stages(db, user.tenant_id if not is_platform_admin(db, user) else None)
+    cases = list_cases(tenant_id=tenant_id, db=db, user=user, limit=20)
+    stages = legal_stages(db, tenant_id if is_platform_admin(db, user) and tenant_id else user.tenant_id if not is_platform_admin(db, user) else None)
     columns = []
     for stage in stages:
         stage_key = _norm(stage["name"])
@@ -217,12 +217,14 @@ def legal_kanban(db: Session = Depends(get_db), user: User = Depends(current_use
 
 
 @router.get("/cases", response_model=list[LegalCaseOut])
-def list_cases(db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[LegalCase]:
+def list_cases(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[LegalCase]:
     require_permission(db, user, "legal.cases.view")
     ensure_legal_read(db, user)
     profile_role = get_profile_role_code(db, user)
     if is_platform_admin(db, user):
         query = select(LegalCase).order_by(LegalCase.created_at.desc())
+        if tenant_id:
+            query = query.where(LegalCase.tenant_id == tenant_id)
     elif is_company_admin(db, user) or profile_role == "legal_director":
         query = select(LegalCase).where(LegalCase.tenant_id == user.tenant_id).order_by(LegalCase.created_at.desc())
     elif profile_role == "lawyer":
@@ -321,13 +323,15 @@ def create_action(case_id: int, payload: LegalActionCreate, db: Session = Depend
 
 
 @router.get("/deadlines", response_model=list[LegalDeadlineOut])
-def list_deadlines(db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[LegalDeadline]:
+def list_deadlines(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[LegalDeadline]:
     require_permission(db, user, "legal.deadlines.view")
     ensure_legal_read(db, user)
     if is_platform_admin(db, user):
         query = select(LegalDeadline).order_by(LegalDeadline.due_at.asc())
+        if tenant_id:
+            query = query.where(LegalDeadline.tenant_id == tenant_id)
     else:
-        cases = list_cases(db, user, limit=20)
+        cases = list_cases(db=db, user=user, limit=20)
         case_ids = [item.id for item in cases]
         query = select(LegalDeadline).where(LegalDeadline.legal_case_id.in_(case_ids)).order_by(LegalDeadline.due_at.asc()) if case_ids else select(LegalDeadline).where(False)
     return list(db.scalars(query.limit(limit)))

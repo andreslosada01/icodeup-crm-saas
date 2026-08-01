@@ -394,10 +394,12 @@ def insight(severity: str, title: str, description: str, action: str, entity_typ
     }
 
 
-def tenant_scope_for_insights(db: Session, user: User) -> list[Tenant]:
+def tenant_scope_for_insights(db: Session, user: User, tenant_id: int | None = None) -> list[Tenant]:
     if not (is_platform_admin(db, user) or is_company_admin(db, user)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo administradores pueden consultar alertas de seguridad.")
     if is_platform_admin(db, user):
+        if tenant_id:
+            return [target_tenant(db, user, tenant_id)]
         return list(db.scalars(select(Tenant).where(Tenant.slug != settings.platform_tenant_slug).order_by(Tenant.name)))
     return [target_tenant(db, user)]
 
@@ -657,7 +659,7 @@ def list_audit_logs(
     user: User = Depends(current_user),
 ) -> list[AuditLog]:
     require_permission(db, user, "audit.logs.view")
-    query = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    query = select(AuditLog)
     if is_platform_admin(db, user):
         if tenant_id:
             query = query.where(AuditLog.tenant_id == tenant_id)
@@ -673,7 +675,7 @@ def list_audit_logs(
         query = query.where(AuditLog.created_at >= date_from)
     if date_to:
         query = query.where(AuditLog.created_at <= date_to)
-    return list(db.scalars(query))
+    return list(db.scalars(query.order_by(AuditLog.created_at.desc()).limit(limit)))
 
 
 @router.get("/parties", response_model=list[PartyOut])
@@ -744,9 +746,9 @@ def list_subscription_overview(db: Session = Depends(get_db), user: User = Depen
 
 
 @router.get("/security-insights")
-def list_security_insights(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+def list_security_insights(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
     rows: list[dict] = []
-    for tenant in tenant_scope_for_insights(db, user):
+    for tenant in tenant_scope_for_insights(db, user, tenant_id):
         rows.extend(security_insights_for_tenant(db, tenant))
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     return sorted(rows, key=lambda item: (severity_order.get(item["severity"], 9), item["title"]))[:80]

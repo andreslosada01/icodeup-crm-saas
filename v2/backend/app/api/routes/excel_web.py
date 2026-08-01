@@ -32,6 +32,7 @@ from app.models import (
     PaymentPromise,
     Project,
     SavedDataView,
+    Tenant,
     UploadBatch,
     User,
     UserProjectAssignment,
@@ -209,6 +210,23 @@ def _require_sheet_manage(db: Session, user: User) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso insuficiente para administrar la hoja operativa.")
 
 
+def _target_tenant_id(db: Session, user: User, tenant_id: int | None = None) -> int:
+    try:
+        requested_id = int(tenant_id) if tenant_id else None
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Empresa invalida.") from exc
+    if is_platform_admin(db, user):
+        if requested_id:
+            tenant = db.get(Tenant, requested_id)
+            if tenant is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Empresa no encontrada.")
+            return tenant.id
+        return user.tenant_id
+    if requested_id and requested_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Empresa fuera de tu alcance.")
+    return user.tenant_id
+
+
 def _apply_filters(query, model: Any, filters: dict[str, Any]):
     text = filters.get("text") or filters.get("search")
     if text:
@@ -218,7 +236,7 @@ def _apply_filters(query, model: Any, filters: dict[str, Any]):
                 expressions.append(getattr(model, field).ilike(f"%{text}%"))
         if expressions:
             query = query.where(or_(*expressions))
-    for field in ("status", "risk", "project_id", "customer_id", "assigned_user_id", "user_id"):
+    for field in ("status", "risk", "project_id", "customer_id", "assigned_user_id", "user_id", "tenant_id"):
         value = filters.get(field)
         if value not in (None, "") and hasattr(model, field):
             query = query.where(getattr(model, field) == value)
@@ -238,8 +256,10 @@ def _apply_filters(query, model: Any, filters: dict[str, Any]):
     return query
 
 
-def _apply_sheet_scope(db: Session, user: User, query):
+def _apply_sheet_scope(db: Session, user: User, query, tenant_id: int | None = None):
     if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(OperationalSheetRow.tenant_id == tenant_id)
         return query
     query = query.where(OperationalSheetRow.tenant_id == user.tenant_id)
     if user.role == "tenant_admin":
@@ -382,6 +402,7 @@ def query_data(payload: ExcelWebQuery, db: Session = Depends(get_db), user: User
 def list_sheet_rows(
     page: int = 1,
     page_size: int = EXCEL_PAGE_SIZE,
+    tenant_id: int | None = None,
     q: str | None = None,
     row_status: str | None = Query(default=None, alias="status"),
     project_id: int | None = None,
@@ -401,8 +422,8 @@ def list_sheet_rows(
         "date_from": date_from,
         "date_to": date_to,
     }
-    query = _apply_sheet_scope(db, user, select(OperationalSheetRow))
-    count_query = _apply_sheet_scope(db, user, select(func.count(OperationalSheetRow.id)))
+    query = _apply_sheet_scope(db, user, select(OperationalSheetRow), tenant_id=tenant_id)
+    count_query = _apply_sheet_scope(db, user, select(func.count(OperationalSheetRow.id)), tenant_id=tenant_id)
     query = _apply_sheet_filters(query, filters)
     count_query = _apply_sheet_filters(count_query, filters)
     total = db.scalar(count_query) or 0
@@ -421,8 +442,9 @@ def list_sheet_rows(
 def create_sheet_row(payload: OperationalSheetRowCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> OperationalSheetRowOut:
     _require_sheet_manage(db, user)
     _ensure_sheet_references(db, user, payload)
+    tenant_id = _target_tenant_id(db, user, payload.tenant_id)
     item = OperationalSheetRow(
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         project_id=payload.project_id,
         user_id=user.id,
         customer_id=payload.customer_id,
@@ -441,7 +463,7 @@ def create_sheet_row(payload: OperationalSheetRowCreate, request: Request, db: S
     )
     db.add(item)
     db.flush()
-    record_audit(db, user, "excel_web_sheet_row", "create", entity_id=item.id, tenant_id=user.tenant_id, module="excel_web", after={"status": item.status, "amount": item.amount}, request=request)
+    record_audit(db, user, "excel_web_sheet_row", "create", entity_id=item.id, tenant_id=tenant_id, module="excel_web", after={"status": item.status, "amount": item.amount}, request=request)
     db.commit()
     db.refresh(item)
     return _sheet_to_out(db, item)
@@ -472,10 +494,13 @@ def update_sheet_row(row_id: int, payload: OperationalSheetRowPatch, request: Re
 
 
 @router.get("/views", response_model=list[SavedDataViewOut])
-def list_views(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[SavedDataViewOut]:
+def list_views(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[SavedDataViewOut]:
     require_permission(db, user, "excel_web.views.manage")
     query = select(SavedDataView).where((SavedDataView.user_id == user.id) | (SavedDataView.is_public.is_(True))).order_by(SavedDataView.is_favorite.desc(), SavedDataView.name)
-    if not is_platform_admin(db, user):
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(SavedDataView.tenant_id == tenant_id)
+    else:
         query = query.where(SavedDataView.tenant_id == user.tenant_id)
     return [_view_to_out(item) for item in db.scalars(query)]
 
@@ -485,8 +510,9 @@ def create_view(payload: SavedDataViewCreate, db: Session = Depends(get_db), use
     require_permission(db, user, "excel_web.views.manage")
     if payload.source not in _allowed_source_codes(db, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Fuente no autorizada para tu alcance.")
+    tenant_id = _target_tenant_id(db, user, payload.tenant_id)
     view = SavedDataView(
-        tenant_id=user.tenant_id,
+        tenant_id=tenant_id,
         user_id=user.id,
         name=payload.name,
         source=payload.source,
@@ -543,10 +569,11 @@ def export_data(payload: ExcelWebQuery, request: Request, db: Session = Depends(
     writer.writeheader()
     for item in items:
         writer.writerow({column: _safe_csv_value(getattr(item, column, None)) for column in columns})
-    log = DataExportLog(tenant_id=user.tenant_id, user_id=user.id, source=payload.source, filters_json=json.dumps(payload.filters), columns_json=json.dumps(columns), row_count=len(items), status="completed")
+    log_tenant_id = _target_tenant_id(db, user, payload.filters.get("tenant_id"))
+    log = DataExportLog(tenant_id=log_tenant_id, user_id=user.id, source=payload.source, filters_json=json.dumps(payload.filters), columns_json=json.dumps(columns), row_count=len(items), status="completed")
     db.add(log)
     db.flush()
-    record_audit(db, user, "excel_web_export", "create", entity_id=log.id, tenant_id=user.tenant_id, module="excel_web", after={"source": payload.source, "rows": len(items)}, request=request)
+    record_audit(db, user, "excel_web_export", "create", entity_id=log.id, tenant_id=log_tenant_id, module="excel_web", after={"source": payload.source, "rows": len(items)}, request=request)
     db.commit()
     file_name = f"iep_{payload.source}_{log.id}.csv"
     return Response(

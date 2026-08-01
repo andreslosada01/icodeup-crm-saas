@@ -339,11 +339,14 @@ def update_project_user(assignment_id: int, payload: ProjectUserAssignmentPatch,
 
 
 @router.get("/leaders", response_model=list[TeamUserOut])
-def list_leaders(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[TeamUserOut]:
+def list_leaders(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[TeamUserOut]:
     require_module(db, user, "administration")
     _require_any_permission(db, user, "teams.view", "project_users.view")
     query = select(User).where(User.status == "active").order_by(User.name)
-    if not is_platform_admin(db, user):
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(User.tenant_id == tenant_id)
+    else:
         query = query.where(User.tenant_id == user.tenant_id)
         if not is_company_admin(db, user) and not _has_manage_scope(db, user):
             query = query.where(User.id == user.id)
@@ -357,11 +360,14 @@ def list_leaders(db: Session = Depends(get_db), user: User = Depends(current_use
 
 
 @router.get("/agents", response_model=list[TeamUserOut])
-def list_agents(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[TeamUserOut]:
+def list_agents(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[TeamUserOut]:
     require_module(db, user, "administration")
     _require_any_permission(db, user, "teams.view", "project_users.view")
     query = select(User).where(User.status == "active").order_by(User.name)
-    if not is_platform_admin(db, user):
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(User.tenant_id == tenant_id)
+    else:
         query = query.where(User.tenant_id == user.tenant_id)
         if not is_company_admin(db, user) and not _has_manage_scope(db, user):
             query = query.where(or_(User.leader_id == user.id, User.id == user.id))

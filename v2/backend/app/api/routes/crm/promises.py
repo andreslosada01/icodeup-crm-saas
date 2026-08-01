@@ -6,12 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.db.session import get_db
-from app.models import CustomerObligation, ManagementActivity, PaymentPromise, User
+from app.models import Customer, CustomerObligation, ManagementActivity, PaymentPromise, User
 from app.schemas.crm import PromiseCreate, PromiseOut
 from app.services.audit_service import record_audit
 from app.services.access_control import require_permission
 
-from .access import customer_for_access, customer_query, ensure_read_access
+from .access import customer_for_access, customer_query, ensure_read_access, is_platform
 from .obligations import obligation_for_access
 
 
@@ -35,10 +35,13 @@ def promise_to_out(db: Session, item: PaymentPromise, customer_name: str | None 
 
 
 @router.get("/promises", response_model=list[PromiseOut])
-def list_promises(limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PromiseOut]:
+def list_promises(tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PromiseOut]:
     require_permission(db, user, "collections.promises.view")
     ensure_read_access(user)
-    customers = list(db.scalars(customer_query(db, user)))
+    query = customer_query(db, user)
+    if tenant_id and is_platform(user):
+        query = query.where(Customer.tenant_id == tenant_id)
+    customers = list(db.scalars(query))
     customer_map = {customer.id: customer for customer in customers}
     promises = list(db.scalars(select(PaymentPromise).where(PaymentPromise.customer_id.in_(customer_map.keys())).order_by(PaymentPromise.created_at.desc()).limit(limit))) if customer_map else []
     return [promise_to_out(db, item, customer_map[item.customer_id].name if item.customer_id in customer_map else None) for item in promises]

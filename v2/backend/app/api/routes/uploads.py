@@ -733,15 +733,19 @@ def _sample_template_row(upload_type: str, columns: list[str]) -> list[str]:
 
 
 @router.get("/batches", response_model=list[UploadBatchOut])
-def list_batches(upload_type: str | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[UploadBatch]:
+def list_batches(tenant_id: int | None = None, upload_type: str | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[UploadBatch]:
     require_permission(db, user, "uploads.view")
     page = max(1, page)
     page_size = min(max(page_size, 1), 20)
-    query = select(UploadBatch).order_by(UploadBatch.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-    if not is_platform_admin(db, user):
+    query = select(UploadBatch)
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(UploadBatch.tenant_id == tenant_id)
+    else:
         query = query.where(UploadBatch.tenant_id == user.tenant_id)
     if upload_type:
         query = query.where(UploadBatch.upload_type == upload_type)
+    query = query.order_by(UploadBatch.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     return list(db.scalars(query))
 
 
@@ -792,14 +796,18 @@ def batch_result(batch_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/demographics", response_model=list[CustomerDemographicOut])
-def list_demographics(customer_id: int | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerDemographicOut]:
+def list_demographics(tenant_id: int | None = None, customer_id: int | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerDemographicOut]:
     require_permission(db, user, "demographics.view")
     page_size = min(max(page_size, 1), 20)
-    query = select(CustomerDemographic).order_by(CustomerDemographic.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
-    if not is_platform_admin(db, user):
+    query = select(CustomerDemographic)
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(CustomerDemographic.tenant_id == tenant_id)
+    else:
         query = query.where(CustomerDemographic.tenant_id == user.tenant_id)
     if customer_id:
         query = query.where(CustomerDemographic.customer_id == customer_id)
+    query = query.order_by(CustomerDemographic.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     return [_demographic_to_out(item) for item in db.scalars(query)]
 
 
