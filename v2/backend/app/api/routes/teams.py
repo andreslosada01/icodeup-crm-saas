@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -10,6 +11,7 @@ from app.api.deps import current_user
 from app.core.roles import AGENT, COORDINATOR, QUALITY_SUPERVISOR, TENANT_ADMIN
 from app.db.session import get_db
 from app.models import (
+    AlertRule,
     Customer,
     CustomerObligation,
     ManagementActivity,
@@ -18,10 +20,12 @@ from app.models import (
     PaymentPromise,
     Project,
     Role,
+    TenantModule,
     User,
     UserProfile,
     UserProjectAssignment,
 )
+from app.schemas.self_service import OperationalCenterOut
 from app.schemas.teams import (
     AssignmentUpdateResult,
     LeaderAgentAssignmentCreate,
@@ -41,6 +45,7 @@ from app.services.access_control import (
     user_has_permission,
 )
 from app.services.audit_service import record_audit
+from app.services.collections_self_service import scoring_rules_for_tenant
 
 
 router = APIRouter()
@@ -189,6 +194,71 @@ def _project_to_out(db: Session, project: Project) -> TeamProjectOut:
     )
 
 
+def _json_config(value: str | None) -> dict:
+    if not value:
+        return {}
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _tenant_modules_out(db: Session, tenant_id: int) -> list[dict]:
+    modules = list(db.scalars(select(TenantModule).where(TenantModule.tenant_id == tenant_id).order_by(TenantModule.module_code).limit(TEAM_PAGE_SIZE)))
+    return [
+        {
+            "id": item.id,
+            "module_code": item.module_code,
+            "name": item.module.name if item.module else item.module_code,
+            "enabled": item.enabled,
+            "is_enabled": item.is_enabled,
+            "enabled_at": item.enabled_at,
+            "configuration": _json_config(item.configuration_json),
+        }
+        for item in modules
+    ]
+
+
+def _alert_rules_out(db: Session, tenant_id: int) -> list[dict]:
+    rules = list(
+        db.scalars(
+            select(AlertRule)
+            .where(AlertRule.module.in_(["collections", "crm"]), or_(AlertRule.tenant_id.is_(None), AlertRule.tenant_id == tenant_id))
+            .order_by(AlertRule.is_active.desc(), AlertRule.code)
+            .limit(TEAM_PAGE_SIZE)
+        )
+    )
+    return [
+        {
+            "id": item.id,
+            "code": item.code,
+            "name": item.name,
+            "condition_type": item.condition_type,
+            "threshold_days": item.threshold_days,
+            "severity": item.severity,
+            "target_role": item.target_role,
+            "is_active": item.is_active,
+        }
+        for item in rules
+    ]
+
+
+def _users_summary(db: Session, tenant_id: int) -> dict[str, int]:
+    return {
+        "active": db.scalar(select(func.count(User.id)).where(User.tenant_id == tenant_id, User.status == "active")) or 0,
+        "inactive": db.scalar(select(func.count(User.id)).where(User.tenant_id == tenant_id, User.status != "active")) or 0,
+        "without_assignment": db.scalar(
+            select(func.count(User.id)).where(
+                User.tenant_id == tenant_id,
+                User.status == "active",
+                User.id.not_in(select(UserProjectAssignment.user_id).where(UserProjectAssignment.tenant_id == tenant_id, UserProjectAssignment.is_active.is_(True))),
+            )
+        )
+        or 0,
+    }
+
+
 def _leader_for_access(db: Session, leader_id: int, user: User, write: bool = False) -> User:
     leader = db.get(User, leader_id)
     if leader is None:
@@ -296,6 +366,73 @@ def list_project_users(project_id: int, db: Session = Depends(get_db), user: Use
     _project_for_access(db, project_id, user)
     assignments = list(db.scalars(select(UserProjectAssignment).where(UserProjectAssignment.project_id == project_id).order_by(UserProjectAssignment.is_active.desc(), UserProjectAssignment.role_in_project, UserProjectAssignment.id).limit(TEAM_PAGE_SIZE)))
     return [_assignment_to_out(db, item) for item in assignments]
+
+
+@router.get("/users/{user_id}/projects", response_model=list[ProjectUserAssignmentOut])
+def list_user_projects(user_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ProjectUserAssignmentOut]:
+    require_module(db, user, "administration")
+    _require_any_permission(db, user, "teams.view", "project_users.view")
+    target = db.get(User, user_id)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado.")
+    if not is_platform_admin(db, user) and target.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuario fuera de tu empresa.")
+    if not _has_manage_scope(db, user) and target.id != user.id and target.leader_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No tienes alcance sobre este usuario.")
+    assignments = list(
+        db.scalars(
+            select(UserProjectAssignment)
+            .where(UserProjectAssignment.user_id == target.id)
+            .order_by(UserProjectAssignment.is_active.desc(), UserProjectAssignment.project_id)
+            .limit(TEAM_PAGE_SIZE)
+        )
+    )
+    return [_assignment_to_out(db, item) for item in assignments]
+
+
+@router.get("/operational-center", response_model=OperationalCenterOut)
+def operational_center(
+    tenant_id: int | None = None,
+    project_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> OperationalCenterOut:
+    require_module(db, user, "administration")
+    _require_any_permission(db, user, "teams.view", "project_users.view")
+    query = select(Project).order_by(Project.name)
+    if is_platform_admin(db, user):
+        if tenant_id:
+            query = query.where(Project.tenant_id == tenant_id)
+    else:
+        query = query.where(Project.tenant_id == user.tenant_id)
+        if not is_company_admin(db, user) and not _has_manage_scope(db, user):
+            project_ids = _active_project_ids(db, user)
+            query = query.where(Project.id.in_(project_ids or [-1]))
+    projects = list(db.scalars(query.limit(TEAM_PAGE_SIZE)))
+    selected = _project_for_access(db, project_id, user) if project_id else projects[0] if projects else None
+    selected_out = _project_to_out(db, selected) if selected else None
+    project_out = [_project_to_out(db, item) for item in projects]
+    assignments = []
+    if selected:
+        assignments = [
+            _assignment_to_out(db, item)
+            for item in db.scalars(
+                select(UserProjectAssignment)
+                .where(UserProjectAssignment.project_id == selected.id)
+                .order_by(UserProjectAssignment.is_active.desc(), UserProjectAssignment.role_in_project, UserProjectAssignment.id)
+                .limit(TEAM_PAGE_SIZE)
+            )
+        ]
+    target_tenant_id = selected.tenant_id if selected else tenant_id if is_platform_admin(db, user) and tenant_id else user.tenant_id
+    return OperationalCenterOut(
+        selected_project=selected_out,
+        projects=project_out,
+        assignments=assignments,
+        active_modules=_tenant_modules_out(db, target_tenant_id),
+        scoring_rules=scoring_rules_for_tenant(db, target_tenant_id),
+        alert_rules=_alert_rules_out(db, target_tenant_id),
+        users_summary=_users_summary(db, target_tenant_id),
+    )
 
 
 @router.post("/projects/{project_id}/users", response_model=ProjectUserAssignmentOut, status_code=status.HTTP_201_CREATED)

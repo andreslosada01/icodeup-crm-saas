@@ -7,8 +7,10 @@ from app.api.deps import current_user
 from app.db.session import get_db
 from app.models import User
 from app.schemas.alerts import AlertOut, AlertSummaryOut
+from app.schemas.self_service import SessionSummaryOut
 from app.services.access_control import require_permission
 from app.services.alert_engine import collect_alerts, summarize_alerts
+from app.services.collections_self_service import build_session_summary
 
 
 router = APIRouter()
@@ -39,3 +41,13 @@ def alert_summary(
     require_permission(db, user, "alerts.view")
     alerts = collect_alerts(db, user, module=module, tenant_id=tenant_id, limit=10)
     return summarize_alerts(alerts)
+
+
+@router.get("/session-summary", response_model=SessionSummaryOut)
+def session_summary(
+    tenant_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> SessionSummaryOut:
+    require_permission(db, user, "alerts.view")
+    return build_session_summary(db, user, tenant_id=tenant_id)

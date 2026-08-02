@@ -13,10 +13,10 @@ const state = {
   governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null, securityInsights: [], effectiveAccess: null },
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], agreements: [], paymentObligations: [], channels: [], typifications: [] },
   configuration: { catalogs: [], rules: [], alertRules: [], workflows: [] },
-  alerts: { items: [], summary: null },
+  alerts: { items: [], summary: null, sessionSummary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
-  teams: { projects: [], leaders: [], agents: [], projectUsers: [], leaderAgents: [], leaderSummary: null, selectedProjectId: null, selectedLeaderId: null },
+  teams: { projects: [], leaders: [], agents: [], projectUsers: [], leaderAgents: [], leaderSummary: null, operationalCenter: null, selectedProjectId: null, selectedLeaderId: null },
   ops: { trees: [], combinations: [], recordings: [], telephonyProviders: [], telephonyExtensions: [], telephonyCallLogs: [], myExtension: null, uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, excelSheetChanges: {}, excelSheetNewRow: {}, excelSheetActiveCell: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
   ui: { tablePages: {}, selectedAgreementId: null },
   selectedCustomer: null,
@@ -24,6 +24,7 @@ const state = {
   selectedObligations: [],
   selectedAgreements: [],
   selectedDemographics: [],
+  selectedManagementInsights: null,
   queuePage: 1,
   customerPage: 1
 };
@@ -903,12 +904,14 @@ async function loadTeamsData() {
   ]);
   const selectedProjectId = state.teams.selectedProjectId || projects[0]?.id || null;
   const selectedLeaderId = state.teams.selectedLeaderId || leaders[0]?.id || null;
-  const [projectUsers, leaderAgents, leaderSummary] = await Promise.all([
+  const centerScope = selectedProjectId ? scopedQuery({ project_id: selectedProjectId }) : scope;
+  const [projectUsers, leaderAgents, leaderSummary, operationalCenter] = await Promise.all([
     selectedProjectId ? apiMaybe(`/api/teams/projects/${selectedProjectId}/users`, []) : [],
     selectedLeaderId ? apiMaybe(`/api/teams/leaders/${selectedLeaderId}/agents`, []) : [],
-    selectedLeaderId ? apiMaybe(`/api/teams/leaders/${selectedLeaderId}/summary`, null) : null
+    selectedLeaderId ? apiMaybe(`/api/teams/leaders/${selectedLeaderId}/summary`, null) : null,
+    apiMaybe(`/api/teams/operational-center${centerScope}`, null)
   ]);
-  state.teams = { projects, leaders, agents, projectUsers, leaderAgents, leaderSummary, selectedProjectId, selectedLeaderId };
+  state.teams = { projects, leaders, agents, projectUsers, leaderAgents, leaderSummary, operationalCenter, selectedProjectId, selectedLeaderId };
 }
 
 async function loadTypifications() {
@@ -988,13 +991,14 @@ async function loadBi() {
 async function loadPhase8Data() {
   const allowed = (...sections) => menuHasSection(...sections);
   const scope = scopedQuery();
-  const [catalogs, rules, alertRules, workflows, alertItems, alertSummary, legalDashboard, legalKanban, legalCases, salesDashboard, salesPipeline, salesKanban, leads, opportunities] = await Promise.all([
+  const [catalogs, rules, alertRules, workflows, alertItems, alertSummary, sessionSummary, legalDashboard, legalKanban, legalCases, salesDashboard, salesPipeline, salesKanban, leads, opportunities] = await Promise.all([
     allowed("configuration") ? apiMaybe(`/api/configuration/catalogs${scope}`, []) : [],
     allowed("configuration") ? apiMaybe(`/api/configuration/rules${scope}`, []) : [],
     allowed("configuration") ? apiMaybe(`/api/configuration/alert-rules${scope}`, []) : [],
     allowed("configuration") ? apiMaybe(`/api/configuration/workflows${scope}`, []) : [],
     allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts${scopedQuery({ limit: DEFAULT_TABLE_PAGE_SIZE })}`, []) : [],
     allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts/summary${scope}`, null) : null,
+    allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts/session-summary${scope}`, null) : null,
     allowed("legal") ? apiMaybe(`/api/legal/dashboard${scope}`, null) : null,
     allowed("legal") ? apiMaybe(`/api/legal/kanban${scope}`, null) : null,
     allowed("legal") ? apiMaybe(`/api/legal/cases${scope}`, []) : [],
@@ -1005,7 +1009,7 @@ async function loadPhase8Data() {
     allowed("sales") ? apiMaybe(`/api/sales/opportunities${scope}`, []) : []
   ]);
   state.configuration = { catalogs, rules, alertRules, workflows };
-  state.alerts = { items: alertItems, summary: alertSummary };
+  state.alerts = { items: alertItems, summary: alertSummary, sessionSummary };
   state.legal = { dashboard: legalDashboard, kanban: legalKanban, cases: legalCases };
   state.sales = { dashboard: salesDashboard, pipeline: salesPipeline, kanban: salesKanban, leads, opportunities };
 }
@@ -1450,9 +1454,57 @@ function renderRoleDashboard() {
   renderModuleCatalog("#experienceModules", menuModules());
 }
 
+function sessionPrioritiesClosedKey() {
+  return `iep_session_priorities_closed_${new Date().toISOString().slice(0, 10)}`;
+}
+
+function priorityTone(severity = "medium") {
+  return { critical: "red", high: "yellow", medium: "blue", low: "green" }[severity] || "blue";
+}
+
+function renderSessionPriorities() {
+  const container = document.querySelector("#sessionPriorities");
+  if (!container) return;
+  const summary = state.alerts.sessionSummary;
+  const priorities = summary?.priorities || [];
+  if (!summary || localStorage.getItem(sessionPrioritiesClosedKey()) === "1") {
+    container.innerHTML = "";
+    return;
+  }
+  const rows = priorities.slice(0, DEFAULT_TABLE_PAGE_SIZE);
+  container.innerHTML = `
+    <article class="session-priorities">
+      <div class="panel-head">
+        <div>
+          <h2>Prioridades de hoy</h2>
+          <p>${rows.length ? "Foco operativo segun tu rol, cartera y reglas activas." : "Sin prioridades criticas para tu sesion actual."}</p>
+        </div>
+        <button class="table-button" data-close-session-priorities type="button">Cerrar</button>
+      </div>
+      <div class="compact-alert-list horizontal-alerts">
+        ${rows.length
+          ? rows
+              .map(
+                (item) => `
+                  <article class="mini-alert ${priorityTone(item.severity)}">
+                    <strong>${escapeHtml(item.title)}</strong>
+                    ${item.value ? `<span>${escapeHtml(item.value)}</span>` : ""}
+                    <p>${escapeHtml(item.message || "")}</p>
+                    ${item.action ? `<small>${escapeHtml(item.action)}</small>` : ""}
+                  </article>
+                `
+              )
+              .join("")
+          : `<article class="mini-alert green"><strong>Operacion al dia</strong><p>No hay bloqueos relevantes al iniciar sesion.</p></article>`}
+      </div>
+    </article>
+  `;
+}
+
 function renderDashboard() {
   const data = state.crm.dashboard || {};
   const bi = state.crm.bi || {};
+  renderSessionPriorities();
   document.querySelector("#metricCustomers").textContent = data.customers || 0;
   document.querySelector("#metricBalance").textContent = money(data.total_balance);
   document.querySelector("#metricRecovered").textContent = money(data.recovered);
@@ -1750,21 +1802,24 @@ async function selectCustomer(customerId) {
   const customer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
   state.selectedCustomer = customer || null;
   if (customer) {
-    const [activities, obligations, demographics, agreements] = await Promise.all([
+    const [activities, obligations, demographics, agreements, managementInsights] = await Promise.all([
       api(`/api/crm/customers/${customer.id}/activities`),
       apiMaybe(`/api/crm/customers/${customer.id}/obligations`, []),
       apiMaybe(`/api/uploads/demographics?${queryParams(scopedTenantParams({ customer_id: customer.id, page_size: DEFAULT_TABLE_PAGE_SIZE }))}`, []),
-      apiMaybe(`/api/crm/agreements?${queryParams(scopedTenantParams({ customer_id: customer.id }))}`, [])
+      apiMaybe(`/api/crm/agreements?${queryParams(scopedTenantParams({ customer_id: customer.id }))}`, []),
+      apiMaybe(`/api/crm/customers/${customer.id}/management-insights`, null)
     ]);
     state.selectedActivities = activities;
     state.selectedObligations = obligations;
     state.selectedDemographics = demographics;
     state.selectedAgreements = agreements;
+    state.selectedManagementInsights = managementInsights;
   } else {
     state.selectedActivities = [];
     state.selectedObligations = [];
     state.selectedDemographics = [];
     state.selectedAgreements = [];
+    state.selectedManagementInsights = null;
   }
   renderQueueDetail();
 }
@@ -1971,6 +2026,39 @@ function relatedRows(items, render, emptyText) {
     : `<p class="empty">${escapeHtml(emptyText)}</p>`;
 }
 
+function scoreBadge(score) {
+  const value = Number(score || 0);
+  if (value >= 85) return "green";
+  if (value >= 65) return "blue";
+  if (value >= 40) return "yellow";
+  return "neutral";
+}
+
+function renderScoreActivity(item, label) {
+  if (!item) {
+    return `<p><strong>${escapeHtml(label)}</strong><span>Sin gestion destacada.</span></p>`;
+  }
+  return `
+    <p>
+      <strong>${escapeHtml(label)} · ${escapeHtml(item.label || "media")}</strong>
+      <span>${escapeHtml(item.result || "-")} · ${dateOnly(item.created_at)} · ${escapeHtml(item.user_name || "-")}</span>
+      <small class="score-chip ${scoreBadge(item.score)}">${Number(item.score || 0)} pts${item.is_effective ? " · efectiva" : ""}</small>
+    </p>
+  `;
+}
+
+function renderManagementInsightsMini() {
+  const insights = state.selectedManagementInsights;
+  if (!insights) return `<p class="empty">Aun no hay lectura de scoring para este cliente.</p>`;
+  return `
+    <div class="mini-list score-list">
+      ${renderScoreActivity(insights.best_current_month, "Mejor mes actual")}
+      ${renderScoreActivity(insights.best_previous_month, "Mejor mes anterior")}
+      ${renderScoreActivity(insights.best_historical, "Mejor historica")}
+    </div>
+  `;
+}
+
 function renderManagementDrawer() {
   const customer = state.selectedCustomer;
   const drawer = ensureManagementDrawer();
@@ -2014,6 +2102,10 @@ function renderManagementDrawer() {
       <article class="drawer-card">
         <h3>Obligaciones del cliente</h3>
         <div class="activity-matrix">${renderObligationMatrix()}</div>
+      </article>
+      <article class="drawer-card">
+        <h3>Mejores gestiones</h3>
+        ${renderManagementInsightsMini()}
       </article>
       <div class="drawer-content-grid">
         <article class="drawer-card">
@@ -3887,6 +3979,52 @@ function uniqueUsersForTeams() {
   return Array.from(map.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)));
 }
 
+function renderOperationalCenter(projectOptions) {
+  const container = document.querySelector("#operationalCenterPanel");
+  if (!container) return;
+  const center = state.teams.operationalCenter;
+  if (!center) {
+    container.innerHTML = `<p class="empty">Centro operativo no disponible para tu alcance actual.</p>`;
+    return;
+  }
+  const project = center.selected_project;
+  const modules = center.active_modules || [];
+  const rules = center.scoring_rules || [];
+  const alertRules = center.alert_rules || [];
+  const summary = center.users_summary || {};
+  container.innerHTML = `
+    <div class="operational-center-head">
+      <label>Cartera activa<select id="operationalProjectSelect"><option value="">Selecciona cartera</option>${projectOptions}</select></label>
+      <div>
+        <span class="status-pill status-pill-ok">${summary.active || 0} usuarios activos</span>
+        <span class="status-pill ${summary.without_assignment ? "status-pill-warn" : "status-pill-ok"}">${summary.without_assignment || 0} sin cartera</span>
+      </div>
+    </div>
+    <div class="metrics-grid compact-metrics">
+      <article class="metric-card"><span>Cartera</span><strong>${escapeHtml(project?.name || "Sin cartera")}</strong></article>
+      <article class="metric-card"><span>Clientes</span><strong>${project?.customer_count || 0}</strong></article>
+      <article class="metric-card"><span>Obligaciones</span><strong>${project?.obligation_count || 0}</strong></article>
+      <article class="metric-card"><span>Saldo visible</span><strong>${money(project?.balance_total || 0)}</strong></article>
+    </div>
+    <div class="operational-center-grid">
+      <article>
+        <h3>Modulos activos</h3>
+        <div class="chip-list">${modules.length ? modules.map((item) => `<span class="module-chip ${item.enabled && item.is_enabled ? "active" : "inactive"}">${escapeHtml(moduleMeta(item.module_code, { name: item.name }).name)}</span>`).join("") : `<span class="module-chip inactive">Sin modulos configurados</span>`}</div>
+      </article>
+      <article>
+        <h3>Scoring de gestiones</h3>
+        <div class="mini-list">${rules.slice(0, DEFAULT_TABLE_PAGE_SIZE).map((item) => `<p><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.source)} · ${escapeHtml(item.severity)}</span></p>`).join("") || `<p class="empty">Sin reglas activas.</p>`}</div>
+      </article>
+      <article>
+        <h3>Alertas operativas</h3>
+        <div class="mini-list">${alertRules.slice(0, DEFAULT_TABLE_PAGE_SIZE).map((item) => `<p><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.condition_type)} · umbral ${escapeHtml(item.threshold_days)}</span></p>`).join("") || `<p class="empty">Sin alertas parametrizadas.</p>`}</div>
+      </article>
+    </div>
+  `;
+  const select = container.querySelector("#operationalProjectSelect");
+  if (select && project?.id) select.value = project.id;
+}
+
 function renderTeams() {
   if (!document.querySelector("#teams")) return;
   const projects = state.teams.projects || [];
@@ -3898,6 +4036,7 @@ function renderTeams() {
   const leaderOptions = optionList(leaders);
   const agentOptions = optionList(agents);
   const projectOptions = optionList(projects);
+  renderOperationalCenter(projectOptions);
   const projectRows = projects
     .map(
       (project) => `
@@ -3927,6 +4066,8 @@ function renderTeams() {
           <td>${dateOnly(assignment.created_at)}</td>
           <td>
             <button class="table-button" data-toggle-project-user="${assignment.id}" data-active="${assignment.is_active}" type="button">${assignment.is_active ? "Desactivar" : "Activar"}</button>
+            <button class="table-button" data-project-user-role="${assignment.id}" data-role="leader" type="button">Lider</button>
+            <button class="table-button" data-project-user-role="${assignment.id}" data-role="agent" type="button">Agente</button>
           </td>
         </tr>
       `
@@ -4579,6 +4720,11 @@ function setupEvents() {
       renderAll();
       return;
     }
+    if (event.target.closest("[data-close-session-priorities]")) {
+      localStorage.setItem(sessionPrioritiesClosedKey(), "1");
+      renderSessionPriorities();
+      return;
+    }
     const open = event.target.closest("[data-open-customer]");
     if (open) {
       await openCustomerDrawer(open.dataset.openCustomer);
@@ -4649,6 +4795,7 @@ function setupEvents() {
     if (teamProject) {
       state.teams.selectedProjectId = Number(teamProject.dataset.teamProject);
       state.teams.projectUsers = await apiMaybe(`/api/teams/projects/${state.teams.selectedProjectId}/users`, []);
+      state.teams.operationalCenter = await apiMaybe(`/api/teams/operational-center${scopedQuery({ project_id: state.teams.selectedProjectId })}`, state.teams.operationalCenter);
       renderTeams();
       return;
     }
@@ -4663,6 +4810,19 @@ function setupEvents() {
         await loadTeamsData();
         renderTeams();
         showToast("success", isActive ? "Asignacion desactivada." : "Asignacion activada.");
+      }, "Actualizando...");
+      return;
+    }
+    const projectUserRole = event.target.closest("[data-project-user-role]");
+    if (projectUserRole) {
+      await runAction(projectUserRole, async () => {
+        await api(`/api/teams/project-users/${projectUserRole.dataset.projectUserRole}`, {
+          method: "PATCH",
+          body: JSON.stringify({ role_in_project: projectUserRole.dataset.role, is_active: true })
+        });
+        await loadTeamsData();
+        renderTeams();
+        showToast("success", "Rol operativo actualizado.");
       }, "Actualizando...");
       return;
     }
@@ -4962,6 +5122,14 @@ function setupEvents() {
     if (teamProjectSelect && teamProjectSelect.value) {
       state.teams.selectedProjectId = Number(teamProjectSelect.value);
       state.teams.projectUsers = await apiMaybe(`/api/teams/projects/${state.teams.selectedProjectId}/users`, []);
+      state.teams.operationalCenter = await apiMaybe(`/api/teams/operational-center${scopedQuery({ project_id: state.teams.selectedProjectId })}`, state.teams.operationalCenter);
+      renderTeams();
+    }
+    const operationalProjectSelect = event.target.closest("#operationalProjectSelect");
+    if (operationalProjectSelect && operationalProjectSelect.value) {
+      state.teams.selectedProjectId = Number(operationalProjectSelect.value);
+      state.teams.projectUsers = await apiMaybe(`/api/teams/projects/${state.teams.selectedProjectId}/users`, []);
+      state.teams.operationalCenter = await apiMaybe(`/api/teams/operational-center${scopedQuery({ project_id: state.teams.selectedProjectId })}`, state.teams.operationalCenter);
       renderTeams();
     }
   });
