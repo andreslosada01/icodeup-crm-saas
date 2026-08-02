@@ -84,13 +84,17 @@ class CustomerObligationCreate(BaseModel):
     portfolio_name: str | None = None
     purchase_number: str | None = None
     original_amount: int = 0
+    original_balance: int | None = None
     current_balance: int = 0
+    priority: int = 0
     capital_amount: int | None = None
     interest_amount: int | None = None
     fees_amount: int | None = None
     days_past_due: int = 0
     status: str = "active"
     risk: str | None = None
+    due_date: datetime | None = None
+    assignment_date: datetime | None = None
     assigned_user_id: int | None = None
     assigned_leader_id: int | None = None
     metadata_json: str | None = None
@@ -101,13 +105,17 @@ class CustomerObligationPatch(BaseModel):
     portfolio_name: str | None = None
     purchase_number: str | None = None
     original_amount: int | None = None
+    original_balance: int | None = None
     current_balance: int | None = None
+    priority: int | None = None
     capital_amount: int | None = None
     interest_amount: int | None = None
     fees_amount: int | None = None
     days_past_due: int | None = None
     status: str | None = None
     risk: str | None = None
+    due_date: datetime | None = None
+    assignment_date: datetime | None = None
     assigned_user_id: int | None = None
     assigned_leader_id: int | None = None
     metadata_json: str | None = None
@@ -124,13 +132,17 @@ class CustomerObligationOut(BaseModel):
     portfolio_name: str | None = None
     purchase_number: str | None = None
     original_amount: int
+    original_balance: int
     current_balance: int
+    priority: int
     capital_amount: int | None = None
     interest_amount: int | None = None
     fees_amount: int | None = None
     days_past_due: int
     status: str
     risk: str
+    due_date: datetime | None = None
+    assignment_date: datetime | None = None
     assigned_user_id: int | None = None
     assigned_user_name: str | None = None
     assigned_leader_id: int | None = None
@@ -204,6 +216,7 @@ class PromiseOut(BaseModel):
 
 class PaymentCreate(BaseModel):
     customer_id: int
+    obligation_id: int | None = None
     amount: int = Field(gt=0)
     paid_at: datetime
     method: str = "No especificado"
@@ -212,8 +225,12 @@ class PaymentCreate(BaseModel):
 
 class PaymentOut(BaseModel):
     id: int
+    tenant_id: int
+    project_id: int | None = None
     customer_id: int
     customer_name: str | None = None
+    obligation_id: int | None = None
+    obligation_number: str | None = None
     amount: int
     paid_at: datetime
     method: str

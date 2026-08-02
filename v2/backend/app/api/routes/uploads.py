@@ -51,8 +51,12 @@ FIELD_SYNONYMS: dict[str, list[str]] = {
     "status": ["status", "estado", "estado_cliente", "estado_obligacion"],
     "risk": ["risk", "riesgo"],
     "priority": ["priority", "prioridad"],
+    "due_date": ["due_date", "fecha_vencimiento", "vencimiento"],
+    "assignment_date": ["assignment_date", "fecha_asignacion", "asignacion"],
     "next_action": ["next_action", "siguiente_accion", "proxima_accion"],
     "contactability": ["contactability", "contactabilidad"],
+    "valid_from": ["valid_from", "vigente_desde", "fecha_inicio_vigencia"],
+    "valid_until": ["valid_until", "vigente_hasta", "fecha_fin_vigencia", "fecha_vencimiento_dato"],
     "notes": ["notes", "nota", "observacion", "observaciones"],
     "assigned_user_email": ["assigned_user_email", "gestor_email", "email_gestor", "asesor_email"],
     "assigned_user_id": ["assigned_user_id", "gestor_id", "asesor_id"],
@@ -89,29 +93,29 @@ UPLOAD_TYPE_CONFIG: dict[str, dict[str, Any]] = {
         "label": "Obligaciones",
         "permission": "uploads.repartos.manage",
         "required": ["document", "obligation_number"],
-        "optional": ["name", "product_type", "portfolio_name", "current_balance", "original_balance", "days_past_due", "risk", "assigned_user_email", "assigned_leader_email", "project_code"],
-        "template": ["documento", "cliente", "numero_obligacion", "producto", "cartera", "saldo_actual", "saldo_original", "dias_mora", "riesgo", "gestor_email", "lider_email", "codigo_cartera"],
+        "optional": ["name", "product_type", "portfolio_name", "current_balance", "original_balance", "days_past_due", "status", "risk", "priority", "due_date", "assignment_date", "assigned_user_email", "assigned_leader_email", "project_code"],
+        "template": ["documento", "cliente", "numero_obligacion", "producto", "cartera", "saldo_actual", "saldo_original", "dias_mora", "estado", "riesgo", "prioridad", "fecha_vencimiento", "fecha_asignacion", "gestor_email", "lider_email", "codigo_cartera"],
     },
     "reparto_cartera": {
         "label": "Reparto de cartera",
         "permission": "uploads.repartos.manage",
         "required": ["document"],
-        "optional": ["name", "obligation_number", "portfolio_name", "current_balance", "days_past_due", "assigned_user_email", "assigned_leader_email", "project_code"],
-        "template": ["documento", "cliente", "numero_obligacion", "cartera", "saldo_actual", "dias_mora", "gestor_email", "lider_email", "codigo_cartera"],
+        "optional": ["name", "obligation_number", "portfolio_name", "current_balance", "days_past_due", "priority", "assignment_date", "assigned_user_email", "assigned_leader_email", "project_code"],
+        "template": ["documento", "cliente", "numero_obligacion", "cartera", "saldo_actual", "dias_mora", "prioridad", "fecha_asignacion", "gestor_email", "lider_email", "codigo_cartera"],
     },
     "demograficos": {
         "label": "Demograficos",
         "permission": "uploads.demographics.manage",
         "required": ["document"],
-        "optional": ["phone", "email", "address", "city", "state", "employer", "job_title", "reference_name", "reference_phone", "source", "score"],
-        "template": ["documento", "telefono", "email", "direccion", "ciudad", "departamento", "empleador", "cargo", "referencia", "telefono_referencia", "fuente", "score"],
+        "optional": ["phone", "email", "address", "city", "state", "employer", "job_title", "reference_name", "reference_phone", "source", "score", "contactability", "priority", "valid_from", "valid_until"],
+        "template": ["documento", "telefono", "email", "direccion", "ciudad", "departamento", "empleador", "cargo", "referencia", "telefono_referencia", "fuente", "score", "contactabilidad", "prioridad", "vigente_desde", "vigente_hasta"],
     },
     "telefonos_emails_direcciones": {
         "label": "Telefonos, emails y direcciones",
         "permission": "uploads.demographics.manage",
         "required": ["document"],
-        "optional": ["phone", "email", "address", "city", "state", "source", "score"],
-        "template": ["documento", "telefono", "email", "direccion", "ciudad", "departamento", "fuente", "score"],
+        "optional": ["phone", "email", "address", "city", "state", "source", "score", "contactability", "priority", "valid_from", "valid_until"],
+        "template": ["documento", "telefono", "email", "direccion", "ciudad", "departamento", "fuente", "score", "contactabilidad", "prioridad", "vigente_desde", "vigente_hasta"],
     },
     "pagos": {
         "label": "PayControl 360",
@@ -218,6 +222,11 @@ def _parse_datetime(value: str | None) -> datetime | None:
         return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+def _parse_date(value: str | None):
+    parsed = _parse_datetime(value)
+    return parsed.date() if parsed else None
 
 
 def _config_for(upload_type: str) -> dict[str, Any]:
@@ -401,12 +410,15 @@ def _upsert_obligation(db: Session, tenant_id: int, project: Project | None, cus
     obligation.purchase_number = _row_value(row, mapping, "purchase_number") or obligation.purchase_number
     obligation.original_amount = _parse_int(_row_value(row, mapping, "original_balance"), current_balance or obligation.original_amount)
     obligation.current_balance = current_balance or obligation.current_balance
+    obligation.priority = _parse_int(_row_value(row, mapping, "priority"), obligation.priority)
     obligation.capital_amount = _parse_int(_row_value(row, mapping, "capital_amount")) or obligation.capital_amount
     obligation.interest_amount = _parse_int(_row_value(row, mapping, "interest_amount")) or obligation.interest_amount
     obligation.fees_amount = _parse_int(_row_value(row, mapping, "fees_amount")) or obligation.fees_amount
     obligation.days_past_due = days_past_due or obligation.days_past_due
     obligation.status = _row_value(row, mapping, "status") or obligation.status
     obligation.risk = risk
+    obligation.due_date = _parse_datetime(_row_value(row, mapping, "due_date")) or obligation.due_date
+    obligation.assignment_date = _parse_datetime(_row_value(row, mapping, "assignment_date")) or obligation.assignment_date
     assigned = _user_from_row(db, tenant_id, row, mapping, "assigned_user")
     leader = _user_from_row(db, tenant_id, row, mapping, "assigned_leader")
     if assigned:
@@ -452,6 +464,10 @@ def _upsert_demographic(db: Session, tenant_id: int, customer: Customer, row: di
     demographic.reference_name = _row_value(row, mapping, "reference_name") or demographic.reference_name
     demographic.reference_phone = _row_value(row, mapping, "reference_phone") or demographic.reference_phone
     demographic.score = _parse_int(_row_value(row, mapping, "score"), demographic.score)
+    demographic.contactability = _row_value(row, mapping, "contactability") or demographic.contactability
+    demographic.priority = _parse_int(_row_value(row, mapping, "priority"), demographic.priority)
+    demographic.valid_from = _parse_date(_row_value(row, mapping, "valid_from")) or demographic.valid_from
+    demographic.valid_until = _parse_date(_row_value(row, mapping, "valid_until")) or demographic.valid_until
     demographic.metadata_json = json.dumps({"upload": True, "file_source": default_source}, ensure_ascii=True)
     return demographic, action
 
@@ -463,14 +479,26 @@ def _create_payment(db: Session, tenant_id: int, project: Project | None, custom
     paid_at = _parse_datetime(_row_value(row, mapping, "paid_at")) or datetime.now(timezone.utc)
     method = _row_value(row, mapping, "method") or "Carga masiva"
     reference = _row_value(row, mapping, "reference")
+    obligation = None
+    obligation_number = _row_value(row, mapping, "obligation_number")
+    if obligation_number:
+        obligation = _find_obligation(db, tenant_id, obligation_number)
+        if obligation is None or obligation.customer_id != customer.id:
+            raise ValueError("La obligacion del pago no existe o no pertenece al cliente.")
     if not reference:
         fingerprint = hashlib.sha1(f"{tenant_id}:{file_name}:{row_number}:{customer.document}:{amount}:{paid_at.date()}".encode("utf-8")).hexdigest()[:16]
         reference = f"UPLOAD-{fingerprint}"
     existing = db.scalar(select(Payment).where(Payment.tenant_id == tenant_id, Payment.customer_id == customer.id, Payment.reference == reference))
     if existing:
         return existing, "updated"
-    payment = Payment(tenant_id=tenant_id, project_id=project.id if project else customer.project_id, customer_id=customer.id, user_id=user.id, amount=amount, paid_at=paid_at, method=method, reference=reference)
-    customer.balance = max(0, customer.balance - amount)
+    payment = Payment(tenant_id=tenant_id, project_id=obligation.project_id if obligation and obligation.project_id else project.id if project else customer.project_id, customer_id=customer.id, obligation_id=obligation.id if obligation else None, user_id=user.id, amount=amount, paid_at=paid_at, method=method, reference=reference)
+    if obligation:
+        obligation.current_balance = max(0, obligation.current_balance - amount)
+        obligation.status = "paid" if obligation.current_balance == 0 else "partial_payment"
+        db.flush()
+        customer.balance = sum(db.scalars(select(CustomerObligation.current_balance).where(CustomerObligation.tenant_id == tenant_id, CustomerObligation.customer_id == customer.id))) or 0
+    else:
+        customer.balance = max(0, customer.balance - amount)
     customer.status = "Pagado" if customer.balance == 0 else "Pago parcial"
     customer.next_action = "Cerrar caso" if customer.balance == 0 else "Confirmar saldo restante"
     db.add(payment)
@@ -479,6 +507,7 @@ def _create_payment(db: Session, tenant_id: int, project: Project | None, custom
             tenant_id=tenant_id,
             project_id=payment.project_id,
             customer_id=customer.id,
+            obligation_id=payment.obligation_id,
             user_id=user.id,
             channel="payment_upload",
             result=customer.status,
@@ -525,9 +554,13 @@ def _validate_rows(db: Session, tenant_id: int, project: Project | None, payload
             value = _row_value(row, mapping, money_field)
             if value and _parse_int(value) < 0:
                 row_errors.append(f"{money_field} invalido.")
-        for date_field in {"paid_at", "next_contact_at"}:
+        for date_field in {"paid_at", "next_contact_at", "due_date", "assignment_date"}:
             value = _row_value(row, mapping, date_field)
             if value and _parse_datetime(value) is None:
+                row_errors.append(f"{date_field} invalido.")
+        for date_field in {"valid_from", "valid_until"}:
+            value = _row_value(row, mapping, date_field)
+            if value and _parse_date(value) is None:
                 row_errors.append(f"{date_field} invalido.")
         try:
             _project_from_row(db, tenant_id, project, row, mapping)
@@ -813,7 +846,7 @@ def list_demographics(tenant_id: int | None = None, customer_id: int | None = No
 
 @router.post("/demographics", response_model=CustomerDemographicOut, status_code=status.HTTP_201_CREATED)
 def create_demographic(payload: CustomerDemographicCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> CustomerDemographicOut:
-    require_permission(db, user, "demographics.manage")
+    require_permission(db, user, "uploads.demographics.manage")
     tenant = require_tenant(db, user, payload.tenant_id)
     customer = db.get(Customer, payload.customer_id)
     if customer is None or customer.tenant_id != tenant.id:
@@ -854,6 +887,10 @@ def _demographic_to_out(item: CustomerDemographic) -> CustomerDemographicOut:
         reference_name=item.reference_name,
         reference_phone=item.reference_phone,
         score=item.score,
+        contactability=item.contactability,
+        priority=item.priority,
+        valid_from=item.valid_from,
+        valid_until=item.valid_until,
         metadata=json.loads(item.metadata_json or "{}"),
         is_active=item.is_active,
         created_at=item.created_at,

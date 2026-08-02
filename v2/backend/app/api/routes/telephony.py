@@ -351,6 +351,7 @@ def _call_log_to_out(db: Session, item: CallLog) -> CallLogOut:
         provider_name=provider.name if provider else None,
         user_id=item.user_id,
         user_name=user.name if user else None,
+        project_id=item.project_id,
         customer_id=item.customer_id,
         customer_name=customer.name if customer else None,
         obligation_id=item.obligation_id,
@@ -546,6 +547,7 @@ def my_extension(db: Session = Depends(get_db), user: User = Depends(current_use
 @router.get("/call-logs", response_model=list[CallLogOut])
 def list_call_logs(
     tenant_id: int | None = None,
+    project_id: int | None = None,
     customer_id: int | None = None,
     user_id: int | None = None,
     limit: int = Query(default=10, ge=1, le=10),
@@ -558,6 +560,8 @@ def list_call_logs(
     if customer_id:
         customer_for_access(db, customer_id, user)
         query = query.where(CallLog.customer_id == customer_id)
+    if project_id:
+        query = query.where(CallLog.project_id == project_id)
     if user_id and (is_platform_admin(db, user) or is_company_admin(db, user) or user.role == COORDINATOR or get_profile_role_code(db, user) == "collections_leader"):
         query = query.where(CallLog.user_id == user_id)
     return [_call_log_to_out(db, item) for item in db.scalars(query.limit(limit))]
@@ -594,6 +598,7 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
         tenant_id=customer.tenant_id,
         provider_id=provider.id if provider else None,
         user_id=user.id,
+        project_id=obligation.project_id if obligation and obligation.project_id else customer.project_id,
         customer_id=customer.id,
         obligation_id=obligation.id if obligation else None,
         phone_number=phone_number,
@@ -630,7 +635,7 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
     db.flush()
     activity = ManagementActivity(
         tenant_id=customer.tenant_id,
-        project_id=customer.project_id,
+        project_id=call.project_id,
         customer_id=customer.id,
         obligation_id=obligation.id if obligation else None,
         user_id=user.id,

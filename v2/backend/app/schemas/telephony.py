@@ -121,6 +121,7 @@ class CallLogOut(BaseModel):
     provider_name: str | None = None
     user_id: int
     user_name: str | None = None
+    project_id: int | None = None
     customer_id: int | None = None
     customer_name: str | None = None
     obligation_id: int | None = None

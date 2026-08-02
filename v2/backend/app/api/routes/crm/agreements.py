@@ -61,18 +61,38 @@ def agreement_to_out(db: Session, agreement: PaymentAgreement) -> PaymentAgreeme
 
 
 @router.get("/agreements", response_model=list[PaymentAgreementOut])
-def list_agreements(tenant_id: int | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentAgreementOut]:
+def list_agreements(
+    tenant_id: int | None = None,
+    customer_id: int | None = None,
+    obligation_id: int | None = None,
+    limit: int = Query(default=10, ge=1, le=10),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[PaymentAgreementOut]:
     require_permission(db, user, "collections.agreements.view")
     ensure_read_access(user)
     if is_platform(user):
         query = select(PaymentAgreement)
         if tenant_id:
             query = query.where(PaymentAgreement.tenant_id == tenant_id)
+        if customer_id:
+            customer_for_access(db, customer_id, user)
+            query = query.where(PaymentAgreement.customer_id == customer_id)
+        if obligation_id:
+            obligation_for_access(db, obligation_id, user)
+            query = query.where(PaymentAgreement.obligation_id == obligation_id)
         agreements = list(db.scalars(query.order_by(PaymentAgreement.created_at.desc()).limit(limit)))
     else:
         customers = list(db.scalars(customer_query(db, user)))
         customer_ids = [customer.id for customer in customers]
-        agreements = list(db.scalars(select(PaymentAgreement).where(PaymentAgreement.customer_id.in_(customer_ids)).order_by(PaymentAgreement.created_at.desc()).limit(limit))) if customer_ids else []
+        query = select(PaymentAgreement).where(PaymentAgreement.customer_id.in_(customer_ids)) if customer_ids else select(PaymentAgreement).where(False)
+        if customer_id:
+            customer_for_access(db, customer_id, user)
+            query = query.where(PaymentAgreement.customer_id == customer_id)
+        if obligation_id:
+            obligation_for_access(db, obligation_id, user)
+            query = query.where(PaymentAgreement.obligation_id == obligation_id)
+        agreements = list(db.scalars(query.order_by(PaymentAgreement.created_at.desc()).limit(limit)))
     return [agreement_to_out(db, agreement) for agreement in agreements]
 
 
@@ -89,7 +109,7 @@ def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El numero de cuotas no coincide con installment_count.")
     agreement = PaymentAgreement(
         tenant_id=customer.tenant_id,
-        project_id=customer.project_id,
+        project_id=obligation.project_id if obligation and obligation.project_id else customer.project_id,
         customer_id=customer.id,
         obligation_id=obligation.id if obligation else None,
         user_id=user.id,
@@ -105,8 +125,10 @@ def create_agreement(payload: PaymentAgreementCreate, db: Session = Depends(get_
         for item in installments_payload:
             db.add(PaymentAgreementInstallment(agreement_id=agreement.id, due_date=item.due_date, amount=item.amount))
     else:
-        amount = round(payload.total_amount / payload.installment_count)
+        base_amount = payload.total_amount // payload.installment_count
+        remainder = payload.total_amount % payload.installment_count
         for index in range(payload.installment_count):
+            amount = base_amount + (1 if index < remainder else 0)
             db.add(PaymentAgreementInstallment(agreement_id=agreement.id, due_date=payload.start_date + timedelta(days=30 * index), amount=amount))
     customer.status = "Acuerdo"
     customer.next_action = "Monitorear cumplimiento de acuerdo"

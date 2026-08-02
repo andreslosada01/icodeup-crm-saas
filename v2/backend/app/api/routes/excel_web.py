@@ -56,12 +56,12 @@ router = APIRouter()
 
 SOURCE_DEFS = {
     "customers": {"label": "Clientes", "columns": ["id", "name", "document", "phone", "email", "city", "segment", "balance", "dpd", "status", "risk", "assigned_user_id"]},
-    "obligations": {"label": "Obligaciones", "columns": ["id", "customer_id", "obligation_number", "product_type", "portfolio_name", "original_amount", "current_balance", "days_past_due", "status", "risk", "assigned_user_id", "assigned_leader_id"]},
+    "obligations": {"label": "Obligaciones", "columns": ["id", "customer_id", "obligation_number", "product_type", "portfolio_name", "original_amount", "current_balance", "priority", "days_past_due", "status", "risk", "due_date", "assignment_date", "assigned_user_id", "assigned_leader_id"]},
     "activities": {"label": "Gestiones", "columns": ["id", "customer_id", "obligation_id", "user_id", "channel", "result", "note", "created_at"]},
     "promises": {"label": "Promesas", "columns": ["id", "customer_id", "obligation_id", "user_id", "amount", "due_date", "status", "channel"]},
-    "payments": {"label": "PayControl 360", "columns": ["id", "customer_id", "user_id", "amount", "paid_at", "method", "reference"]},
+    "payments": {"label": "PayControl 360", "columns": ["id", "customer_id", "obligation_id", "user_id", "amount", "paid_at", "method", "reference"]},
     "agreements": {"label": "Acuerdos", "columns": ["id", "customer_id", "obligation_id", "user_id", "total_amount", "installment_count", "status", "created_at"]},
-    "demographics": {"label": "Demograficos", "columns": ["id", "customer_id", "source", "phone", "email", "city", "state", "employer", "score"]},
+    "demographics": {"label": "Demograficos", "columns": ["id", "customer_id", "source", "phone", "email", "city", "state", "employer", "score", "contactability", "priority", "valid_from", "valid_until"]},
     "recordings": {"label": "Grabaciones", "columns": ["id", "customer_id", "user_id", "call_id", "phone_number", "direction", "duration_seconds", "status", "provider_code"]},
     "legal_cases": {"label": "Juridico", "columns": ["id", "customer_id", "assigned_lawyer_id", "case_number", "process_type", "status", "stage", "risk", "next_deadline_at"]},
     "sales_leads": {"label": "Leads", "columns": ["id", "assigned_user_id", "name", "company", "phone", "email", "source", "status", "priority"]},

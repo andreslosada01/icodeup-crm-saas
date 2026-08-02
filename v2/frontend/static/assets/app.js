@@ -11,17 +11,19 @@ const state = {
   core: { menu: null, roleDashboard: null },
   admin: { overview: null, tenants: [], projects: [], users: [], roles: [], typifications: [] },
   governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null, securityInsights: [], effectiveAccess: null },
-  crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], channels: [], typifications: [] },
+  crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], agreements: [], paymentObligations: [], channels: [], typifications: [] },
   configuration: { catalogs: [], rules: [], alertRules: [], workflows: [] },
   alerts: { items: [], summary: null },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
   teams: { projects: [], leaders: [], agents: [], projectUsers: [], leaderAgents: [], leaderSummary: null, selectedProjectId: null, selectedLeaderId: null },
   ops: { trees: [], combinations: [], recordings: [], telephonyProviders: [], telephonyExtensions: [], telephonyCallLogs: [], myExtension: null, uploads: [], demographics: [], excelSources: [], excelViews: [], excelResult: null, excelDraft: null, excelSheetRows: null, excelSheetFilters: {}, excelSheetEditingId: null, excelSheetChanges: {}, excelSheetNewRow: {}, excelSheetActiveCell: null, uploadPreview: null, uploadDraft: null, providers: [], integrationChannels: [], templates: [], webhooks: [], events: [] },
-  ui: { tablePages: {} },
+  ui: { tablePages: {}, selectedAgreementId: null },
   selectedCustomer: null,
   selectedActivities: [],
   selectedObligations: [],
+  selectedAgreements: [],
+  selectedDemographics: [],
   queuePage: 1,
   customerPage: 1
 };
@@ -921,11 +923,12 @@ function scopedExcelFilters(filters = {}) {
 
 async function loadCrmData() {
   const allowed = (...sections) => menuHasSection(...sections);
-  const [options, dashboard, promises, payments, channels, typifications] = await Promise.all([
+  const [options, dashboard, promises, payments, agreements, channels, typifications] = await Promise.all([
     apiMaybe(`/api/crm/options${scopedQuery()}`, { tenants: [], projects: [], users: [], channels: [] }),
     allowed("dashboard", "queue", "customers", "reports") ? apiMaybe(`/api/crm/dashboard${scopedQuery()}`, null) : null,
     allowed("promises") ? apiMaybe(`/api/crm/promises${scopedQuery()}`, []) : [],
     allowed("payments") ? apiMaybe(`/api/crm/payments${scopedQuery()}`, []) : [],
+    allowed("agreements") ? apiMaybe(`/api/crm/agreements${scopedQuery()}`, []) : [],
     allowed("channels") ? apiMaybe("/api/crm/channels", []) : [],
     canManageCrm() || allowed("queue", "customers") ? apiMaybe(`/api/crm/typifications${scopedQuery()}`, []) : []
   ]);
@@ -933,6 +936,7 @@ async function loadCrmData() {
   state.crm.dashboard = dashboard;
   state.crm.promises = promises;
   state.crm.payments = payments;
+  state.crm.agreements = agreements;
   state.crm.channels = channels;
   state.crm.typifications = typifications;
   await Promise.all([loadQueue(), loadCustomers()]);
@@ -1732,15 +1736,21 @@ async function selectCustomer(customerId) {
   const customer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
   state.selectedCustomer = customer || null;
   if (customer) {
-    const [activities, obligations] = await Promise.all([
+    const [activities, obligations, demographics, agreements] = await Promise.all([
       api(`/api/crm/customers/${customer.id}/activities`),
-      apiMaybe(`/api/crm/customers/${customer.id}/obligations`, [])
+      apiMaybe(`/api/crm/customers/${customer.id}/obligations`, []),
+      apiMaybe(`/api/uploads/demographics?${queryParams(scopedTenantParams({ customer_id: customer.id, page_size: DEFAULT_TABLE_PAGE_SIZE }))}`, []),
+      apiMaybe(`/api/crm/agreements?${queryParams(scopedTenantParams({ customer_id: customer.id }))}`, [])
     ]);
     state.selectedActivities = activities;
     state.selectedObligations = obligations;
+    state.selectedDemographics = demographics;
+    state.selectedAgreements = agreements;
   } else {
     state.selectedActivities = [];
     state.selectedObligations = [];
+    state.selectedDemographics = [];
+    state.selectedAgreements = [];
   }
   renderQueueDetail();
 }
@@ -1759,6 +1769,30 @@ function obligationOptions(selected = "") {
   return options.join("");
 }
 
+function formObligationOptions(obligations = [], selected = "") {
+  const options = [`<option value="">Cliente completo</option>`];
+  (obligations || []).forEach((item) => {
+    const label = `${obligationLabel(item)} - ${money(item.current_balance || 0)} - ${item.days_past_due || 0} dias`;
+    options.push(`<option value="${item.id}" ${String(selected) === String(item.id) ? "selected" : ""}>${escapeHtml(label)}</option>`);
+  });
+  return options.join("");
+}
+
+function setFormObligationOptions(form, obligations = [], selected = "") {
+  const select = form?.elements?.obligation_id;
+  if (!select) return;
+  select.innerHTML = formObligationOptions(obligations, selected);
+}
+
+async function loadObligationsForForm(form) {
+  const customerId = form?.elements?.customer_id?.value;
+  setFormObligationOptions(form, []);
+  if (!customerId) return;
+  const obligations = await apiMaybe(`/api/crm/customers/${customerId}/obligations`, []);
+  setFormObligationOptions(form, obligations);
+  if (form?.id === "paymentForm") state.crm.paymentObligations = obligations;
+}
+
 function selectedObligationSummary(obligationId) {
   const item = (state.selectedObligations || []).find((obligation) => String(obligation.id) === String(obligationId));
   return item ? `Obligacion: ${item.obligation_number}` : "";
@@ -1770,11 +1804,45 @@ function renderObligationMatrix(obligations = state.selectedObligations) {
     (item) => `
       <article class="activity-card">
         <strong>${escapeHtml(obligationLabel(item))}</strong>
-        <span>${money(item.current_balance || 0)} - ${item.days_past_due || 0} dias mora - ${escapeHtml(item.risk || "-")}</span>
-        <p>${escapeHtml(item.status || "Activa")} - ${escapeHtml(item.assigned_user_name || "Sin gestor")}</p>
+        <span>${money(item.current_balance || 0)} - ${item.days_past_due || 0} dias mora - ${escapeHtml(item.risk || "-")} - prioridad ${item.priority || 0}</span>
+        <p>${escapeHtml(item.status || "Activa")} - vence ${escapeHtml(item.due_date ? dateOnly(item.due_date) : "-")} - ${escapeHtml(item.assigned_user_name || "Sin gestor")}</p>
       </article>
     `,
     "Este cliente aun no tiene obligaciones detalladas."
+  );
+}
+
+function agreementSummary(item) {
+  const paid = (item.installments || []).filter((installment) => installment.status === "paid").length;
+  const total = item.installment_count || (item.installments || []).length || 0;
+  return `${paid}/${total} cuotas pagadas`;
+}
+
+function renderAgreementMiniList(agreements = state.selectedAgreements) {
+  return relatedRows(
+    agreements,
+    (item) => `
+      <article class="activity-card">
+        <strong>${money(item.total_amount)} - ${escapeHtml(item.status || "active")}</strong>
+        <span>${escapeHtml(item.obligation_number || "Cliente completo")} - ${agreementSummary(item)}</span>
+        <p>${escapeHtml(item.notes || "Acuerdo registrado con trazabilidad de cuotas.")}</p>
+      </article>
+    `,
+    "Sin acuerdos registrados para este cliente."
+  );
+}
+
+function renderDemographicMiniList(demographics = state.selectedDemographics) {
+  return relatedRows(
+    demographics,
+    (item) => `
+      <p>
+        <strong>${escapeHtml(item.source)}</strong>
+        <span>${escapeHtml([item.phone, item.email, item.address, item.city].filter(Boolean).join(" - ") || "-")}</span>
+        <small>${escapeHtml(item.contactability || "Media")} - prioridad ${item.priority || 0}</small>
+      </p>
+    `,
+    "Sin demograficos asociados."
   );
 }
 
@@ -1892,7 +1960,8 @@ function renderManagementDrawer() {
   const activities = state.selectedActivities || [];
   const promises = (state.crm.promises || []).filter((item) => Number(item.customer_id) === Number(customer.id) || item.customer_name === customer.name);
   const payments = (state.crm.payments || []).filter((item) => Number(item.customer_id) === Number(customer.id) || item.customer_name === customer.name);
-  const demographics = (state.ops.demographics || []).filter((item) => Number(item.customer_id) === Number(customer.id));
+  const agreements = state.selectedAgreements || [];
+  const demographics = state.selectedDemographics || [];
   const recordings = menuHasSection("recordings") ? (state.ops.recordings || []).filter((item) => Number(item.customer_id) === Number(customer.id)) : [];
   drawer.innerHTML = `
     <div class="drawer-backdrop" data-close-drawer></div>
@@ -1949,7 +2018,11 @@ function renderManagementDrawer() {
         <article class="drawer-card">
           <h3>Promesas y pagos</h3>
           <div class="mini-list">${relatedRows(promises, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.due_date)} - ${escapeHtml(item.status)}</span>${item.obligation_number ? `<span>${escapeHtml(item.obligation_number)}</span>` : ""}</p>`, "Sin promesas para este cliente.")}</div>
-          <div class="mini-list">${relatedRows(payments, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.paid_at)} - ${escapeHtml(item.method || "-")}</span></p>`, "Sin pagos para este cliente.")}</div>
+          <div class="mini-list">${relatedRows(payments, (item) => `<p><strong>${money(item.amount)}</strong><span>${dateOnly(item.paid_at)} - ${escapeHtml(item.method || "-")}</span>${item.obligation_number ? `<span>${escapeHtml(item.obligation_number)}</span>` : ""}</p>`, "Sin pagos para este cliente.")}</div>
+        </article>
+        <article class="drawer-card">
+          <h3>Acuerdos y cuotas</h3>
+          <div class="activity-matrix compact">${renderAgreementMiniList(agreements)}</div>
         </article>
         ${menuHasSection("agreements") ? `
         <article class="drawer-card">
@@ -1978,7 +2051,7 @@ function renderManagementDrawer() {
         </article>` : ""}
         <article class="drawer-card">
           <h3>Datos complementarios</h3>
-          <div class="mini-list">${relatedRows(demographics, (item) => `<p><strong>${escapeHtml(item.source)}</strong><span>${escapeHtml(item.phone || item.email || item.city || "-")}</span></p>`, "Sin demograficos asociados.")}</div>
+          <div class="mini-list">${renderDemographicMiniList(demographics)}</div>
           ${menuHasSection("recordings") ? `<h3>Grabaciones</h3><div class="mini-list">${relatedRows(recordings, (item) => `<p><strong>${escapeHtml(item.call_id)}</strong><span>${Math.round((item.duration_seconds || 0) / 60)} min - ${escapeHtml(item.status)}</span></p>`, "Sin grabaciones asociadas.")}</div>` : ""}
         </article>
       </div>
@@ -2110,27 +2183,36 @@ async function saveDrawerDocument(event) {
 async function refreshCustomerAfterActivity(customerId) {
   const activityRequest = api(`/api/crm/customers/${customerId}/activities`);
   const obligationsRequest = apiMaybe(`/api/crm/customers/${customerId}/obligations`, []);
-  const [queueResult, customersResult, activitiesResult, obligationsResult, promisesResult, paymentsResult] = await Promise.allSettled([
+  const demographicsRequest = apiMaybe(`/api/uploads/demographics?${queryParams(scopedTenantParams({ customer_id: customerId, page_size: DEFAULT_TABLE_PAGE_SIZE }))}`, []);
+  const agreementsRequest = apiMaybe(`/api/crm/agreements?${queryParams(scopedTenantParams({ customer_id: customerId }))}`, []);
+  const [queueResult, customersResult, activitiesResult, obligationsResult, demographicsResult, agreementsResult, promisesResult, paymentsResult, globalAgreementsResult] = await Promise.allSettled([
     loadQueue(),
     loadCustomers(),
     activityRequest,
     obligationsRequest,
-    menuHasSection("promises") ? api("/api/crm/promises") : Promise.resolve(state.crm.promises || []),
-    menuHasSection("payments") ? api("/api/crm/payments") : Promise.resolve(state.crm.payments || []),
+    demographicsRequest,
+    agreementsRequest,
+    menuHasSection("promises") ? api(`/api/crm/promises${scopedQuery()}`) : Promise.resolve(state.crm.promises || []),
+    menuHasSection("payments") ? api(`/api/crm/payments${scopedQuery()}`) : Promise.resolve(state.crm.payments || []),
+    menuHasSection("agreements") ? api(`/api/crm/agreements${scopedQuery()}`) : Promise.resolve(state.crm.agreements || []),
   ]);
-  [queueResult, customersResult, activitiesResult, obligationsResult, promisesResult, paymentsResult].forEach((result) => {
+  [queueResult, customersResult, activitiesResult, obligationsResult, demographicsResult, agreementsResult, promisesResult, paymentsResult, globalAgreementsResult].forEach((result) => {
     if (result.status === "rejected") console.warn("Refresh posterior a gestion omitido:", result.reason);
   });
   if (activitiesResult.status === "fulfilled") state.selectedActivities = activitiesResult.value;
   if (obligationsResult.status === "fulfilled") state.selectedObligations = obligationsResult.value;
+  if (demographicsResult.status === "fulfilled") state.selectedDemographics = demographicsResult.value;
+  if (agreementsResult.status === "fulfilled") state.selectedAgreements = agreementsResult.value;
   if (promisesResult.status === "fulfilled") state.crm.promises = promisesResult.value;
   if (paymentsResult.status === "fulfilled") state.crm.payments = paymentsResult.value;
+  if (globalAgreementsResult.status === "fulfilled") state.crm.agreements = globalAgreementsResult.value;
   const refreshedCustomer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
   if (refreshedCustomer) state.selectedCustomer = refreshedCustomer;
   renderQueue();
   renderCustomers();
   renderPromises();
   renderPayments();
+  renderAgreements();
   renderQueueDetail();
   if (!document.querySelector("#managementDrawer")?.classList.contains("hidden")) renderManagementDrawer();
 }
@@ -2183,6 +2265,7 @@ function renderPayments() {
       (item) => `
         <tr>
           <td>${escapeHtml(item.customer_name || "-")}</td>
+          <td>${escapeHtml(item.obligation_number || "Cliente completo")}</td>
           <td>${money(item.amount)}</td>
           <td>${dateOnly(item.paid_at)}</td>
           <td>${escapeHtml(item.method)}</td>
@@ -2191,7 +2274,62 @@ function renderPayments() {
       `
     )
     .join("");
-  document.querySelector("#paymentTable").innerHTML = table(["Cliente", "Monto", "Fecha", "Metodo", "Referencia"], rows, "No hay pagos.");
+  document.querySelector("#paymentTable").innerHTML = table(["Cliente", "Obligacion", "Monto", "Fecha", "Metodo", "Referencia"], rows, "No hay pagos.");
+}
+
+function selectedAgreement() {
+  const selectedId = state.ui.selectedAgreementId;
+  return (state.crm.agreements || []).find((item) => String(item.id) === String(selectedId)) || (state.crm.agreements || [])[0] || null;
+}
+
+function renderAgreementInstallments(agreement) {
+  if (!agreement) return `<p class="empty">Selecciona un acuerdo para ver cuotas.</p>`;
+  const rows = (agreement.installments || [])
+    .map(
+      (item) => `
+        <tr>
+          <td>${dateOnly(item.due_date)}</td>
+          <td>${money(item.amount)}</td>
+          <td>${money(item.paid_amount || 0)}</td>
+          <td><span class="badge">${escapeHtml(item.status)}</span></td>
+        </tr>
+      `
+    )
+    .join("");
+  return table(["Vence", "Cuota", "Pagado", "Estado"], rows, "Este acuerdo aun no tiene cuotas.", { key: `agreement-installments-${agreement.id}` });
+}
+
+function renderAgreements() {
+  const container = document.querySelector("#agreementTable");
+  if (!container) return;
+  const agreements = state.crm.agreements || [];
+  const active = agreements.filter((item) => ["active", "vigente", "al dia", "Acuerdo"].includes(item.status)).length;
+  const totalAmount = agreements.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
+  const installments = agreements.reduce((sum, item) => sum + Number(item.installment_count || 0), 0);
+  document.querySelector("#agreementInsightCards") && (document.querySelector("#agreementInsightCards").innerHTML = [
+    { label: "Acuerdos", value: agreements.length, detail: "Registros visibles por alcance.", tone: agreements.length ? "green" : "yellow" },
+    { label: "Vigentes", value: active, detail: "Planes activos o en seguimiento.", tone: active ? "blue" : "neutral" },
+    { label: "Monto acordado", value: money(totalAmount), detail: "Suma de acuerdos cargados.", tone: "purple" },
+    { label: "Cuotas", value: installments, detail: "Plan de pagos comprometido.", tone: "green" },
+  ].map(kpiCard).join(""));
+  const rows = (state.crm.agreements || [])
+    .map(
+      (item) => `
+        <tr>
+          <td><strong>${escapeHtml(item.customer_name || "-")}</strong><small>${escapeHtml(item.obligation_number || "Cliente completo")}</small></td>
+          <td>${money(item.total_amount)}</td>
+          <td>${item.installment_count}</td>
+          <td>${dateOnly(item.start_date)}</td>
+          <td><span class="badge">${escapeHtml(item.status)}</span></td>
+          <td>${agreementSummary(item)}</td>
+          <td><button class="table-button" data-open-agreement="${item.id}" type="button">Cuotas</button></td>
+        </tr>
+      `
+    )
+    .join("");
+  container.innerHTML = table(["Cliente", "Monto", "Cuotas", "Inicio", "Estado", "Avance", ""], rows, "No hay acuerdos registrados.");
+  const detail = document.querySelector("#agreementInstallments");
+  if (detail) detail.innerHTML = renderAgreementInstallments(selectedAgreement());
 }
 
 function renderChannels() {
@@ -3259,8 +3397,8 @@ function renderUploads() {
       ${table(["Lote", "Estado", "Total", "Validas", "Errores", "Fecha", ""], batchRows, "Sin lotes de carga. Previsualiza y confirma el primer reparto.")}
     </article>
   `);
-  const demographicRows = demographics.slice(0, 20).map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.employer || "-")}</td><td>${item.score}</td></tr>`).join("");
-  document.querySelector("#demographicTable") && (document.querySelector("#demographicTable").innerHTML = table(["Cliente", "Telefono", "Email", "Ciudad", "Empleador", "Score"], demographicRows, "Sin demograficos cargados."));
+  const demographicRows = demographics.map((item) => `<tr><td><strong>Cliente #${item.customer_id}</strong><small>${escapeHtml(item.source)}</small></td><td>${escapeHtml(item.phone || "-")}</td><td>${escapeHtml(item.email || "-")}</td><td>${escapeHtml(item.city || "-")}</td><td>${escapeHtml(item.contactability || "Media")}</td><td>${item.priority || 0}</td><td>${item.score}</td><td>${escapeHtml(item.valid_until || "-")}</td></tr>`).join("");
+  document.querySelector("#demographicTable") && (document.querySelector("#demographicTable").innerHTML = table(["Cliente", "Telefono", "Email", "Ciudad", "Contactabilidad", "Prioridad", "Score", "Vigente hasta"], demographicRows, "Sin demograficos cargados."));
 }
 
 const excelColumnLabels = {
@@ -3866,6 +4004,7 @@ function renderAll() {
   renderCustomers();
   renderPromises();
   renderPayments();
+  renderAgreements();
   renderChannels();
   renderAdminTables();
   renderGovernanceTables();
@@ -4259,11 +4398,29 @@ function setupForms() {
     event.preventDefault();
     await submitJson(event.currentTarget, "/api/crm/payments", (form) => ({
       customer_id: Number(form.elements.customer_id.value),
+      obligation_id: form.elements.obligation_id.value ? Number(form.elements.obligation_id.value) : null,
       amount: Number(form.elements.amount.value),
       paid_at: toDateTime(form.elements.paid_at.value),
       method: form.elements.method.value || "No especificado",
       reference: form.elements.reference.value
     }));
+  });
+  document.querySelector("#paymentForm select[name='customer_id']")?.addEventListener("change", async (event) => {
+    await loadObligationsForForm(event.currentTarget.form);
+  });
+  document.querySelector("#agreementForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitJson(event.currentTarget, "/api/crm/agreements", (form) => ({
+      customer_id: Number(form.elements.customer_id.value),
+      obligation_id: form.elements.obligation_id.value ? Number(form.elements.obligation_id.value) : null,
+      total_amount: Number(form.elements.total_amount.value || 0),
+      installment_count: Number(form.elements.installment_count.value || 0),
+      start_date: toDateTime(form.elements.start_date.value),
+      notes: form.elements.notes.value || null
+    }));
+  });
+  document.querySelector("#agreementForm select[name='customer_id']")?.addEventListener("change", async (event) => {
+    await loadObligationsForForm(event.currentTarget.form);
   });
   document.querySelector("#channelForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -4397,6 +4554,12 @@ function setupEvents() {
     const open = event.target.closest("[data-open-customer]");
     if (open) {
       await openCustomerDrawer(open.dataset.openCustomer);
+      return;
+    }
+    const agreement = event.target.closest("[data-open-agreement]");
+    if (agreement) {
+      state.ui.selectedAgreementId = Number(agreement.dataset.openAgreement);
+      renderAgreements();
       return;
     }
     const clickToCall = event.target.closest("[data-click-to-call]");

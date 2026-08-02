@@ -8,20 +8,25 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import current_user
 from app.db.session import get_db
-from app.models import ChannelConfiguration, ChannelEventLog, CommunicationTemplate, IntegrationProvider, User, WebhookConfiguration
+from app.models import CallLog, ChannelConfiguration, ChannelEventLog, CommunicationTemplate, Customer, CustomerObligation, IntegrationProvider, ManagementActivity, User, WebhookConfiguration
 from app.schemas.collection_ops import (
     ChannelConfigurationCreate,
     ChannelConfigurationOut,
     ChannelEventOut,
     CommunicationTemplateCreate,
     CommunicationTemplateOut,
+    IntegrationDryRunOut,
     IntegrationProviderCreate,
     IntegrationProviderOut,
+    IntegrationReadinessOut,
+    PayControlPaymentSyncPreview,
+    QAuditEvaluationPreview,
     WebhookConfigurationCreate,
     WebhookConfigurationOut,
 )
 from app.services.access_control import is_platform_admin, require_permission, require_tenant
 from app.services.audit_service import record_audit
+from app.services.integration_readiness import paycontrol_idempotency_key, qaudit_idempotency_key, readiness_contracts
 
 
 router = APIRouter()
@@ -57,6 +62,83 @@ def _webhook_out(item: WebhookConfiguration) -> WebhookConfigurationOut:
 
 def _event_out(item: ChannelEventLog) -> ChannelEventOut:
     return ChannelEventOut(id=item.id, tenant_id=item.tenant_id, provider_id=item.provider_id, channel_type=item.channel_type, event_type=item.event_type, entity_type=item.entity_type, entity_id=item.entity_id, status=item.status, payload=_config(item.payload_json), created_at=item.created_at)
+
+
+def _event_by_idempotency(db: Session, tenant_id: int, event_type: str, idempotency_key: str) -> ChannelEventLog | None:
+    return db.scalar(
+        select(ChannelEventLog)
+        .where(
+            ChannelEventLog.tenant_id == tenant_id,
+            ChannelEventLog.event_type == event_type,
+            ChannelEventLog.payload_json.contains(f'"idempotency_key": "{idempotency_key}"'),
+        )
+        .order_by(ChannelEventLog.created_at.desc())
+        .limit(1)
+    )
+
+
+@router.get("/readiness", response_model=list[IntegrationReadinessOut])
+def integration_readiness(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[IntegrationReadinessOut]:
+    require_permission(db, user, "integrations.providers.view")
+    return [IntegrationReadinessOut(**contract) for contract in readiness_contracts()]
+
+
+@router.post("/paycontrol/payments/dry-run", response_model=IntegrationDryRunOut, status_code=status.HTTP_202_ACCEPTED)
+def paycontrol_payment_dry_run(payload: PayControlPaymentSyncPreview, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> IntegrationDryRunOut:
+    require_permission(db, user, "integrations.providers.manage")
+    tenant_id = _tenant_id(db, user, payload.tenant_id)
+    idempotency_key = paycontrol_idempotency_key(tenant_id, payload)
+    normalized = payload.model_dump(mode="json")
+    customer = db.scalar(select(Customer).where(Customer.tenant_id == tenant_id, Customer.document == payload.customer_document))
+    obligation = db.scalar(select(CustomerObligation).where(CustomerObligation.tenant_id == tenant_id, CustomerObligation.obligation_number == payload.obligation_number)) if payload.obligation_number else None
+    normalized.update(
+        {
+            "tenant_id": tenant_id,
+            "resolved_customer_id": customer.id if customer else None,
+            "resolved_obligation_id": obligation.id if obligation and customer and obligation.customer_id == customer.id else None,
+            "integration_enabled": False,
+            "feature_flag": "PAYCONTROL_APP_PAGOS_ENABLED",
+        }
+    )
+    existing = _event_by_idempotency(db, tenant_id, "paycontrol.payment.preview", idempotency_key)
+    if existing is None:
+        existing = ChannelEventLog(tenant_id=tenant_id, channel_type="api", event_type="paycontrol.payment.preview", entity_type="payment", entity_id=customer.id if customer else None, status="dry_run", payload_json=json.dumps({"idempotency_key": idempotency_key, "payload": normalized}, ensure_ascii=True))
+        db.add(existing)
+        db.flush()
+        record_audit(db, user, "integration_paycontrol", "dry_run", entity_id=existing.id, tenant_id=tenant_id, module="integrations", after={"idempotency_key": idempotency_key, "customer_document": payload.customer_document}, request=request)
+        db.commit()
+        db.refresh(existing)
+    return IntegrationDryRunOut(ok=True, integration="paycontrol_360_app_pagos", tenant_id=tenant_id, idempotency_key=idempotency_key, event_id=existing.id, message="Contrato PayControl 360 validado en modo dry-run. No se llamo App Pagos.", normalized_payload=normalized)
+
+
+@router.post("/qaudit/evaluations/dry-run", response_model=IntegrationDryRunOut, status_code=status.HTTP_202_ACCEPTED)
+def qaudit_evaluation_dry_run(payload: QAuditEvaluationPreview, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> IntegrationDryRunOut:
+    require_permission(db, user, "integrations.providers.manage")
+    tenant_id = _tenant_id(db, user, payload.tenant_id)
+    for model, object_id, label in (
+        (User, payload.user_id, "usuario"),
+        (Customer, payload.customer_id, "cliente"),
+        (CustomerObligation, payload.obligation_id, "obligacion"),
+        (ManagementActivity, payload.activity_id, "gestion"),
+        (CallLog, payload.call_log_id, "llamada"),
+    ):
+        if object_id is None:
+            continue
+        item = db.get(model, object_id)
+        if item is None or getattr(item, "tenant_id", tenant_id) != tenant_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"{label.capitalize()} fuera de la empresa.")
+    idempotency_key = qaudit_idempotency_key(tenant_id, payload)
+    normalized = payload.model_dump(mode="json")
+    normalized.update({"tenant_id": tenant_id, "integration_enabled": False, "feature_flag": "QAUDIT_360_ENABLED"})
+    existing = _event_by_idempotency(db, tenant_id, "qaudit.evaluation.preview", idempotency_key)
+    if existing is None:
+        existing = ChannelEventLog(tenant_id=tenant_id, channel_type="api", event_type="qaudit.evaluation.preview", entity_type="qa_evaluation", entity_id=payload.call_log_id or payload.activity_id, status="dry_run", payload_json=json.dumps({"idempotency_key": idempotency_key, "payload": normalized}, ensure_ascii=True))
+        db.add(existing)
+        db.flush()
+        record_audit(db, user, "integration_qaudit", "dry_run", entity_id=existing.id, tenant_id=tenant_id, module="integrations", after={"idempotency_key": idempotency_key, "score": payload.score}, request=request)
+        db.commit()
+        db.refresh(existing)
+    return IntegrationDryRunOut(ok=True, integration="qaudit_360_quality", tenant_id=tenant_id, idempotency_key=idempotency_key, event_id=existing.id, message="Contrato QAudit 360 validado en modo dry-run. No se llamo QAudit.", normalized_payload=normalized)
 
 
 @router.get("/providers", response_model=list[IntegrationProviderOut])

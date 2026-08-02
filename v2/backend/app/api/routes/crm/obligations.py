@@ -94,13 +94,17 @@ def obligation_to_out(db: Session, item: CustomerObligation) -> CustomerObligati
         portfolio_name=item.portfolio_name,
         purchase_number=item.purchase_number,
         original_amount=item.original_amount,
+        original_balance=item.original_amount,
         current_balance=item.current_balance,
+        priority=item.priority,
         capital_amount=item.capital_amount,
         interest_amount=item.interest_amount,
         fees_amount=item.fees_amount,
         days_past_due=item.days_past_due,
         status=item.status,
         risk=item.risk,
+        due_date=item.due_date,
+        assignment_date=item.assignment_date,
         assigned_user_id=item.assigned_user_id,
         assigned_user_name=assigned.name if assigned else None,
         assigned_leader_id=item.assigned_leader_id,
@@ -132,15 +136,15 @@ def list_obligations(
     if q:
         pattern = f"%{q.lower()}%"
         query = query.where(func.lower(CustomerObligation.obligation_number).like(pattern) | func.lower(CustomerObligation.product_type).like(pattern))
-    items = db.scalars(query.order_by(CustomerObligation.days_past_due.desc(), CustomerObligation.current_balance.desc()).limit(limit))
+    items = db.scalars(query.order_by(CustomerObligation.priority.desc(), CustomerObligation.days_past_due.desc(), CustomerObligation.current_balance.desc()).limit(limit))
     return [obligation_to_out(db, item) for item in items]
 
 
 @router.get("/customers/{customer_id}/obligations", response_model=list[CustomerObligationOut])
-def list_customer_obligations(customer_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerObligationOut]:
+def list_customer_obligations(customer_id: int, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerObligationOut]:
     require_permission(db, user, "crm.clients.view")
     customer_for_access(db, customer_id, user)
-    items = db.scalars(obligation_query(db, user).where(CustomerObligation.customer_id == customer_id).order_by(CustomerObligation.days_past_due.desc()))
+    items = db.scalars(obligation_query(db, user).where(CustomerObligation.customer_id == customer_id).order_by(CustomerObligation.priority.desc(), CustomerObligation.days_past_due.desc()).limit(limit))
     return [obligation_to_out(db, item) for item in items]
 
 
@@ -152,22 +156,31 @@ def create_obligation(payload: CustomerObligationCreate, db: Session = Depends(g
         validate_assigned_user(db, customer.tenant_id, payload.assigned_user_id)
     if payload.assigned_leader_id:
         validate_assigned_user(db, customer.tenant_id, payload.assigned_leader_id)
+    project_id = payload.project_id or customer.project_id
+    if project_id:
+        project = project_for_access(db, project_id, user)
+        if project.tenant_id != customer.tenant_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El proyecto no pertenece a la empresa del cliente.")
+    original_amount = payload.original_balance if payload.original_balance is not None else payload.original_amount
     item = CustomerObligation(
         tenant_id=customer.tenant_id,
-        project_id=payload.project_id or customer.project_id,
+        project_id=project_id,
         customer_id=customer.id,
         obligation_number=payload.obligation_number,
         product_type=payload.product_type,
         portfolio_name=payload.portfolio_name,
         purchase_number=payload.purchase_number,
-        original_amount=payload.original_amount,
+        original_amount=original_amount,
         current_balance=payload.current_balance,
+        priority=payload.priority,
         capital_amount=payload.capital_amount,
         interest_amount=payload.interest_amount,
         fees_amount=payload.fees_amount,
         days_past_due=payload.days_past_due,
         status=payload.status,
         risk=payload.risk or risk_from_dpd(payload.days_past_due, payload.current_balance),
+        due_date=payload.due_date,
+        assignment_date=payload.assignment_date,
         assigned_user_id=payload.assigned_user_id or customer.assigned_user_id,
         assigned_leader_id=payload.assigned_leader_id,
         metadata_json=payload.metadata_json,
@@ -189,6 +202,12 @@ def update_obligation(obligation_id: int, payload: CustomerObligationPatch, db: 
         validate_assigned_user(db, item.tenant_id, updates["assigned_user_id"])
     if "assigned_leader_id" in updates and updates["assigned_leader_id"]:
         validate_assigned_user(db, item.tenant_id, updates["assigned_leader_id"])
+    if "project_id" in updates and updates["project_id"]:
+        project = project_for_access(db, updates["project_id"], user)
+        if project.tenant_id != item.tenant_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El proyecto no pertenece a la empresa de la obligacion.")
+    if "original_balance" in updates:
+        updates["original_amount"] = updates.pop("original_balance")
     for key, value in updates.items():
         setattr(item, key, value)
     if "risk" not in updates and ("days_past_due" in updates or "current_balance" in updates):

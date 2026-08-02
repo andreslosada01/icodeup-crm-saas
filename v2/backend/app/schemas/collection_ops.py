@@ -174,6 +174,10 @@ class CustomerDemographicCreate(BaseModel):
     reference_name: str | None = None
     reference_phone: str | None = None
     score: int = 0
+    contactability: str = "Media"
+    priority: int = 0
+    valid_from: date_type | None = None
+    valid_until: date_type | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -192,6 +196,10 @@ class CustomerDemographicOut(BaseModel):
     reference_name: str | None = None
     reference_phone: str | None = None
     score: int
+    contactability: str
+    priority: int
+    valid_from: date_type | None = None
+    valid_until: date_type | None = None
     metadata: dict[str, Any]
     is_active: bool
     created_at: datetime
@@ -404,6 +412,64 @@ class WebhookConfigurationOut(BaseModel):
     status: str
     secret_mask: str | None = None
     created_at: datetime
+
+
+class IntegrationReadinessOut(BaseModel):
+    integration: str
+    enabled: bool
+    mode: str
+    required_feature_flag: str
+    contract_version: str
+    dependencies_required_now: bool = False
+    tenant_isolated: bool = True
+    idempotency_keys: list[str] = Field(default_factory=list)
+    required_fields: list[str] = Field(default_factory=list)
+    optional_fields: list[str] = Field(default_factory=list)
+
+
+class PayControlPaymentSyncPreview(BaseModel):
+    tenant_id: int | None = None
+    external_payment_id: str | None = None
+    external_tenant_code: str | None = None
+    project_id: int | None = None
+    external_project_code: str | None = None
+    customer_document: str
+    obligation_number: str | None = None
+    amount: int = Field(gt=0)
+    paid_at: datetime
+    status: str = "received"
+    reference: str | None = None
+    support_url: str | None = None
+    validation_status: str = "pending"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class QAuditEvaluationPreview(BaseModel):
+    tenant_id: int | None = None
+    external_evaluation_id: str | None = None
+    user_id: int | None = None
+    advisor_external_id: str | None = None
+    call_log_id: int | None = None
+    customer_id: int | None = None
+    obligation_id: int | None = None
+    activity_id: int | None = None
+    score: int = Field(ge=0, le=100)
+    result: str
+    findings: list[str] = Field(default_factory=list)
+    evaluated_at: datetime
+    evaluator: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class IntegrationDryRunOut(BaseModel):
+    ok: bool
+    mode: str = "dry_run"
+    integration: str
+    tenant_id: int
+    idempotency_key: str
+    event_id: int
+    message: str
+    normalized_payload: dict[str, Any]
 
 
 class ChannelEventOut(BaseModel):

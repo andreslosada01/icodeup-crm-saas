@@ -655,6 +655,7 @@
               <h2>Registrar pago</h2>
               <form id="paymentForm" class="form-grid">
                 <label class="wide">Cliente<select name="customer_id" required></select></label>
+                <label class="wide">Obligacion<select name="obligation_id"><option value="">Cliente completo</option></select></label>
                 <label>Monto<input name="amount" type="number" min="1" required /></label>
                 <label>Fecha<input name="paid_at" type="date" required /></label>
                 <label>Metodo<input name="method" placeholder="Transferencia" /></label>
@@ -673,16 +674,37 @@
         </section>
 
         <section id="agreements" class="section">
-          <article class="module-placeholder">
-            <div>
-              <p class="eyebrow">Capacidad operativa</p>
-              <h2>Acuerdos de pago</h2>
-              <p>Administra acuerdos, cuotas, cumplimiento, vencimientos y trazabilidad de recuperacion desde una vista preparada para control ejecutivo.</p>
+          <article class="module-intelligence">
+            <div class="panel-head">
+              <div><h2>Acuerdos de pago</h2><p>Cuotas, cumplimiento y trazabilidad por cliente u obligacion especifica.</p></div>
             </div>
-            <div class="module-roadmap">
-              <span>Endpoint base: /api/crm/agreements</span>
-              <span>Activacion comercial sugerida: calendario de cuotas, alertas de vencimiento y tablero de cumplimiento.</span>
+            <div id="agreementInsightCards" class="intelligence-grid"></div>
+          </article>
+          <div class="two-column">
+            <article class="panel">
+              <h2>Crear acuerdo</h2>
+              <form id="agreementForm" class="form-grid">
+                <label class="wide">Cliente<select name="customer_id" required></select></label>
+                <label class="wide">Obligacion<select name="obligation_id"><option value="">Cliente completo</option></select></label>
+                <label>Monto total<input name="total_amount" type="number" min="1" required /></label>
+                <label>Cuotas<input name="installment_count" type="number" min="1" value="3" required /></label>
+                <label>Inicio<input name="start_date" type="date" required /></label>
+                <label class="wide">Notas<textarea name="notes" placeholder="Condiciones acordadas, periodicidad o soporte pendiente."></textarea></label>
+                <button type="submit">Guardar acuerdo</button>
+              </form>
+            </article>
+            <article class="panel">
+              <div class="panel-head">
+                <div><h2>Cuotas del acuerdo</h2><p>Selecciona un acuerdo para revisar su plan de pagos.</p></div>
+              </div>
+              <div id="agreementInstallments" class="table-wrap"></div>
+            </article>
+          </div>
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Acuerdos recientes</h2><p>Maximo 10 acuerdos visibles por pagina.</p></div>
             </div>
+            <div id="agreementTable" class="table-wrap"></div>
           </article>
         </section>
 

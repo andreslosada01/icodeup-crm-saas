@@ -52,6 +52,7 @@ class CallLog(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, nullable=False)
     provider_id: Mapped[int | None] = mapped_column(ForeignKey("telephony_providers.id"), index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    project_id: Mapped[int | None] = mapped_column(ForeignKey("projects.id"), index=True)
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), index=True)
     obligation_id: Mapped[int | None] = mapped_column(ForeignKey("customer_obligations.id"), index=True)
     phone_number: Mapped[str] = mapped_column(String(80), nullable=False)
