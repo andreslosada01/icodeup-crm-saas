@@ -160,6 +160,19 @@ Los defaults y el seed TEST incluyen reglas idempotentes con `rule_type='scoring
 
 Estas reglas viven en `business_rules`, son editables por configuracion y evitan que el scoring dependa exclusivamente del fallback de lectura.
 
+Cuando existen reglas globales (`tenant_id IS NULL`) y reglas del tenant con el mismo `code`, el servicio prioriza la regla del tenant y no duplica la regla global en la UI. Prioridad: tenant > global fallback. La regla global queda como fallback para tenants que todavia no tienen parametrizacion propia.
+
+## Asignaciones Demo por Cartera
+
+Los seeds TEST no deben activar todos los usuarios en todas las carteras. Para usuarios demo con cartera identificable en el correo, por ejemplo `agente1.<tenant>.finlosada@demo.icodeup.local`, el seed:
+
+- activa solo la cartera cuyo codigo/nombre coincide con el sufijo del correo.
+- desactiva (`is_active=false`) asignaciones demo cruzadas.
+- no elimina filas para conservar trazabilidad.
+- no modifica asignaciones de usuarios no-demo o de usuarios demo donde no se puede inferir con seguridad la cartera.
+
+Admins tenant pueden quedar como `admin` en varias carteras para administracion. La productividad y los conteos de asesores excluyen `admin`, `coordinator` y `quality_supervisor`; solo `role_in_project='agent'` cuenta como asesor operativo.
+
 ## QA Checklist
 
 - SuperAdmin en soporte operativo ve centro de la empresa seleccionada.
@@ -172,6 +185,8 @@ Estas reglas viven en `business_rules`, son editables por configuracion y evitan
 - Desactivar asignacion mantiene trazabilidad y no borra datos.
 - Cambiar rol actualiza `role_in_project` y mantiene `tenant_id`.
 - Coordinador queda como `coordinator` o `leader`; calidad queda como `quality_supervisor` o `quality`; admin empresa no queda como `agent` por seed/demo.
+- Usuarios demo con sufijo de cartera no quedan activos en carteras cruzadas.
+- Reglas de scoring se muestran sin duplicar global/tenant; tenant tiene prioridad sobre global.
 - `session-summary` no cierra sesion ante 403/503 cuando se consume opcionalmente desde frontend.
 - Drawer muestra mejores gestiones cuando existen actividades.
 - Todas las tablas visibles mantienen maximo 10 filas.

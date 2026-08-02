@@ -78,7 +78,7 @@ def company_admin_dashboard(db: Session, user: User) -> dict:
 
 def leader_dashboard(db: Session, user: User) -> dict:
     tenant = get_current_tenant(db, user)
-    team_ids = [item.id for item in db.scalars(select(User).where(User.tenant_id == tenant.id, User.leader_id == user.id))]
+    team_ids = [item.id for item in db.scalars(select(User).where(User.tenant_id == tenant.id, User.leader_id == user.id, User.role == AGENT))]
     visible_user_ids = team_ids or [user.id]
     today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
     month_start = datetime(datetime.now(timezone.utc).year, datetime.now(timezone.utc).month, 1, tzinfo=timezone.utc)

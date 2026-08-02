@@ -128,7 +128,12 @@ def scoring_rules_for_tenant(db: Session, tenant_id: int | None) -> list[Scoring
         query = query.where(BusinessRule.tenant_id.is_(None))
     else:
         query = query.where(or_(BusinessRule.tenant_id.is_(None), BusinessRule.tenant_id == tenant_id))
-    rules = list(db.scalars(query.order_by(BusinessRule.tenant_id.nullsfirst(), BusinessRule.code)))
+    rules = list(db.scalars(query.order_by(BusinessRule.code, BusinessRule.tenant_id.desc().nullslast())))
+    if tenant_id is not None:
+        prioritized: dict[str, BusinessRule] = {}
+        for item in sorted(rules, key=lambda rule: (0 if rule.tenant_id == tenant_id else 1, rule.code)):
+            prioritized.setdefault(item.code, item)
+        rules = list(prioritized.values())
     if rules:
         return [
             ScoringRuleOut(
@@ -318,8 +323,10 @@ def _active_project_ids(db: Session, user: User) -> list[int]:
 
 
 def _team_user_ids(db: Session, leader: User) -> list[int]:
-    ids = [leader.id]
-    ids.extend(db.scalars(select(User.id).where(User.tenant_id == leader.tenant_id, User.leader_id == leader.id, User.status == "active")))
+    ids = []
+    if leader.role == AGENT:
+        ids.append(leader.id)
+    ids.extend(db.scalars(select(User.id).where(User.tenant_id == leader.tenant_id, User.leader_id == leader.id, User.role == AGENT, User.status == "active")))
     return list(dict.fromkeys(ids))
 
 

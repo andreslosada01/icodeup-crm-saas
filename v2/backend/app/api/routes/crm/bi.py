@@ -221,7 +221,7 @@ def business_intelligence(
 
     agent_productivity = []
     assigned_user_ids = {customer.assigned_user_id for customer in customers if customer.assigned_user_id}
-    visible_users = list(db.scalars(select(User).where(User.id.in_(assigned_user_ids)))) if assigned_user_ids else []
+    visible_users = list(db.scalars(select(User).where(User.id.in_(assigned_user_ids), User.role == "agent"))) if assigned_user_ids else []
     for agent in visible_users:
         assigned = [customer for customer in customers if customer.assigned_user_id == agent.id]
         if not assigned:

@@ -83,33 +83,71 @@ def _project_role_for_user(user: User) -> str:
     return "viewer"
 
 
+def _compact(value: str | None) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _project_scope_for_user(user: User, projects: list[Project]) -> set[int] | None:
+    email = (user.email or "").lower()
+    if not email.endswith("@demo.icodeup.local"):
+        return None
+    if user.role == TENANT_ADMIN:
+        return {project.id for project in projects}
+    local = _compact(email.split("@", 1)[0])
+    matches = {
+        project.id
+        for project in projects
+        if _compact(project.code) in local or _compact(project.name) in local
+    }
+    return matches or None
+
+
 def _ensure_project_assignments(db: Session, tenant_id: int) -> dict[str, int]:
     updated = 0
     created = 0
+    deactivated = 0
     projects = list(db.scalars(select(Project).where(Project.tenant_id == tenant_id).order_by(Project.id)))
+    project_ids = {project.id for project in projects}
     users = list(db.scalars(select(User).where(User.tenant_id == tenant_id, User.status == "active").order_by(User.id)))
-    for project in projects:
-        for user in users:
-            expected_role = _project_role_for_user(user)
-            if expected_role == "viewer":
-                continue
-            assignment = db.scalar(
+    for user in users:
+        expected_role = _project_role_for_user(user)
+        if expected_role == "viewer":
+            continue
+        expected_project_ids = _project_scope_for_user(user, projects)
+        assignments = list(
+            db.scalars(
                 select(UserProjectAssignment).where(
                     UserProjectAssignment.user_id == user.id,
-                    UserProjectAssignment.project_id == project.id,
+                    UserProjectAssignment.project_id.in_(project_ids or {-1}),
                 )
             )
+        )
+        assignments_by_project = {assignment.project_id: assignment for assignment in assignments}
+        if expected_project_ids is None:
+            for assignment in assignments:
+                if assignment.is_active and assignment.role_in_project != expected_role:
+                    assignment.tenant_id = tenant_id
+                    assignment.role_in_project = expected_role
+                    updated += 1
+            continue
+        for assignment in assignments:
+            if assignment.project_id not in expected_project_ids and assignment.is_active:
+                assignment.is_active = False
+                deactivated += 1
+        for project_id in expected_project_ids:
+            assignment = assignments_by_project.get(project_id)
             if assignment is None:
-                assignment = UserProjectAssignment(tenant_id=tenant_id, user_id=user.id, project_id=project.id)
+                assignment = UserProjectAssignment(tenant_id=tenant_id, user_id=user.id, project_id=project_id)
                 db.add(assignment)
                 created += 1
             old_role = assignment.role_in_project
+            old_active = assignment.is_active
             assignment.tenant_id = tenant_id
             assignment.is_active = True
             assignment.role_in_project = expected_role
-            if assignment.role_in_project != old_role:
+            if assignment.role_in_project != old_role or not old_active:
                 updated += 1
-    return {"assignments_created": created, "assignments_role_fixed": updated}
+    return {"assignments_created": created, "assignments_role_fixed": updated, "assignments_cross_deactivated": deactivated}
 
 
 def _ensure_scoring_rules(db: Session, tenant_id: int) -> dict[str, int]:

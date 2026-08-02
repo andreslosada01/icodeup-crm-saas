@@ -236,6 +236,15 @@ def ensure_assignment(db: Session, user: User, project: Project) -> None:
     exists.tenant_id = project.tenant_id
     exists.role_in_project = role_in_project
     exists.is_active = True
+    local_email = compact((user.email or "").split("@", 1)[0])
+    if (user.email or "").lower().endswith("@demo.icodeup.local") and compact(project.code) in local_email:
+        assignments = list(db.scalars(select(UserProjectAssignment).where(UserProjectAssignment.user_id == user.id)))
+        for assignment in assignments:
+            if assignment.project_id == project.id:
+                continue
+            assigned_project = db.get(Project, assignment.project_id)
+            if assigned_project and assigned_project.tenant_id == project.tenant_id and assignment.is_active:
+                assignment.is_active = False
 
 
 def ensure_channels(db: Session, tenant: Tenant) -> int:

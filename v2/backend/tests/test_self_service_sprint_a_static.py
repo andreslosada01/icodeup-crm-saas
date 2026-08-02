@@ -113,3 +113,30 @@ def test_qa_hardens_operational_roles_dashboard_and_scoring_defaults() -> None:
     assert "_ensure_scoring_rules" in seed
     assert "project_role_for_user" in scale_seed
     assert "exists.role_in_project = role_in_project" in scale_seed
+
+
+@pytest.mark.safe_static
+def test_a2_prevents_demo_cross_portfolio_assignments_and_duplicate_scoring() -> None:
+    seed = read("backend/app/seeds/collects_core_demo.py")
+    scale_seed = read("backend/app/seeds/scale_demo.py")
+    self_service = read("backend/app/services/collections_self_service.py")
+    teams_route = read("backend/app/api/routes/teams.py")
+    dashboard_service = read("backend/app/services/dashboard_service.py")
+    bi_route = read("backend/app/api/routes/crm/bi.py")
+    docs = read("docs/AUTOGESTION_EMPRESA_CARTERAS_ALERTAS_SCORING.md")
+
+    assert "_project_scope_for_user" in seed
+    assert 'email.endswith("@demo.icodeup.local")' in seed
+    assert "assignment.is_active = False" in seed
+    assert "assignments_cross_deactivated" in seed
+    assert "compact(project.code) in local_email" in scale_seed
+    assert "assignment.is_active = False" in scale_seed
+
+    assert "prioritized.setdefault(item.code, item)" in self_service
+    assert "rule.tenant_id == tenant_id" in self_service
+    assert "tenant > global fallback" in docs
+
+    assert 'role_in_project == "agent"' in teams_route
+    assert "User.role == AGENT" in teams_route
+    assert "User.role == AGENT" in dashboard_service
+    assert 'User.role == "agent"' in bi_route

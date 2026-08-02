@@ -84,7 +84,7 @@ def _active_project_ids(db: Session, user: User) -> list[int]:
 
 
 def _team_user_ids(db: Session, leader: User) -> list[int]:
-    ids = list(db.scalars(select(User.id).where(User.tenant_id == leader.tenant_id, User.leader_id == leader.id, User.status == "active")))
+    ids = list(db.scalars(select(User.id).where(User.tenant_id == leader.tenant_id, User.leader_id == leader.id, User.role == AGENT, User.status == "active")))
     return list(dict.fromkeys(ids))
 
 
