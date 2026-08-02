@@ -42,6 +42,7 @@ from app.services.access_control import (
     is_platform_admin,
     require_module,
     require_permission,
+    user_has_module,
     user_has_permission,
 )
 from app.services.audit_service import record_audit
@@ -59,6 +60,12 @@ def _require_any_permission(db: Session, user: User, *permission_codes: str) -> 
     if any(user_has_permission(db, user, permission) for permission in permission_codes):
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permiso insuficiente.")
+
+
+def _require_teams_module(db: Session, user: User) -> None:
+    if user_has_module(db, user, "administration") or user_has_module(db, user, "collections"):
+        return
+    require_module(db, user, "administration")
 
 
 def _has_manage_scope(db: Session, user: User) -> bool:
@@ -90,6 +97,12 @@ def _profile_code_for_user(db: Session, user_id: int) -> str | None:
 
 
 def _role_in_project_for(user: User, profile_code: str | None) -> str:
+    if user.role == TENANT_ADMIN:
+        return "admin"
+    if user.role == COORDINATOR:
+        return "coordinator"
+    if user.role == QUALITY_SUPERVISOR:
+        return "quality_supervisor"
     if profile_code in {"collections_leader", "operational_leader", "sales_leader", "legal_director"} or user.role in {TENANT_ADMIN, COORDINATOR}:
         return "leader"
     if profile_code == "lawyer":
@@ -173,7 +186,7 @@ def _user_to_out(db: Session, item: User) -> TeamUserOut:
 
 def _project_to_out(db: Session, project: Project) -> TeamProjectOut:
     active_assignments = select(UserProjectAssignment).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True))
-    leader_count = db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True), UserProjectAssignment.role_in_project == "leader")) or 0
+    leader_count = db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True), UserProjectAssignment.role_in_project.in_(["leader", "coordinator"]))) or 0
     agent_count = db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True), UserProjectAssignment.role_in_project == "agent")) or 0
     user_count = db.scalar(select(func.count()).select_from(active_assignments.subquery())) or 0
     customer_count = db.scalar(select(func.count(Customer.id)).where(Customer.project_id == project.id, Customer.tenant_id == project.tenant_id)) or 0
@@ -344,7 +357,7 @@ def list_team_projects(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[TeamProjectOut]:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     query = select(Project).order_by(Project.name)
     if is_platform_admin(db, user):
@@ -361,7 +374,7 @@ def list_team_projects(
 
 @router.get("/projects/{project_id}/users", response_model=list[ProjectUserAssignmentOut])
 def list_project_users(project_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ProjectUserAssignmentOut]:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     _project_for_access(db, project_id, user)
     assignments = list(db.scalars(select(UserProjectAssignment).where(UserProjectAssignment.project_id == project_id).order_by(UserProjectAssignment.is_active.desc(), UserProjectAssignment.role_in_project, UserProjectAssignment.id).limit(TEAM_PAGE_SIZE)))
@@ -370,7 +383,7 @@ def list_project_users(project_id: int, db: Session = Depends(get_db), user: Use
 
 @router.get("/users/{user_id}/projects", response_model=list[ProjectUserAssignmentOut])
 def list_user_projects(user_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ProjectUserAssignmentOut]:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     target = db.get(User, user_id)
     if target is None:
@@ -397,7 +410,7 @@ def operational_center(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> OperationalCenterOut:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     query = select(Project).order_by(Project.name)
     if is_platform_admin(db, user):
@@ -437,7 +450,7 @@ def operational_center(
 
 @router.post("/projects/{project_id}/users", response_model=ProjectUserAssignmentOut, status_code=status.HTTP_201_CREATED)
 def assign_project_user(project_id: int, payload: ProjectUserAssignmentCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ProjectUserAssignmentOut:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     require_permission(db, user, "project_users.manage")
     project = _project_for_access(db, project_id, user, write=True)
     target = _user_for_tenant(db, payload.user_id, project.tenant_id)
@@ -458,7 +471,7 @@ def assign_project_user(project_id: int, payload: ProjectUserAssignmentCreate, r
 
 @router.patch("/project-users/{assignment_id}", response_model=ProjectUserAssignmentOut)
 def update_project_user(assignment_id: int, payload: ProjectUserAssignmentPatch, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ProjectUserAssignmentOut:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     require_permission(db, user, "project_users.manage")
     assignment = db.get(UserProjectAssignment, assignment_id)
     if assignment is None:
@@ -477,7 +490,7 @@ def update_project_user(assignment_id: int, payload: ProjectUserAssignmentPatch,
 
 @router.get("/leaders", response_model=list[TeamUserOut])
 def list_leaders(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[TeamUserOut]:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     query = select(User).where(User.status == "active").order_by(User.name)
     if is_platform_admin(db, user):
@@ -498,7 +511,7 @@ def list_leaders(tenant_id: int | None = None, db: Session = Depends(get_db), us
 
 @router.get("/agents", response_model=list[TeamUserOut])
 def list_agents(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[TeamUserOut]:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     query = select(User).where(User.status == "active").order_by(User.name)
     if is_platform_admin(db, user):
@@ -524,7 +537,7 @@ def list_leader_agents(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[TeamUserOut]:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     leader = _leader_for_access(db, leader_id, user)
     query = select(User).where(User.tenant_id == leader.tenant_id, User.leader_id == leader.id, User.status == "active").order_by(User.name)
@@ -536,7 +549,7 @@ def list_leader_agents(
 
 @router.post("/leaders/{leader_id}/agents", response_model=AssignmentUpdateResult)
 def assign_leader_agent(leader_id: int, payload: LeaderAgentAssignmentCreate, request: Request, db: Session = Depends(get_db), user: User = Depends(current_user)) -> AssignmentUpdateResult:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     require_permission(db, user, "teams.manage")
     leader = _leader_for_access(db, leader_id, user, write=True)
     agent = _user_for_tenant(db, payload.agent_user_id, leader.tenant_id, "El agente debe pertenecer a la misma empresa del lider.")
@@ -561,7 +574,7 @@ def assign_leader_agent(leader_id: int, payload: LeaderAgentAssignmentCreate, re
 
 @router.get("/leaders/{leader_id}/summary", response_model=LeaderSummaryOut)
 def leader_summary(leader_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LeaderSummaryOut:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     leader = _leader_for_access(db, leader_id, user)
     return _leader_summary(db, leader)
@@ -569,7 +582,7 @@ def leader_summary(leader_id: int, db: Session = Depends(get_db), user: User = D
 
 @router.get("/dashboard", response_model=LeaderSummaryOut)
 def my_team_dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)) -> LeaderSummaryOut:
-    require_module(db, user, "administration")
+    _require_teams_module(db, user)
     _require_any_permission(db, user, "teams.view", "project_users.view")
     if is_company_admin(db, user):
         leader = db.scalar(select(User).where(User.tenant_id == user.tenant_id, User.role == COORDINATOR).order_by(User.id))

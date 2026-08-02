@@ -35,7 +35,7 @@ from app.services.access_control import get_profile_role_code, is_company_admin,
 
 
 PRIORITY_LIMIT = 10
-SCORING_RULE_TYPES = {"management_scoring", "activity_scoring"}
+SCORING_RULE_TYPES = {"management_scoring", "activity_scoring", "scoring"}
 ALERT_DEFAULTS = {
     "max_days_without_management": 30,
     "min_effective_score": 60,
@@ -485,7 +485,7 @@ def _append_admin_priorities(db: Session, tenant_id: int, settings: dict[str, in
     without_leader = 0
     without_agent = 0
     for project in projects:
-        leader_count = db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True), UserProjectAssignment.role_in_project == "leader")) or 0
+        leader_count = db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True), UserProjectAssignment.role_in_project.in_(["leader", "coordinator"]))) or 0
         agent_count = db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.project_id == project.id, UserProjectAssignment.is_active.is_(True), UserProjectAssignment.role_in_project == "agent")) or 0
         if not leader_count:
             without_leader += 1

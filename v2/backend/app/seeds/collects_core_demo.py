@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.roles import AGENT, COORDINATOR
+from app.core.roles import AGENT, COORDINATOR, QUALITY_SUPERVISOR, TENANT_ADMIN
 from app.db.session import SessionLocal
 from app.models import (
     Customer,
@@ -18,15 +18,29 @@ from app.models import (
     PaymentAgreement,
     PaymentAgreementInstallment,
     Project,
+    BusinessRule,
     TelephonyExtension,
     TelephonyProvider,
     Tenant,
     TenantModule,
     User,
+    UserProjectAssignment,
 )
 
 
 SEED_MARKER = "iep_collects_core_incremental_seed"
+
+SCORING_RULES = [
+    ("SCORING_EFFECTIVE_CONTACT", "Scoring - contacto efectivo", {"result_contains_any": ["contactado", "contacto efectivo", "negociacion"], "channel_any": ["phone", "whatsapp", "email", "manual"]}, {"score": 65}, "medium"),
+    ("SCORING_PROMISE_CREATED", "Scoring - promesa creada", {"result_contains_any": ["promesa"]}, {"score": 78}, "high"),
+    ("SCORING_PAYMENT_REPORTED", "Scoring - pago reportado", {"result_contains_any": ["pago", "pagado", "normalizado"]}, {"score": 92}, "high"),
+    ("SCORING_AGREEMENT_CREATED", "Scoring - acuerdo creado", {"result_contains_any": ["acuerdo"]}, {"score": 86}, "high"),
+    ("SCORING_LEGAL_ESCALATION", "Scoring - escalamiento juridico", {"result_contains_any": ["escalado", "juridico"]}, {"score": 48}, "medium"),
+    ("SCORING_NO_ANSWER", "Scoring - no contesta", {"result_contains_any": ["no contesta", "sin contacto", "ocupado"]}, {"score": 18}, "low"),
+    ("SCORING_WRONG_NUMBER", "Scoring - numero errado", {"result_contains_any": ["numero errado", "telefono errado", "no ubicado"]}, {"score": 8}, "low"),
+    ("SCORING_CLIENT_WITHOUT_CONTACT", "Scoring - cliente sin contacto", {"result_contains_any": ["sin contacto"]}, {"score": 12}, "low"),
+    ("SCORING_SUPPORT_UPLOADED", "Scoring - soporte cargado", {"note_contains": "soporte"}, {"score": 52}, "medium"),
+]
 
 
 def _count(db: Session, model, tenant_id: int) -> int:
@@ -50,6 +64,78 @@ def _users(db: Session, tenant_id: int) -> tuple[User | None, User | None]:
     coordinator = db.scalar(select(User).where(User.tenant_id == tenant_id, User.role == COORDINATOR).order_by(User.id).limit(1))
     agent = db.scalar(select(User).where(User.tenant_id == tenant_id, User.role == AGENT).order_by(User.id).limit(1))
     return coordinator, agent
+
+
+def _project_role_for_user(user: User) -> str:
+    if user.role == TENANT_ADMIN:
+        return "admin"
+    if user.role == COORDINATOR:
+        return "coordinator"
+    if user.role == QUALITY_SUPERVISOR:
+        return "quality_supervisor"
+    if user.role == AGENT:
+        return "agent"
+    email = (user.email or "").lower()
+    if email.startswith("abogado"):
+        return "lawyer"
+    if email.startswith("comercial"):
+        return "sales"
+    return "viewer"
+
+
+def _ensure_project_assignments(db: Session, tenant_id: int) -> dict[str, int]:
+    updated = 0
+    created = 0
+    projects = list(db.scalars(select(Project).where(Project.tenant_id == tenant_id).order_by(Project.id)))
+    users = list(db.scalars(select(User).where(User.tenant_id == tenant_id, User.status == "active").order_by(User.id)))
+    for project in projects:
+        for user in users:
+            expected_role = _project_role_for_user(user)
+            if expected_role == "viewer":
+                continue
+            assignment = db.scalar(
+                select(UserProjectAssignment).where(
+                    UserProjectAssignment.user_id == user.id,
+                    UserProjectAssignment.project_id == project.id,
+                )
+            )
+            if assignment is None:
+                assignment = UserProjectAssignment(tenant_id=tenant_id, user_id=user.id, project_id=project.id)
+                db.add(assignment)
+                created += 1
+            old_role = assignment.role_in_project
+            assignment.tenant_id = tenant_id
+            assignment.is_active = True
+            assignment.role_in_project = expected_role
+            if assignment.role_in_project != old_role:
+                updated += 1
+    return {"assignments_created": created, "assignments_role_fixed": updated}
+
+
+def _ensure_scoring_rules(db: Session, tenant_id: int) -> dict[str, int]:
+    created = 0
+    updated = 0
+    for code, name, condition, action, severity in SCORING_RULES:
+        rule = db.scalar(
+            select(BusinessRule).where(
+                BusinessRule.tenant_id == tenant_id,
+                BusinessRule.module == "collections",
+                BusinessRule.rule_type == "scoring",
+                BusinessRule.code == code,
+            )
+        )
+        if rule is None:
+            rule = BusinessRule(tenant_id=tenant_id, module="collections", rule_type="scoring", code=code, name=name)
+            db.add(rule)
+            created += 1
+        else:
+            updated += 1
+        rule.name = name
+        rule.condition_json = json.dumps(condition, ensure_ascii=True)
+        rule.action_json = json.dumps(action, ensure_ascii=True)
+        rule.severity = severity
+        rule.is_active = True
+    return {"scoring_rules_created": created, "scoring_rules_updated": updated}
 
 
 def _obligation_number(customer: Customer, index: int) -> str:
@@ -265,10 +351,14 @@ def run(tenant_slug: str | None, limit_customers: int, dry_run: bool) -> dict[st
                 "telephony_modules_active": _telephony_module_active_count(db, tenant.id),
                 "telephony_providers": _count(db, TelephonyProvider, tenant.id),
                 "telephony_extensions": _count(db, TelephonyExtension, tenant.id),
+                "project_assignments": db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.tenant_id == tenant.id)) or 0,
+                "scoring_rules": db.scalar(select(func.count(BusinessRule.id)).where(BusinessRule.tenant_id == tenant.id, BusinessRule.module == "collections", BusinessRule.rule_type == "scoring")) or 0,
             }
             created_obligations = _ensure_obligations(db, tenant.id, customers)
             created_demographics = _ensure_demographics(db, tenant.id, customers)
             created_agreements = _ensure_agreements(db, tenant.id, customers, max_agreements=min(5, len(customers)))
+            assignments = _ensure_project_assignments(db, tenant.id)
+            scoring = _ensure_scoring_rules(db, tenant.id)
             telephony = _ensure_telephony(db, tenant.id)
             after = {
                 "customers": len(customers),
@@ -278,8 +368,10 @@ def run(tenant_slug: str | None, limit_customers: int, dry_run: bool) -> dict[st
                 "telephony_modules_active": _telephony_module_active_count(db, tenant.id),
                 "telephony_providers": before["telephony_providers"] + telephony["providers_created"],
                 "telephony_extensions": before["telephony_extensions"] + telephony["extensions_created"],
+                "project_assignments": db.scalar(select(func.count(UserProjectAssignment.id)).where(UserProjectAssignment.tenant_id == tenant.id)) or 0,
+                "scoring_rules": db.scalar(select(func.count(BusinessRule.id)).where(BusinessRule.tenant_id == tenant.id, BusinessRule.module == "collections", BusinessRule.rule_type == "scoring")) or 0,
             }
-            results[tenant.slug] = {"before": before, "after": after, "created": {"obligations": created_obligations, "demographics": created_demographics, "agreements": created_agreements, **telephony}}
+            results[tenant.slug] = {"before": before, "after": after, "created": {"obligations": created_obligations, "demographics": created_demographics, "agreements": created_agreements, **assignments, **scoring, **telephony}}
         if dry_run:
             db.rollback()
         else:

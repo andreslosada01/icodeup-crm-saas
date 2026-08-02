@@ -134,15 +134,44 @@ Si no hay reglas, se aplican valores de referencia para mostrar prioridades. La 
 - Acciones rapidas para activar/desactivar asignaciones y cambiar rol a lider/agente.
 - Drawer de cliente con mejores gestiones.
 
+## Hardening QA por Rol
+
+- El asesor/agente operativo no ve el catalogo corporativo de modulos en el dashboard.
+- El nav lateral del agente oculta `Documentos`, `Telefonia` y `Mi Excel Web` como modulos independientes.
+- Telefonia se mantiene como accion operativa de click-to-call cuando el modulo y la extension estan disponibles.
+- Documentos se mantienen como soporte asociado al cliente dentro del drawer, no como modulo corporativo del agente.
+- `Equipos y carteras` acepta modulo `administration` o `collections`, evitando pantallas vacias para lideres operativos cuando no tienen licenciamiento administrativo completo.
+- `role_in_project` soporta roles explicitos: `admin`, `coordinator`, `leader`, `agent`, `quality`, `quality_supervisor`, `lawyer`, `sales`, `auditor`, `viewer`.
+- Las carteras cuentan `leader` y `coordinator` como liderazgo operativo para evitar falsos positivos de "cartera sin lider".
+
+## Reglas Demo de Scoring
+
+Los defaults y el seed TEST incluyen reglas idempotentes con `rule_type='scoring'` para:
+
+- contacto efectivo.
+- promesa creada.
+- pago reportado.
+- acuerdo creado.
+- escalamiento juridico.
+- no contesta.
+- numero errado.
+- cliente sin contacto.
+- soporte cargado.
+
+Estas reglas viven en `business_rules`, son editables por configuracion y evitan que el scoring dependa exclusivamente del fallback de lectura.
+
 ## QA Checklist
 
 - SuperAdmin en soporte operativo ve centro de la empresa seleccionada.
 - Admin empresa ve solo su tenant.
 - Lider ve carteras/equipo dentro de su alcance.
 - Gestor no puede modificar asignaciones.
+- Gestor no ve tarjetas de modulos corporativos o licenciamiento en dashboard.
+- Gestor no ve Documentos/Telefonia/Excel como modulos laterales independientes.
 - Crear asignacion no duplica `user_project_assignments`.
 - Desactivar asignacion mantiene trazabilidad y no borra datos.
 - Cambiar rol actualiza `role_in_project` y mantiene `tenant_id`.
+- Coordinador queda como `coordinator` o `leader`; calidad queda como `quality_supervisor` o `quality`; admin empresa no queda como `agent` por seed/demo.
 - `session-summary` no cierra sesion ante 403/503 cuando se consume opcionalmente desde frontend.
 - Drawer muestra mejores gestiones cuando existen actividades.
 - Todas las tablas visibles mantienen maximo 10 filas.

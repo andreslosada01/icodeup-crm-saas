@@ -108,6 +108,17 @@ class AdministrationRepository:
     def get_user(self, user_id: int) -> User | None:
         return self.db.get(User, user_id)
 
+    def project_role_for_user(self, user: User) -> str:
+        if user.role == "tenant_admin":
+            return "admin"
+        if user.role == "coordinator":
+            return "coordinator"
+        if user.role == "quality_supervisor":
+            return "quality_supervisor"
+        if user.role == "agent":
+            return "agent"
+        return "viewer"
+
     def set_user_projects(self, user: User, project_ids: list[int]) -> None:
         project_ids = sorted(set(project_ids))
         if project_ids:
@@ -123,10 +134,12 @@ class AdministrationRepository:
             assignment.tenant_id = user.tenant_id
             if assignment.project_id not in project_ids:
                 assignment.is_active = False
+        role_in_project = self.project_role_for_user(user)
         for project_id in project_ids:
             if project_id in current_by_project:
                 current_by_project[project_id].is_active = True
-                current_by_project[project_id].role_in_project = current_by_project[project_id].role_in_project or "agent"
+                if not current_by_project[project_id].role_in_project or (current_by_project[project_id].role_in_project == "agent" and role_in_project != "agent"):
+                    current_by_project[project_id].role_in_project = role_in_project
             else:
-                self.db.add(UserProjectAssignment(tenant_id=user.tenant_id, user_id=user.id, project_id=project_id, role_in_project="agent", is_active=True))
+                self.db.add(UserProjectAssignment(tenant_id=user.tenant_id, user_id=user.id, project_id=project_id, role_in_project=role_in_project, is_active=True))
         self.db.flush()

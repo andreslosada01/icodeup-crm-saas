@@ -742,7 +742,8 @@ function renderDynamicMenu() {
   if (!nav) return;
   const items = state.core.menu?.items || [];
   if (!items.length) return;
-  const grouped = items.reduce((acc, item) => {
+  const navItems = visibleMenuItemsForCurrentRole(items);
+  const grouped = navItems.reduce((acc, item) => {
     const category = sectionCategory(item);
     if (!acc[category]) acc[category] = [];
     acc[category].push(item);
@@ -754,21 +755,28 @@ function renderDynamicMenu() {
         <div class="nav-group">
           <p>${escapeHtml(category)}</p>
           ${groupItems
-            .map((item, index) => `<button class="nav-item ${items.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span class="nav-label">${escapeHtml(menuItemLabel(item))}</span></button>`)
+            .map((item, index) => `<button class="nav-item ${navItems.indexOf(item) === 0 && index === 0 ? "active" : ""}" data-section="${escapeHtml(item.section)}">${iconForSection(item.section)}<span class="nav-label">${escapeHtml(menuItemLabel(item))}</span></button>`)
             .join("")}
         </div>
       `
     )
     .join("");
-  const allowedSections = new Set(items.map((item) => item.section));
+  const allowedSections = new Set(navItems.map((item) => item.section));
   document.querySelectorAll(".section").forEach((section) => {
     section.classList.remove("active-section");
     section.classList.toggle("menu-disabled", !allowedSections.has(section.id));
   });
-  const firstSection = items[0]?.section || "dashboard";
+  const firstSection = navItems[0]?.section || "dashboard";
   document.querySelector(`#${firstSection}`)?.classList.add("active-section");
-  document.querySelector("#sectionTitle").textContent = titles[firstSection] || items[0]?.label || "IEP";
+  document.querySelector("#sectionTitle").textContent = titles[firstSection] || navItems[0]?.label || "IEP";
   renderShellContext();
+}
+
+function visibleMenuItemsForCurrentRole(items) {
+  const audience = menuUser().audience;
+  if (audience !== "operational_user") return items;
+  const hiddenOperationalModules = new Set(["documents", "telephony", "excel-web"]);
+  return items.filter((item) => !hiddenOperationalModules.has(item.section));
 }
 
 function menuHasSection(...sections) {
@@ -1451,7 +1459,11 @@ function renderRoleDashboard() {
     </div>
   `;
   renderQuickActions("#experienceActions", actionsForAudience(audience).filter((action) => menuHasSection(action.section)));
-  renderModuleCatalog("#experienceModules", menuModules());
+  if (audience === "operational_user") {
+    document.querySelector("#experienceModules") && (document.querySelector("#experienceModules").innerHTML = "");
+  } else {
+    renderModuleCatalog("#experienceModules", menuModules());
+  }
 }
 
 function sessionPrioritiesClosedKey() {
@@ -3961,12 +3973,16 @@ function renderIntegrations() {
 
 function teamRoleLabel(value) {
   const labels = {
+    admin: "Admin empresa",
+    coordinator: "Coordinador",
     leader: "Lider",
     agent: "Agente",
     quality: "Calidad",
+    quality_supervisor: "Supervisor calidad",
     lawyer: "Abogado",
     sales: "Comercial",
-    auditor: "Auditor"
+    auditor: "Auditor",
+    viewer: "Consulta"
   };
   return labels[value] || value || "-";
 }
@@ -4066,8 +4082,10 @@ function renderTeams() {
           <td>${dateOnly(assignment.created_at)}</td>
           <td>
             <button class="table-button" data-toggle-project-user="${assignment.id}" data-active="${assignment.is_active}" type="button">${assignment.is_active ? "Desactivar" : "Activar"}</button>
+            <button class="table-button" data-project-user-role="${assignment.id}" data-role="coordinator" type="button">Coord</button>
             <button class="table-button" data-project-user-role="${assignment.id}" data-role="leader" type="button">Lider</button>
             <button class="table-button" data-project-user-role="${assignment.id}" data-role="agent" type="button">Agente</button>
+            <button class="table-button" data-project-user-role="${assignment.id}" data-role="quality_supervisor" type="button">Calidad</button>
           </td>
         </tr>
       `

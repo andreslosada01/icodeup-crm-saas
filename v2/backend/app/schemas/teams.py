@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 
-TEAM_PROJECT_ROLES = {"leader", "agent", "quality", "lawyer", "sales", "auditor"}
+TEAM_PROJECT_ROLES = {"admin", "coordinator", "leader", "agent", "quality", "quality_supervisor", "lawyer", "sales", "auditor", "viewer"}
 
 
 class TeamProjectOut(BaseModel):

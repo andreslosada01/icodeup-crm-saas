@@ -456,6 +456,15 @@ CATALOG_DEFAULTS = [
 BUSINESS_RULE_DEFAULTS = [
     ("collections", "sla", "CUSTOMER_WITHOUT_ACTIVITY", "Cliente sin gestion", '{"days": 7}', '{"alert": true}', "high"),
     ("collections", "sla", "PROMISE_DUE_SOON", "Promesa proxima a vencer", '{"days": 2}', '{"alert": true}', "medium"),
+    ("collections", "scoring", "SCORING_EFFECTIVE_CONTACT", "Scoring - contacto efectivo", '{"result_contains_any": ["contactado", "contacto efectivo", "negociacion"], "channel_any": ["phone", "whatsapp", "email", "manual"]}', '{"score": 65}', "medium"),
+    ("collections", "scoring", "SCORING_PROMISE_CREATED", "Scoring - promesa creada", '{"result_contains_any": ["promesa"]}', '{"score": 78}', "high"),
+    ("collections", "scoring", "SCORING_PAYMENT_REPORTED", "Scoring - pago reportado", '{"result_contains_any": ["pago", "pagado", "normalizado"]}', '{"score": 92}', "high"),
+    ("collections", "scoring", "SCORING_AGREEMENT_CREATED", "Scoring - acuerdo creado", '{"result_contains_any": ["acuerdo"]}', '{"score": 86}', "high"),
+    ("collections", "scoring", "SCORING_LEGAL_ESCALATION", "Scoring - escalamiento juridico", '{"result_contains_any": ["escalado", "juridico"]}', '{"score": 48}', "medium"),
+    ("collections", "scoring", "SCORING_NO_ANSWER", "Scoring - no contesta", '{"result_contains_any": ["no contesta", "sin contacto", "ocupado"]}', '{"score": 18}', "low"),
+    ("collections", "scoring", "SCORING_WRONG_NUMBER", "Scoring - numero errado", '{"result_contains_any": ["numero errado", "telefono errado", "no ubicado"]}', '{"score": 8}', "low"),
+    ("collections", "scoring", "SCORING_CLIENT_WITHOUT_CONTACT", "Scoring - cliente sin contacto", '{"result_contains_any": ["sin contacto"]}', '{"score": 12}', "low"),
+    ("collections", "scoring", "SCORING_SUPPORT_UPLOADED", "Scoring - soporte cargado", '{"note_contains": "soporte"}', '{"score": 52}', "medium"),
     ("legal", "sla", "LEGAL_DEADLINE_DUE_SOON", "Vencimiento juridico proximo", '{"days": 7}', '{"alert": true}', "high"),
     ("legal", "sla", "LEGAL_CASE_WITHOUT_ACTION", "Caso sin actuacion", '{"days": 10}', '{"alert": true}', "high"),
     ("sales", "sla", "LEAD_WITHOUT_FOLLOWUP", "Lead sin seguimiento", '{"days": 5}', '{"alert": true}', "medium"),
@@ -1945,15 +1954,20 @@ def _seed_phase5_demo_data(db: Session, modules: dict[str, Module], platform_ten
     ]
     for project in projects:
         for email, user in users.items():
-            role_in_project = "leader"
-            if email.startswith("gestor"):
+            if email.startswith("admin."):
+                role_in_project = "admin"
+            elif email.startswith("coord."):
+                role_in_project = "coordinator"
+            elif email.startswith("gestor"):
                 role_in_project = "agent"
             elif email.startswith("calidad"):
-                role_in_project = "quality"
+                role_in_project = "quality_supervisor"
             elif email.startswith("abogado"):
                 role_in_project = "lawyer"
             elif email.startswith("comercial"):
                 role_in_project = "sales"
+            else:
+                role_in_project = "viewer"
             _ensure_assignment(db, user, project, role_in_project)
     _ensure_channels(db, andina, projects[0])
     _ensure_demo_telephony_extensions(db, andina)

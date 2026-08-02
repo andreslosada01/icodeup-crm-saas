@@ -212,6 +212,16 @@ def get_or_create_user(
     return user
 
 
+def project_role_for_user(user: User) -> str:
+    if user.role == TENANT_ADMIN:
+        return "admin"
+    if user.role == COORDINATOR:
+        return "coordinator"
+    if user.role == QUALITY_SUPERVISOR:
+        return "quality_supervisor"
+    return "agent"
+
+
 def ensure_assignment(db: Session, user: User, project: Project) -> None:
     exists = db.scalar(
         select(UserProjectAssignment).where(
@@ -219,8 +229,13 @@ def ensure_assignment(db: Session, user: User, project: Project) -> None:
             UserProjectAssignment.project_id == project.id,
         )
     )
+    role_in_project = project_role_for_user(user)
     if not exists:
-        db.add(UserProjectAssignment(user_id=user.id, project_id=project.id))
+        exists = UserProjectAssignment(user_id=user.id, project_id=project.id)
+        db.add(exists)
+    exists.tenant_id = project.tenant_id
+    exists.role_in_project = role_in_project
+    exists.is_active = True
 
 
 def ensure_channels(db: Session, tenant: Tenant) -> int:

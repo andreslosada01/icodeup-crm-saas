@@ -62,3 +62,54 @@ def test_frontend_self_service_panels_are_optional_and_visible() -> None:
     assert ".session-priorities" in styles
     assert ".operational-center" in styles
     assert ".score-chip" in styles
+
+
+@pytest.mark.safe_static
+def test_qa_hardens_operational_roles_dashboard_and_scoring_defaults() -> None:
+    app_js = read("frontend/static/assets/app.js")
+    index_html = read("frontend/static/index.html")
+    teams_schema = read("backend/app/schemas/teams.py")
+    teams_route = read("backend/app/api/routes/teams.py")
+    self_service = read("backend/app/services/collections_self_service.py")
+    bootstrap = read("backend/app/services/bootstrap_service.py")
+    seed = read("backend/app/seeds/collects_core_demo.py")
+    scale_seed = read("backend/app/seeds/scale_demo.py")
+    repository = read("backend/app/repositories/administration_repository.py")
+
+    assert "visibleMenuItemsForCurrentRole" in app_js
+    assert 'audience !== "operational_user"' in app_js
+    assert 'new Set(["documents", "telephony", "excel-web"])' in app_js
+    assert 'audience === "operational_user"' in app_js
+    assert 'document.querySelector("#experienceModules")' in app_js
+    assert 'value="coordinator"' in index_html
+    assert 'value="quality_supervisor"' in index_html
+
+    assert '"coordinator"' in teams_schema
+    assert '"quality_supervisor"' in teams_schema
+    assert '"admin"' in teams_schema
+    assert 'role_in_project.in_(["leader", "coordinator"])' in teams_route
+    assert "_require_teams_module" in teams_route
+    assert 'user_has_module(db, user, "administration") or user_has_module(db, user, "collections")' in teams_route
+
+    assert 'SCORING_RULE_TYPES = {"management_scoring", "activity_scoring", "scoring"}' in self_service
+    for code in [
+        "SCORING_EFFECTIVE_CONTACT",
+        "SCORING_PROMISE_CREATED",
+        "SCORING_PAYMENT_REPORTED",
+        "SCORING_AGREEMENT_CREATED",
+        "SCORING_LEGAL_ESCALATION",
+        "SCORING_NO_ANSWER",
+        "SCORING_WRONG_NUMBER",
+        "SCORING_CLIENT_WITHOUT_CONTACT",
+        "SCORING_SUPPORT_UPLOADED",
+    ]:
+        assert code in bootstrap
+        assert code in seed
+
+    assert "project_role_for_user" in repository
+    assert 'user.role == "coordinator"' in repository
+    assert 'role_in_project=role_in_project' in repository
+    assert "_ensure_project_assignments" in seed
+    assert "_ensure_scoring_rules" in seed
+    assert "project_role_for_user" in scale_seed
+    assert "exists.role_in_project = role_in_project" in scale_seed
