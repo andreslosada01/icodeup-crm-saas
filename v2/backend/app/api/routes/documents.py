@@ -92,7 +92,7 @@ def document_for_access(db: Session, document_id: int, user: User, write: bool =
 
 
 @router.get("", response_model=list[DocumentOut])
-def list_documents(limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Document]:
+def list_documents(limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Document]:
     require_permission(db, user, "documents.view")
     ensure_document_read(db, user)
     query = select(Document).order_by(Document.created_at.desc())

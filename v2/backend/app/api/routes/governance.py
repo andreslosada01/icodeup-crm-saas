@@ -654,7 +654,7 @@ def list_audit_logs(
     user_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-    limit: int = Query(default=20, ge=1, le=20),
+    limit: int = Query(default=10, ge=1, le=10),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[AuditLog]:
@@ -679,7 +679,7 @@ def list_audit_logs(
 
 
 @router.get("/parties", response_model=list[PartyOut])
-def list_parties(q: str | None = None, tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Party]:
+def list_parties(q: str | None = None, tenant_id: int | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Party]:
     require_permission(db, user, "parties.view")
     tenant = target_tenant(db, user, tenant_id)
     query = select(Party).where(Party.tenant_id == tenant.id).order_by(Party.updated_at.desc()).limit(limit)

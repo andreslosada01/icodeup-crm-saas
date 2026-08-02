@@ -265,7 +265,7 @@ class ExcelWebQuery(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
     columns: list[str] = Field(default_factory=list)
     page: int = Field(default=1, ge=1)
-    page_size: int = Field(default=20, ge=1, le=20)
+    page_size: int = Field(default=10, ge=1, le=10)
 
 
 class ExcelWebQueryResult(BaseModel):

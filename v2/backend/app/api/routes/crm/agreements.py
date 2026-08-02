@@ -61,7 +61,7 @@ def agreement_to_out(db: Session, agreement: PaymentAgreement) -> PaymentAgreeme
 
 
 @router.get("/agreements", response_model=list[PaymentAgreementOut])
-def list_agreements(tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentAgreementOut]:
+def list_agreements(tenant_id: int | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentAgreementOut]:
     require_permission(db, user, "collections.agreements.view")
     ensure_read_access(user)
     if is_platform(user):

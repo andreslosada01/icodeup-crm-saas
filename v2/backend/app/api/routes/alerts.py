@@ -21,7 +21,7 @@ def list_alerts(
     status: str | None = "open",
     tenant_id: int | None = None,
     assigned_to_me: bool = False,
-    limit: int = Query(default=20, ge=1, le=20),
+    limit: int = Query(default=10, ge=1, le=10),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[dict]:
@@ -37,5 +37,5 @@ def alert_summary(
     user: User = Depends(current_user),
 ) -> dict:
     require_permission(db, user, "alerts.view")
-    alerts = collect_alerts(db, user, module=module, tenant_id=tenant_id, limit=20)
+    alerts = collect_alerts(db, user, module=module, tenant_id=tenant_id, limit=10)
     return summarize_alerts(alerts)

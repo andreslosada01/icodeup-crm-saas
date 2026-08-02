@@ -112,8 +112,8 @@ def opportunity_for_access(db: Session, opportunity_id: int, user: User, write: 
 def sales_dashboard(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "sales.leads.view")
     ensure_sales_read(db, user)
-    leads = list_leads(tenant_id=tenant_id, db=db, user=user, limit=20)
-    opportunities = list_opportunities(tenant_id=tenant_id, db=db, user=user, limit=20) if user_has_permission(db, user, "sales.opportunities.view") else []
+    leads = list_leads(tenant_id=tenant_id, db=db, user=user, limit=10)
+    opportunities = list_opportunities(tenant_id=tenant_id, db=db, user=user, limit=10) if user_has_permission(db, user, "sales.opportunities.view") else []
     open_opportunities = [item for item in opportunities if item.status in {"open", "active"}]
     won = [item for item in opportunities if item.status in {"won", "closed_won"} or item.stage in {"closed_won", "won"}]
     lost = [item for item in opportunities if item.status in {"lost", "closed_lost"} or item.stage in {"closed_lost", "lost"}]
@@ -147,7 +147,7 @@ def sales_dashboard(tenant_id: int | None = None, db: Session = Depends(get_db),
 def sales_pipeline(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(db, user)
-    opportunities = list_opportunities(tenant_id=tenant_id, db=db, user=user, limit=20)
+    opportunities = list_opportunities(tenant_id=tenant_id, db=db, user=user, limit=10)
     stages = sales_stages(db, tenant_id if is_platform_admin(db, user) and tenant_id else user.tenant_id if not is_platform_admin(db, user) else None)
     rows = []
     for stage in stages:
@@ -170,7 +170,7 @@ def sales_pipeline(tenant_id: int | None = None, db: Session = Depends(get_db), 
 def sales_kanban(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict:
     require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(db, user)
-    opportunities = list_opportunities(tenant_id=tenant_id, db=db, user=user, limit=20)
+    opportunities = list_opportunities(tenant_id=tenant_id, db=db, user=user, limit=10)
     stages = sales_stages(db, tenant_id if is_platform_admin(db, user) and tenant_id else user.tenant_id if not is_platform_admin(db, user) else None)
     columns = []
     for stage in stages:
@@ -194,7 +194,7 @@ def sales_kanban(tenant_id: int | None = None, db: Session = Depends(get_db), us
 
 
 @router.get("/leads", response_model=list[LeadOut])
-def list_leads(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[Lead]:
+def list_leads(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=10, ge=1, le=10)) -> list[Lead]:
     require_permission(db, user, "sales.leads.view")
     ensure_sales_read(db, user)
     query = select(Lead).order_by(Lead.created_at.desc())
@@ -240,7 +240,7 @@ def update_lead(lead_id: int, payload: LeadPatch, db: Session = Depends(get_db),
 
 
 @router.get("/opportunities", response_model=list[OpportunityOut])
-def list_opportunities(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=20, ge=1, le=20)) -> list[Opportunity]:
+def list_opportunities(tenant_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(current_user), limit: int = Query(default=10, ge=1, le=10)) -> list[Opportunity]:
     require_permission(db, user, "sales.opportunities.view")
     ensure_sales_read(db, user)
     query = select(Opportunity).order_by(Opportunity.created_at.desc())

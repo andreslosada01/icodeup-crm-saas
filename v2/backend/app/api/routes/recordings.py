@@ -74,7 +74,7 @@ def list_recordings(
     project_id: int | None = None,
     phone: str | None = None,
     status_filter: str | None = None,
-    limit: int = Query(default=20, ge=1, le=20),
+    limit: int = Query(default=10, ge=1, le=10),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[CallRecordingOut]:
@@ -118,7 +118,7 @@ def create_recording(payload: CallRecordingCreate, request: Request, db: Session
 
 
 @router.get("/access-logs")
-def access_logs(recording_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
+def access_logs(recording_id: int | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[dict]:
     _ensure_recordings_allowed(db, user)
     require_permission(db, user, "recordings.audit.view")
     query = select(RecordingAccessLog).order_by(RecordingAccessLog.created_at.desc()).limit(limit)

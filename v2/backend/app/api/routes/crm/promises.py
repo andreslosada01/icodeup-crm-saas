@@ -35,7 +35,7 @@ def promise_to_out(db: Session, item: PaymentPromise, customer_name: str | None 
 
 
 @router.get("/promises", response_model=list[PromiseOut])
-def list_promises(tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PromiseOut]:
+def list_promises(tenant_id: int | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PromiseOut]:
     require_permission(db, user, "collections.promises.view")
     ensure_read_access(user)
     query = customer_query(db, user)

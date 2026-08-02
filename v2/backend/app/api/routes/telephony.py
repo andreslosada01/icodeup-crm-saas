@@ -548,7 +548,7 @@ def list_call_logs(
     tenant_id: int | None = None,
     customer_id: int | None = None,
     user_id: int | None = None,
-    limit: int = Query(default=30, ge=1, le=100),
+    limit: int = Query(default=10, ge=1, le=10),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ) -> list[CallLogOut]:

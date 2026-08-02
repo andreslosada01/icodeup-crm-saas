@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 @router.get("/payments", response_model=list[PaymentOut])
-def list_payments(tenant_id: int | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentOut]:
+def list_payments(tenant_id: int | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[PaymentOut]:
     require_permission(db, user, "collections.payments.view")
     ensure_read_access(user)
     query = customer_query(db, user)

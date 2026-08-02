@@ -93,7 +93,7 @@ AGENT_SOURCES = {"customers", "obligations", "activities", "promises", "payments
 LEADER_SOURCES = AGENT_SOURCES | {"demographics"}
 SALES_SOURCES = {"customers", "sales_leads", "opportunities", "alerts"}
 LEGAL_SOURCES = {"customers", "legal_cases", "documents", "alerts"}
-EXCEL_PAGE_SIZE = 20
+EXCEL_PAGE_SIZE = 10
 EXCEL_EXPORT_LIMIT = 5000
 SHEET_STATUSES = {"Pendiente", "Seguimiento", "Gestionado", "Pagos", "Cerrado"}
 

@@ -733,10 +733,10 @@ def _sample_template_row(upload_type: str, columns: list[str]) -> list[str]:
 
 
 @router.get("/batches", response_model=list[UploadBatchOut])
-def list_batches(tenant_id: int | None = None, upload_type: str | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[UploadBatch]:
+def list_batches(tenant_id: int | None = None, upload_type: str | None = None, page: int = 1, page_size: int = 10, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[UploadBatch]:
     require_permission(db, user, "uploads.view")
     page = max(1, page)
-    page_size = min(max(page_size, 1), 20)
+    page_size = min(max(page_size, 1), 10)
     query = select(UploadBatch)
     if is_platform_admin(db, user):
         if tenant_id:
@@ -796,9 +796,9 @@ def batch_result(batch_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/demographics", response_model=list[CustomerDemographicOut])
-def list_demographics(tenant_id: int | None = None, customer_id: int | None = None, page: int = 1, page_size: int = 20, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerDemographicOut]:
+def list_demographics(tenant_id: int | None = None, customer_id: int | None = None, page: int = 1, page_size: int = 10, db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[CustomerDemographicOut]:
     require_permission(db, user, "demographics.view")
-    page_size = min(max(page_size, 1), 20)
+    page_size = min(max(page_size, 1), 10)
     query = select(CustomerDemographic)
     if is_platform_admin(db, user):
         if tenant_id:

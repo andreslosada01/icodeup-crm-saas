@@ -45,7 +45,7 @@ from app.services.audit_service import record_audit
 
 router = APIRouter()
 
-TEAM_PAGE_SIZE = 20
+TEAM_PAGE_SIZE = 10
 LEADER_PROFILE_CODES = {"collections_leader", "operational_leader", "sales_leader", "legal_director"}
 AGENT_PROFILE_CODES = {"collections_agent", "sales_advisor", "lawyer", "tenant_auditor"}
 

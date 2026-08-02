@@ -4,6 +4,8 @@ const SUPPORT_TENANT_STORAGE_KEY = "icodeup_support_tenant_id";
 const SUPPORT_AUDIENCE_STORAGE_KEY = "icodeup_support_audience";
 const recentToasts = new Map();
 const pendingClickToCallCustomers = new Set();
+const DEFAULT_TABLE_PAGE_SIZE = 10;
+const MAX_TABLE_PAGE_SIZE = 10;
 
 const state = {
   core: { menu: null, roleDashboard: null },
@@ -973,7 +975,7 @@ async function loadPhase8Data() {
     allowed("configuration") ? apiMaybe(`/api/configuration/rules${scope}`, []) : [],
     allowed("configuration") ? apiMaybe(`/api/configuration/alert-rules${scope}`, []) : [],
     allowed("configuration") ? apiMaybe(`/api/configuration/workflows${scope}`, []) : [],
-    allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts${scopedQuery({ limit: 50 })}`, []) : [],
+    allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts${scopedQuery({ limit: DEFAULT_TABLE_PAGE_SIZE })}`, []) : [],
     allowed("alerts", "dashboard", "reports") ? apiMaybe(`/api/alerts/summary${scope}`, null) : null,
     allowed("legal") ? apiMaybe(`/api/legal/dashboard${scope}`, null) : null,
     allowed("legal") ? apiMaybe(`/api/legal/kanban${scope}`, null) : null,
@@ -1001,12 +1003,12 @@ async function loadPhase8BData() {
     allowed("telephony") ? apiMaybe(`/api/telephony/extensions${scope}`, []) : [],
     allowed("telephony") ? apiMaybe(`/api/telephony/call-logs${scope}`, []) : [],
     allowed("telephony") ? apiMaybe("/api/telephony/my-extension", null) : null,
-    allowed("uploads") ? apiMaybe(`/api/uploads/batches${scopedQuery({ page_size: 20 })}`, []) : [],
-    allowed("uploads", "queue", "customers") ? apiMaybe(`/api/uploads/demographics${scopedQuery({ page_size: 20 })}`, []) : [],
+    allowed("uploads") ? apiMaybe(`/api/uploads/batches${scopedQuery({ page_size: DEFAULT_TABLE_PAGE_SIZE })}`, []) : [],
+    allowed("uploads", "queue", "customers") ? apiMaybe(`/api/uploads/demographics${scopedQuery({ page_size: DEFAULT_TABLE_PAGE_SIZE })}`, []) : [],
     allowed("excel-web") ? apiMaybe("/api/excel-web/sources", []) : [],
     allowed("excel-web") ? apiMaybe(`/api/excel-web/views${scope}`, []) : [],
-    allowed("excel-web") ? apiMaybe("/api/excel-web/query", null, { method: "POST", body: JSON.stringify({ source: "customers", page: 1, page_size: 20, filters: scopedExcelFilters({}), columns: [] }) }) : null,
-    allowed("excel-web") ? apiMaybe(`/api/excel-web/sheet-rows${scopedQuery({ page_size: 20 })}`, { items: [], page: 1, total_pages: 0, total: 0 }) : null,
+    allowed("excel-web") ? apiMaybe("/api/excel-web/query", null, { method: "POST", body: JSON.stringify({ source: "customers", page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, filters: scopedExcelFilters({}), columns: [] }) }) : null,
+    allowed("excel-web") ? apiMaybe(`/api/excel-web/sheet-rows${scopedQuery({ page_size: DEFAULT_TABLE_PAGE_SIZE })}`, { items: [], page: 1, total_pages: 0, total: 0 }) : null,
     allowed("integrations", "channels") ? apiMaybe(`/api/integrations/providers${scope}`, []) : [],
     allowed("integrations", "channels") ? apiMaybe(`/api/integrations/channels${scope}`, []) : [],
     allowed("integrations") ? apiMaybe(`/api/integrations/templates${scope}`, []) : [],
@@ -1684,7 +1686,8 @@ function table(headers, rows, emptyMessage, options = {}) {
   if (options.noClientPager) {
     return `<div class="data-table-shell"><table><thead><tr>${headers.map((item) => `<th>${escapeHtml(item)}</th>`).join("")}</tr></thead><tbody>${allRows.join("")}</tbody></table><div class="table-pager muted"><span>${allRows.length} filas visibles</span></div></div>`;
   }
-  const pageSize = Math.min(Number(options.pageSize || 20), 20);
+  const requestedPageSize = Number(options.pageSize || DEFAULT_TABLE_PAGE_SIZE);
+  const pageSize = Math.min(Math.max(requestedPageSize || DEFAULT_TABLE_PAGE_SIZE, 1), MAX_TABLE_PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(allRows.length / pageSize));
   const requestedPage = Number(state.ui.tablePages[key] || 1);
   const page = Math.min(Math.max(requestedPage, 1), totalPages);
@@ -3575,20 +3578,20 @@ function renderExcelWeb() {
       <label>Fecha desde<input name="date_from" type="date" value="${escapeHtml(activeFilters.date_from || "")}" /></label>
       <label>Fecha hasta<input name="date_to" type="date" value="${escapeHtml(activeFilters.date_to || "")}" /></label>
       <input name="page" type="hidden" value="${result?.page || 1}" />
-      <input name="page_size" type="hidden" value="20" />
+      <input name="page_size" type="hidden" value="${DEFAULT_TABLE_PAGE_SIZE}" />
       <label class="wide">Elige las columnas que quieres ver<div class="checkbox-grid">${columnChecks || "<p class='empty'>Selecciona una fuente para ver columnas.</p>"}</div></label>
       <button type="submit">Filtrar</button>
       <button class="secondary-button" data-excel-clear type="button">Limpiar</button>
       ${canExportExcelWeb() ? `<button class="secondary-button" data-excel-export type="button">Exportar</button>` : `<p class="form-note">Exportacion no disponible para gestores. La consulta queda limitada a tu operacion.</p>`}
     </form>
     <div class="excel-query-head">
-      <p class="form-note">${result ? `${result.total} registros · pagina ${result.page} de ${Math.max(result.total_pages || 1, 1)} · 20 por pagina` : "Selecciona una fuente de informacion y filtra tu cartera."}</p>
+      <p class="form-note">${result ? `${result.total} registros · pagina ${result.page} de ${Math.max(result.total_pages || 1, 1)} · ${DEFAULT_TABLE_PAGE_SIZE} por pagina` : "Selecciona una fuente de informacion y filtra tu cartera."}</p>
       <div class="pager">
         <button data-excel-page="${(result?.page || 1) - 1}" type="button" ${!result || result.page <= 1 ? "disabled" : ""}>Anterior</button>
         <button data-excel-page="${(result?.page || 1) + 1}" type="button" ${!result || result.page >= (result.total_pages || 1) ? "disabled" : ""}>Siguiente</button>
       </div>
     </div>
-    <div class="table-wrap excel-table-wrap">${table((result?.columns || selectedColumns).map(excelColumnLabel), resultRows, "Aun no hay informacion disponible para esta consulta operativa.", { key: "excel-result", pageSize: 20 })}</div>
+    <div class="table-wrap excel-table-wrap">${table((result?.columns || selectedColumns).map(excelColumnLabel), resultRows, "Aun no hay informacion disponible para esta consulta operativa.", { key: "excel-result", pageSize: DEFAULT_TABLE_PAGE_SIZE })}</div>
   `);
   document.querySelector("#excelSheetPanel") && (document.querySelector("#excelSheetPanel").innerHTML = `
     <form id="excelSheetFilterForm" class="ops-form form-grid excel-filter-form">
@@ -3752,7 +3755,7 @@ function renderTeams() {
       `
     )
     .join("");
-  document.querySelector("#teamProjectTable").innerHTML = table(["Cartera", "Estado", "Lideres", "Agentes", "Clientes", "Obligaciones", "Saldo", ""], projectRows, "No hay carteras disponibles para tu alcance.", { key: "teams-projects", pageSize: 20 });
+  document.querySelector("#teamProjectTable").innerHTML = table(["Cartera", "Estado", "Lideres", "Agentes", "Clientes", "Obligaciones", "Saldo", ""], projectRows, "No hay carteras disponibles para tu alcance.", { key: "teams-projects", pageSize: DEFAULT_TABLE_PAGE_SIZE });
 
   const assignmentRows = (state.teams.projectUsers || [])
     .map(
@@ -3770,7 +3773,7 @@ function renderTeams() {
       `
     )
     .join("");
-  document.querySelector("#teamProjectUsers").innerHTML = table(["Usuario", "Rol cartera", "Perfil", "Estado", "Asignado", ""], assignmentRows, "Selecciona una cartera o asigna usuarios para ver el equipo.", { key: "teams-project-users", pageSize: 20 });
+  document.querySelector("#teamProjectUsers").innerHTML = table(["Usuario", "Rol cartera", "Perfil", "Estado", "Asignado", ""], assignmentRows, "Selecciona una cartera o asigna usuarios para ver el equipo.", { key: "teams-project-users", pageSize: DEFAULT_TABLE_PAGE_SIZE });
 
   const summary = state.teams.leaderSummary;
   document.querySelector("#teamLeaderSummary").innerHTML = summary
@@ -3790,11 +3793,11 @@ function renderTeams() {
   const leaderAgentRows = (state.teams.leaderAgents || [])
     .map((agent) => `<tr><td><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.email)}</small></td><td>${escapeHtml(roleLabel(agent.profile_role || agent.role))}</td><td>${escapeHtml(agent.project_names?.join(", ") || "-")}</td><td>${escapeHtml(agent.status)}</td></tr>`)
     .join("");
-  document.querySelector("#teamLeaderAgents").innerHTML = table(["Agente", "Perfil", "Carteras", "Estado"], leaderAgentRows, "Este lider no tiene agentes activos asignados.", { key: "teams-leader-agents", pageSize: 20 });
+  document.querySelector("#teamLeaderAgents").innerHTML = table(["Agente", "Perfil", "Carteras", "Estado"], leaderAgentRows, "Este lider no tiene agentes activos asignados.", { key: "teams-leader-agents", pageSize: DEFAULT_TABLE_PAGE_SIZE });
   const rankingRows = (summary?.ranking || [])
     .map((row) => `<tr><td><strong>${escapeHtml(row.name)}</strong></td><td>${row.customers}</td><td>${row.activities_today}</td><td>${money(row.payments_month)}</td></tr>`)
     .join("");
-  document.querySelector("#teamRanking").innerHTML = table(["Agente", "Clientes", "Gestiones hoy", "Pagos mes"], rankingRows, "Sin ranking disponible para este equipo.", { key: "teams-ranking", pageSize: 20 });
+  document.querySelector("#teamRanking").innerHTML = table(["Agente", "Clientes", "Gestiones hoy", "Pagos mes"], rankingRows, "Sin ranking disponible para este equipo.", { key: "teams-ranking", pageSize: DEFAULT_TABLE_PAGE_SIZE });
 
   const projectForm = document.querySelector("#projectUserAssignForm");
   if (projectForm) {
@@ -4564,7 +4567,7 @@ function setupEvents() {
     const excelSource = event.target.closest("[data-excel-source]");
     if (excelSource) {
       const source = state.ops.excelSources.find((item) => item.code === excelSource.dataset.excelSource);
-      state.ops.excelDraft = { source: excelSource.dataset.excelSource, filters: scopedExcelFilters({}), columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 20 };
+      state.ops.excelDraft = { source: excelSource.dataset.excelSource, filters: scopedExcelFilters({}), columns: (source?.columns || []).slice(0, 8), page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE };
       state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
@@ -4573,7 +4576,7 @@ function setupEvents() {
     if (excelView) {
       const view = state.ops.excelViews.find((item) => String(item.id) === String(excelView.dataset.excelView));
       if (view) {
-        state.ops.excelDraft = { source: view.source, filters: scopedExcelFilters(view.filters || {}), columns: view.columns || [], page: 1, page_size: 20 };
+        state.ops.excelDraft = { source: view.source, filters: scopedExcelFilters(view.filters || {}), columns: view.columns || [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE };
         state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
         showToast("success", "Vista cargada correctamente.");
         renderExcelWeb();
@@ -4593,8 +4596,8 @@ function setupEvents() {
     }
     const excelPage = event.target.closest("[data-excel-page]");
     if (excelPage) {
-      const payload = state.ops.excelDraft || { source: state.ops.excelSources[0]?.code || "customers", filters: scopedExcelFilters({}), columns: [], page: 1, page_size: 20 };
-      state.ops.excelDraft = { ...payload, filters: scopedExcelFilters(payload.filters || {}), page: Math.max(1, Number(excelPage.dataset.excelPage || 1)), page_size: 20 };
+      const payload = state.ops.excelDraft || { source: state.ops.excelSources[0]?.code || "customers", filters: scopedExcelFilters({}), columns: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE };
+      state.ops.excelDraft = { ...payload, filters: scopedExcelFilters(payload.filters || {}), page: Math.max(1, Number(excelPage.dataset.excelPage || 1)), page_size: DEFAULT_TABLE_PAGE_SIZE };
       state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
@@ -4602,7 +4605,7 @@ function setupEvents() {
     const excelClear = event.target.closest("[data-excel-clear]");
     if (excelClear) {
       const source = state.ops.excelSources.find((item) => item.code === (state.ops.excelDraft?.source || state.ops.excelResult?.source)) || state.ops.excelSources[0];
-      state.ops.excelDraft = { source: source?.code || "customers", filters: scopedExcelFilters({}), columns: (source?.columns || []).slice(0, 8), page: 1, page_size: 20 };
+      state.ops.excelDraft = { source: source?.code || "customers", filters: scopedExcelFilters({}), columns: (source?.columns || []).slice(0, 8), page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE };
       state.ops.excelResult = await api("/api/excel-web/query", { method: "POST", body: JSON.stringify(state.ops.excelDraft) });
       renderExcelWeb();
       return;
@@ -5178,7 +5181,7 @@ function excelPayloadFromForm(form) {
     filters: scopedExcelFilters(filters),
     columns,
     page: Number(form.elements.page.value || 1),
-    page_size: 20,
+    page_size: DEFAULT_TABLE_PAGE_SIZE,
   };
 }
 
@@ -5225,7 +5228,7 @@ async function loadExcelSheetRows(page = 1) {
   const filters = state.ops.excelSheetFilters || {};
   state.ops.excelSheetRows = await api(`/api/excel-web/sheet-rows?${queryParams({
     ...scopedTenantParams({ page }),
-    page_size: 20,
+    page_size: DEFAULT_TABLE_PAGE_SIZE,
     q: filters.q || "",
     status: filters.status || "",
     project_id: filters.project_id || "",

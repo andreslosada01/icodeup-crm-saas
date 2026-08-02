@@ -252,7 +252,7 @@ def test_webhook(webhook_id: int, db: Session = Depends(get_db), user: User = De
 
 
 @router.get("/events", response_model=list[ChannelEventOut])
-def list_events(tenant_id: int | None = None, channel_type: str | None = None, limit: int = Query(default=20, ge=1, le=20), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelEventOut]:
+def list_events(tenant_id: int | None = None, channel_type: str | None = None, limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[ChannelEventOut]:
     require_permission(db, user, "integrations.events.view")
     query = select(ChannelEventLog)
     if is_platform_admin(db, user):
