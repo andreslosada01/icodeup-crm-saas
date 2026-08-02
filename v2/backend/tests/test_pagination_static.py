@@ -35,6 +35,7 @@ def test_visible_backend_list_endpoints_cap_pagination_at_ten() -> None:
     files = [
         "app/api/routes/administration.py",
         "app/api/routes/alerts.py",
+        "app/api/routes/careflow.py",
         "app/api/routes/documents.py",
         "app/api/routes/excel_web.py",
         "app/api/routes/governance.py",

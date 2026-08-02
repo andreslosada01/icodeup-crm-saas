@@ -1,4 +1,5 @@
 from app.models.audit import AuditLog
+from app.models.careflow import CareCase, CareCaseCategory, CareCaseEvent
 from app.models.collection_ops import (
     CallRecording,
     ChannelConfiguration,
@@ -34,6 +35,9 @@ __all__ = [
     "AuditLog",
     "AlertRule",
     "BusinessRule",
+    "CareCase",
+    "CareCaseCategory",
+    "CareCaseEvent",
     "CallRecording",
     "CallLog",
     "ChannelConfiguration",
