@@ -48,6 +48,11 @@ button:disabled {
   opacity: 0.72;
 }
 
+button.call-disabled:disabled {
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
 .hidden {
   display: none !important;
 }

@@ -98,6 +98,12 @@ def test_seed_and_integration_readiness_stay_safe_and_idempotent() -> None:
     assert "IpCom Demo TEST" in seed
     assert "real_credentials" in seed
     assert "settings.platform_tenant_slug" in seed
+    assert "TenantModule" in seed
+    assert "Module).where(Module.code == \"telephony\")" in seed
+    assert "tenant_module.enabled = True" in seed
+    assert "tenant_module.is_enabled = True" in seed
+    assert "tenant_module.enabled_at = datetime.now(timezone.utc)" in seed
+    assert "telephony_modules_active" in seed
 
     assert "PAYCONTROL_APP_PAGOS_ENABLED" in readiness_service
     assert "QAUDIT_360_ENABLED" in readiness_service
@@ -107,3 +113,18 @@ def test_seed_and_integration_readiness_stay_safe_and_idempotent() -> None:
     assert "@router.post(\"/qaudit/evaluations/dry-run\"" in integrations_route
     assert "No se llamo App Pagos" in integrations_route
     assert "No se llamo QAudit" in integrations_route
+
+
+@pytest.mark.safe_static
+def test_frontend_telephony_and_refresh_errors_do_not_look_like_logout() -> None:
+    app_js = read("frontend/static/assets/app.js")
+
+    assert "error.status = response.status" in app_js
+    assert "error.transient = [502, 503, 504].includes(response.status)" in app_js
+    assert "Servicio temporalmente no disponible. Reintenta en unos segundos." in app_js
+    assert "if (error?.status === 401)" in app_js
+    assert "logout();" in app_js
+    assert "data-click-to-call-unavailable disabled" in app_js
+    assert "Telefonia pendiente de configuracion" in app_js
+    assert "normalized.includes(\"modulo no contratado\")" in app_js
+    assert "normalized.includes(\"modulo inactivo\")" in app_js

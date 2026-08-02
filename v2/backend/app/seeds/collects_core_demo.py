@@ -14,12 +14,14 @@ from app.models import (
     Customer,
     CustomerDemographic,
     CustomerObligation,
+    Module,
     PaymentAgreement,
     PaymentAgreementInstallment,
     Project,
     TelephonyExtension,
     TelephonyProvider,
     Tenant,
+    TenantModule,
     User,
 )
 
@@ -159,7 +161,60 @@ def _ensure_agreements(db: Session, tenant_id: int, customers: list[Customer], m
     return created
 
 
+def _config_dict(raw_config: str | None) -> dict:
+    if not raw_config:
+        return {}
+    try:
+        data = json.loads(raw_config)
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _telephony_module_active_count(db: Session, tenant_id: int) -> int:
+    return db.scalar(
+        select(func.count(TenantModule.id)).where(
+            TenantModule.tenant_id == tenant_id,
+            TenantModule.module_code == "telephony",
+            TenantModule.enabled.is_(True),
+            TenantModule.is_enabled.is_(True),
+        )
+    ) or 0
+
+
+def _ensure_telephony_module(db: Session, tenant_id: int) -> dict[str, int]:
+    module = db.scalar(select(Module).where(Module.code == "telephony"))
+    if module is None:
+        return {"telephony_module_created": 0, "telephony_module_activated": 0, "telephony_module_missing": 1}
+    tenant_module = db.scalar(
+        select(TenantModule).where(
+            TenantModule.tenant_id == tenant_id,
+            TenantModule.module_code == "telephony",
+        )
+    )
+    created = 0
+    was_active = bool(tenant_module and tenant_module.enabled and tenant_module.is_enabled)
+    if tenant_module is None:
+        tenant_module = TenantModule(tenant_id=tenant_id, module_code="telephony")
+        db.add(tenant_module)
+        created = 1
+    tenant_module.module_id = module.id
+    tenant_module.enabled = True
+    tenant_module.is_enabled = True
+    if tenant_module.enabled_at is None:
+        tenant_module.enabled_at = datetime.now(timezone.utc)
+    config = _config_dict(tenant_module.configuration_json)
+    config.update({"demo": True, "mode": "simulated", "seed": SEED_MARKER, "provider": "IpCom Demo TEST"})
+    tenant_module.configuration_json = json.dumps(config, ensure_ascii=True)
+    return {
+        "telephony_module_created": created,
+        "telephony_module_activated": 0 if was_active else 1,
+        "telephony_module_missing": 0,
+    }
+
+
 def _ensure_telephony(db: Session, tenant_id: int) -> dict[str, int]:
+    module_result = _ensure_telephony_module(db, tenant_id)
     coordinator, agent = _users(db, tenant_id)
     provider = db.scalar(select(TelephonyProvider).where(TelephonyProvider.tenant_id == tenant_id, TelephonyProvider.name == "IpCom Demo TEST"))
     provider_created = 0
@@ -191,7 +246,7 @@ def _ensure_telephony(db: Session, tenant_id: int) -> dict[str, int]:
         extension.status = "available"
         extension.is_active = True
         extension.metadata_json = json.dumps({"mode": "simulated", "seed": SEED_MARKER, "real_credentials": False}, ensure_ascii=True)
-    return {"providers_created": provider_created, "extensions_created": extensions_created}
+    return {**module_result, "providers_created": provider_created, "extensions_created": extensions_created}
 
 
 def run(tenant_slug: str | None, limit_customers: int, dry_run: bool) -> dict[str, dict[str, int]]:
@@ -207,6 +262,7 @@ def run(tenant_slug: str | None, limit_customers: int, dry_run: bool) -> dict[st
                 "obligations": _count(db, CustomerObligation, tenant.id),
                 "demographics": _count(db, CustomerDemographic, tenant.id),
                 "agreements": _count(db, PaymentAgreement, tenant.id),
+                "telephony_modules_active": _telephony_module_active_count(db, tenant.id),
                 "telephony_providers": _count(db, TelephonyProvider, tenant.id),
                 "telephony_extensions": _count(db, TelephonyExtension, tenant.id),
             }
@@ -219,6 +275,7 @@ def run(tenant_slug: str | None, limit_customers: int, dry_run: bool) -> dict[st
                 "obligations": before["obligations"] + created_obligations,
                 "demographics": before["demographics"] + created_demographics,
                 "agreements": before["agreements"] + created_agreements,
+                "telephony_modules_active": _telephony_module_active_count(db, tenant.id),
                 "telephony_providers": before["telephony_providers"] + telephony["providers_created"],
                 "telephony_extensions": before["telephony_extensions"] + telephony["extensions_created"],
             }

@@ -55,7 +55,20 @@ Conteos esperados:
 - Demograficos: hasta 1 nuevo por cliente seleccionado.
 - Acuerdos: hasta 5 acuerdos nuevos por tenant, con 3 cuotas cada uno.
 - Telefonia: proveedor `IpCom Demo TEST` y extensiones demo `1001` y `1002` si hay usuarios coordinador/gestor.
+- Modulo Telefonia: activa `tenant_modules.telephony` para el tenant demo con `enabled=true`, `is_enabled=true`, `enabled_at` y configuracion demo/simulated.
 - En una segunda ejecucion, `created` debe tender a cero porque el seed es idempotente.
+
+Validar Andina Servicios Integrales despues del seed:
+
+```sql
+select tm.module_code, tm.enabled, tm.is_enabled, tm.enabled_at, tm.configuration_json
+from tenant_modules tm
+join tenants t on t.id = tm.tenant_id
+where t.name = 'Andina Servicios Integrales'
+  and tm.module_code = 'telephony';
+```
+
+El resultado esperado es `enabled=true`, `is_enabled=true`, `enabled_at` informado y `configuration_json` con modo `simulated`.
 
 ## Pruebas funcionales manuales
 
@@ -89,6 +102,8 @@ Telefonia:
 - Con `TELEPHONY_REAL_CALLS_ENABLED=false`, iniciar click-to-call desde un cliente.
 - Confirmar respuesta simulada segura.
 - Revisar que `CallLog` quede con tenant, proyecto, cliente, obligacion si aplica, usuario y telefono.
+- Si el modulo aun no esta activo, la ficha del cliente debe mostrar `Telefonia pendiente` y no el boton normal `Llamar`.
+- Si el servicio TEST se esta reiniciando, refrescar la pagina debe conservar la sesion y mostrar un aviso temporal. Solo un 401 real debe enviar al login.
 
 Integraciones futuras:
 

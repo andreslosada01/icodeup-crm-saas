@@ -317,24 +317,38 @@ function renderAlertSet(selector, alerts, emptyMessage = "Sin alertas con los da
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } catch (requestError) {
+    const error = new Error("Servicio temporalmente no disponible. Reintenta en unos segundos.");
+    error.status = 0;
+    error.transient = true;
+    error.cause = requestError;
+    throw error;
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) logout();
     const detail = payload.detail;
+    const fallbackMessage = [502, 503, 504].includes(response.status)
+      ? "Servicio temporalmente no disponible. Reintenta en unos segundos."
+      : "No fue posible completar la solicitud. Intenta nuevamente o contacta al administrador.";
     const message = typeof detail === "string"
       ? detail
-      : detail?.message || payload.message || "No fue posible completar la solicitud. Intenta nuevamente o contacta al administrador.";
+      : detail?.message || payload.message || fallbackMessage;
     const error = new Error(message);
+    error.status = response.status;
     error.code = detail?.code || payload.code || null;
     error.payload = payload;
+    error.transient = [502, 503, 504].includes(response.status);
     throw error;
   }
   return payload;
@@ -1856,7 +1870,14 @@ function channelHref(kind, customer) {
   return "#";
 }
 
+function telephonyModuleAvailable() {
+  return menuHasSection("telephony");
+}
+
 function callActionButton(customer) {
+  if (!telephonyModuleAvailable()) {
+    return `<button type="button" class="secondary-button call-disabled" data-click-to-call-unavailable disabled title="Telefonia pendiente de configuracion" aria-label="Telefonia pendiente de configuracion">Telefonia pendiente</button>`;
+  }
   return `<button type="button" data-click-to-call="${customer.id}">Llamar</button>`;
 }
 
@@ -4183,7 +4204,14 @@ async function handleTelephonyExtensionSubmit(form) {
 
 function telephonyExtensionMessage(error) {
   const rawMessage = String(error?.message || "");
-  if (rawMessage.toLowerCase().includes("extension")) {
+  const normalized = rawMessage.toLowerCase();
+  if (normalized.includes("modulo no contratado") || normalized.includes("modulo inactivo")) {
+    return "Telefonia pendiente de configuracion.";
+  }
+  if (error?.transient) {
+    return "Servicio temporalmente no disponible. Reintenta en unos segundos.";
+  }
+  if (normalized.includes("extension")) {
     if (canManageTelephony()) {
       return "Configura una extension en Telefonia > Extensiones antes de iniciar la llamada.";
     }
@@ -5706,8 +5734,13 @@ await loadHealth();
 if (token && currentUser) {
   showApp();
   await refreshAll().catch((error) => {
-    loginResult.textContent = error.message;
-    logout();
+    console.warn("Refresh inicial no disponible:", error);
+    if (error?.status === 401) {
+      loginResult.textContent = error.message;
+      logout();
+      return;
+    }
+    showToast("warning", error?.message || "Servicio temporalmente no disponible. Reintenta en unos segundos.");
   });
 } else {
   showLogin();
