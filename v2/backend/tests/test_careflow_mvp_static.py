@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 
 import pytest
@@ -101,3 +102,19 @@ def test_careflow_permissions_menu_seed_frontend_and_docs_are_in_place() -> None
     assert '"careflow"' in alerts
     assert "CareFlow se agrega a `Prioridades de hoy`" in docs
     assert "page_size` maximo 10" in docs
+
+
+@pytest.mark.safe_static
+def test_careflow_runtime_imports_are_available() -> None:
+    from app.models import CareCase, CareCaseCategory, CareCaseEvent
+
+    seed = import_module("app.seeds.careflow_demo")
+    main = import_module("app.main")
+
+    assert CareCase.__tablename__ == "care_cases"
+    assert CareCaseCategory.__tablename__ == "care_case_categories"
+    assert CareCaseEvent.__tablename__ == "care_case_events"
+    assert seed.CareCase is CareCase
+    assert seed.CareCaseCategory is CareCaseCategory
+    assert seed.CareCaseEvent is CareCaseEvent
+    assert any(route.path.startswith("/api/careflow") for route in main.app.routes)

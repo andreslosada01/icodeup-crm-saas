@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import AlertRule, Customer, Lead, LegalAction, LegalCase, LegalDeadline, LegalHearing, Opportunity, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, Tenant, TenantModule, TenantSubscription, User
+from app.models.careflow import CareCase
 from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, user_has_permission
 
 
@@ -72,6 +73,7 @@ def _can_view_module(db: Session, user: User, module: str) -> bool:
         "collections": ("collections.queue.view", "collections.promises.view", "collections.agreements.view"),
         "legal": ("legal.cases.view", "legal.deadlines.view"),
         "sales": ("sales.leads.view", "sales.opportunities.view"),
+        "careflow": ("careflow.view", "careflow.reports.view"),
         "administration": ("tenant.settings.view", "users.view", "modules.view", "audit.logs.view"),
     }
     return any(user_has_permission(db, user, code) for code in checks.get(module, ("menu.view",)))
@@ -338,6 +340,86 @@ def _sales_alerts(db: Session, user: User, tenant_ids: list[int]) -> list[dict[s
     return alerts
 
 
+def _careflow_module_active(db: Session, tenant_id: int) -> bool:
+    module = db.scalar(select(TenantModule).where(TenantModule.tenant_id == tenant_id, TenantModule.module_code == "careflow"))
+    return bool(module and module.enabled and module.is_enabled)
+
+
+def _careflow_alerts(db: Session, user: User, tenant_ids: list[int]) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    now = _now()
+    for tenant_id in tenant_ids:
+        if not _careflow_module_active(db, tenant_id):
+            continue
+        query = select(CareCase).where(
+            CareCase.tenant_id == tenant_id,
+            CareCase.status.in_(["nuevo", "asignado", "en_proceso", "pendiente_cliente", "pendiente_interno"]),
+        )
+        if _assigned_filter_needed(db, user, "careflow"):
+            query = query.where((CareCase.assigned_user_id == user.id) | (CareCase.created_by_id == user.id))
+        for item in db.scalars(query.limit(200)):
+            if item.due_at and item.due_at < now:
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="careflow",
+                        entity_type="care_case",
+                        entity_id=item.id,
+                        title=f"CareFlow vencido: {item.case_number}",
+                        message=item.title,
+                        severity="critical",
+                        due_at=item.due_at,
+                        assigned_user_id=item.assigned_user_id,
+                        action="Actualizar estado, reasignar o cerrar caso.",
+                    )
+                )
+            elif item.due_at and item.due_at <= now + timedelta(days=2):
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="careflow",
+                        entity_type="care_case",
+                        entity_id=item.id,
+                        title=f"CareFlow proximo a SLA: {item.case_number}",
+                        message=item.title,
+                        severity="high",
+                        due_at=item.due_at,
+                        assigned_user_id=item.assigned_user_id,
+                        action="Registrar avance antes del vencimiento.",
+                    )
+                )
+            if item.priority == "critica":
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="careflow",
+                        entity_type="care_case",
+                        entity_id=item.id,
+                        title=f"Caso critico CareFlow: {item.case_number}",
+                        message=item.title,
+                        severity="critical",
+                        due_at=item.due_at,
+                        assigned_user_id=item.assigned_user_id,
+                        action="Priorizar seguimiento de atencion al cliente.",
+                    )
+                )
+            if item.assigned_user_id is None and (is_platform_admin(db, user) or is_company_admin(db, user)):
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="careflow",
+                        entity_type="care_case",
+                        entity_id=item.id,
+                        title=f"CareFlow sin responsable: {item.case_number}",
+                        message=item.title,
+                        severity="high",
+                        due_at=item.due_at,
+                        action="Asignar responsable del caso.",
+                    )
+                )
+    return alerts
+
+
 def _administration_alerts(db: Session, user: User, tenant_ids: list[int]) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
     if not (is_platform_admin(db, user) or is_company_admin(db, user)):
@@ -392,7 +474,7 @@ def collect_alerts(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     tenant_ids = _tenant_ids(db, user, tenant_id)
-    modules = [module] if module else ["collections", "legal", "sales", "administration"]
+    modules = [module] if module else ["collections", "legal", "sales", "careflow", "administration"]
     alerts: list[dict[str, Any]] = []
     if "collections" in modules and _can_view_module(db, user, "collections"):
         alerts.extend(_collection_alerts(db, user, tenant_ids))
@@ -400,6 +482,8 @@ def collect_alerts(
         alerts.extend(_legal_alerts(db, user, tenant_ids))
     if "sales" in modules and _can_view_module(db, user, "sales"):
         alerts.extend(_sales_alerts(db, user, tenant_ids))
+    if "careflow" in modules and _can_view_module(db, user, "careflow"):
+        alerts.extend(_careflow_alerts(db, user, tenant_ids))
     if "administration" in modules and _can_view_module(db, user, "administration"):
         alerts.extend(_administration_alerts(db, user, tenant_ids))
     if severity:

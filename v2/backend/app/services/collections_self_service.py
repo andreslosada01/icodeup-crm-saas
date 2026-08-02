@@ -23,6 +23,7 @@ from app.models import (
     User,
     UserProjectAssignment,
 )
+from app.models.careflow import CareCase
 from app.schemas.self_service import (
     AdvisorManagementInsightsOut,
     CustomerManagementInsightsOut,
@@ -520,6 +521,56 @@ def _append_admin_priorities(db: Session, tenant_id: int, settings: dict[str, in
         priorities.append(_priority("tenant_admin", "no_portfolios", "Sin carteras configuradas", "Crea o activa una cartera para iniciar la operacion de Collects 360.", "critical", 0, "Crear cartera"))
 
 
+def _careflow_module_active(db: Session, tenant_id: int) -> bool:
+    module = db.scalar(select(TenantModule).where(TenantModule.tenant_id == tenant_id, TenantModule.module_code == "careflow"))
+    return bool(module and module.enabled and module.is_enabled)
+
+
+def _append_careflow_priorities(db: Session, user: User, tenant_id: int, role_group: str, priorities: list[SessionPriorityOut]) -> None:
+    if not _careflow_module_active(db, tenant_id):
+        return
+    now = _now()
+    due_soon = now + timedelta(days=2)
+    open_statuses = ["nuevo", "asignado", "en_proceso", "pendiente_cliente", "pendiente_interno"]
+    query = select(CareCase).where(CareCase.tenant_id == tenant_id, CareCase.status.in_(open_statuses))
+    if role_group in {"advisor", "operational"}:
+        query = query.where(or_(CareCase.assigned_user_id == user.id, CareCase.created_by_id == user.id))
+    elif role_group == "leader":
+        team_ids = _team_user_ids(db, user)
+        project_ids = _active_project_ids(db, user)
+        conditions = [CareCase.assigned_user_id.in_(team_ids), CareCase.created_by_id == user.id, CareCase.assigned_user_id.is_(None)]
+        if project_ids:
+            conditions.append(CareCase.project_id.in_(project_ids))
+        query = query.where(or_(*conditions))
+    cases = query.subquery()
+    overdue = db.scalar(select(func.count()).select_from(cases).where(cases.c.due_at.is_not(None), cases.c.due_at < now)) or 0
+    due = db.scalar(select(func.count()).select_from(cases).where(cases.c.due_at.is_not(None), cases.c.due_at >= now, cases.c.due_at <= due_soon)) or 0
+    assigned_new = db.scalar(select(func.count()).select_from(cases).where(cases.c.assigned_user_id == user.id, cases.c.status.in_(["nuevo", "asignado"]))) or 0
+    unassigned = db.scalar(select(func.count()).select_from(cases).where(cases.c.assigned_user_id.is_(None))) or 0
+    critical = db.scalar(select(func.count()).select_from(cases).where(cases.c.priority == "critica")) or 0
+    if role_group in {"advisor", "operational"}:
+        if overdue:
+            priorities.append(_priority(role_group, "careflow_overdue", "CareFlow vencido", "Tienes casos de atencion vencidos que requieren cierre o seguimiento.", "critical", overdue, "Abrir Mis casos", "care_case"))
+        if due:
+            priorities.append(_priority(role_group, "careflow_due_soon", "CareFlow proximo a vencer", "Revisa casos de atencion con SLA cercano a vencerse.", "high", due, "Abrir Casos asignados", "care_case"))
+        if assigned_new:
+            priorities.append(_priority(role_group, "careflow_new_assigned", "Nuevos casos asignados", "Hay casos recientes de atencion esperando primera gestion.", "medium", assigned_new, "Gestionar CareFlow", "care_case"))
+    elif role_group == "leader":
+        if overdue:
+            priorities.append(_priority(role_group, "careflow_team_overdue", "Casos CareFlow vencidos del equipo", "Coordina seguimiento sobre casos de atencion fuera de SLA.", "critical", overdue, "Revisar equipo CareFlow", "care_case"))
+        if unassigned:
+            priorities.append(_priority(role_group, "careflow_unassigned", "Casos CareFlow sin responsable", "Hay casos abiertos sin responsable operativo asignado.", "high", unassigned, "Asignar responsable", "care_case"))
+        if critical:
+            priorities.append(_priority(role_group, "careflow_critical", "Casos criticos de atencion", "Existen casos criticos abiertos que requieren supervision.", "critical", critical, "Priorizar casos criticos", "care_case"))
+    else:
+        if overdue:
+            priorities.append(_priority(role_group, "careflow_tenant_overdue", "CareFlow con SLA vencido", "La empresa tiene casos de atencion vencidos.", "critical", overdue, "Abrir CareFlow 360", "care_case"))
+        if unassigned:
+            priorities.append(_priority(role_group, "careflow_tenant_unassigned", "CareFlow sin asignacion", "Hay casos de atencion pendientes sin responsable.", "high", unassigned, "Asignar responsables", "care_case"))
+        if critical:
+            priorities.append(_priority(role_group, "careflow_tenant_critical", "Casos criticos abiertos", "Revisa volumen critico de atencion al cliente.", "critical", critical, "Ver reportes CareFlow", "care_case"))
+
+
 def build_session_summary(db: Session, user: User, tenant_id: int | None = None) -> SessionSummaryOut:
     target_tenant_id = _tenant_for_summary(db, user, tenant_id)
     settings = alert_settings_for_tenant(db, target_tenant_id)
@@ -531,5 +582,6 @@ def build_session_summary(db: Session, user: User, tenant_id: int | None = None)
         _append_leader_priorities(db, user, target_tenant_id, settings, priorities)
     elif role_group in {"tenant_admin", "platform_admin"}:
         _append_admin_priorities(db, target_tenant_id, settings, priorities)
+    _append_careflow_priorities(db, user, target_tenant_id, role_group, priorities)
     priorities = sorted(priorities, key=lambda item: {"critical": 0, "high": 1, "medium": 2, "low": 3}.get(item.severity, 2))[:PRIORITY_LIMIT]
     return SessionSummaryOut(role_group=role_group, generated_at=_now(), priorities=priorities, settings=settings)

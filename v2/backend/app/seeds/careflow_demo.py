@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.roles import AGENT, COORDINATOR, TENANT_ADMIN
 from app.db.session import SessionLocal
-from app.models import CareCase, CareCaseCategory, CareCaseEvent, Customer, Module, Project, Tenant, TenantModule, User
+from app.models import Customer, Module, Project, Tenant, TenantModule, User
+from app.models.careflow import CareCase, CareCaseCategory, CareCaseEvent
 
 
 SEED_MARKER = "iep_careflow_360_demo_seed"

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import current_user
 from app.core.roles import AGENT, COORDINATOR, QUALITY_SUPERVISOR
 from app.db.session import get_db
-from app.models import CareCase, CareCaseCategory, CareCaseEvent, Customer, Project, Tenant, User, UserProjectAssignment
+from app.models import Customer, Project, Tenant, User, UserProjectAssignment
+from app.models.careflow import CareCase, CareCaseCategory, CareCaseEvent
 from app.schemas.careflow import (
     CareCaseAssign,
     CareCaseCategoryCreate,
