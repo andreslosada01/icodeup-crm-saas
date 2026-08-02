@@ -14,7 +14,7 @@ from app.schemas.subscription import ModuleOut, SaasPlanCreate, SaasPlanOut, Ten
 
 router = APIRouter()
 
-SUPPORTED_MODULES = {"core", "administration", "crm", "collections", "legal", "sales", "documents", "bi", "integrations", "hr", "finance", "industrial"}
+SUPPORTED_MODULES = {"core", "administration", "crm", "collections", "legal", "sales", "documents", "bi", "telephony", "careflow", "integrations", "hr", "finance", "industrial"}
 
 
 def require_platform(user: User) -> None:

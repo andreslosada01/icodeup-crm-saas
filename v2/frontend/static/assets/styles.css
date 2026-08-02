@@ -1448,6 +1448,11 @@ nav {
   background: rgba(243, 165, 31, 0.12);
 }
 
+.status-pill-danger {
+  color: var(--danger);
+  background: rgba(194, 65, 45, 0.12);
+}
+
 .demo-mode-badge {
   color: #7a4f00;
   border-color: rgba(243, 165, 31, 0.4);
@@ -3086,6 +3091,61 @@ tbody tr:hover {
   background: rgba(21, 149, 111, 0.09);
   font-size: 12px;
   font-weight: 900;
+}
+
+.badge.green {
+  color: var(--primary-dark);
+  border-color: rgba(21, 149, 111, 0.26);
+  background: rgba(21, 149, 111, 0.1);
+}
+
+.badge.blue {
+  color: var(--blue);
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.badge.yellow {
+  color: #8a5a00;
+  border-color: rgba(243, 165, 31, 0.28);
+  background: rgba(243, 165, 31, 0.1);
+}
+
+.badge.red {
+  color: var(--danger);
+  border-color: rgba(194, 65, 45, 0.26);
+  background: rgba(194, 65, 45, 0.1);
+}
+
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.inline-actions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.86);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.inline-actions button.active,
+.inline-actions button:hover {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--primary), var(--blue), #6f3ee8);
+  box-shadow: 0 14px 30px rgba(21, 149, 111, 0.18);
+}
+
+.careflow-detail-card {
+  margin-bottom: 14px;
 }
 
 .risk-alto {

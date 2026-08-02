@@ -14,6 +14,7 @@ const state = {
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], agreements: [], paymentObligations: [], channels: [], typifications: [] },
   configuration: { catalogs: [], rules: [], alertRules: [], workflows: [] },
   alerts: { items: [], summary: null, sessionSummary: null },
+  careflow: { summary: null, cases: { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 }, categories: [], selectedCaseId: null, selectedCase: null, page: 1 },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
   teams: { projects: [], leaders: [], agents: [], projectUsers: [], leaderAgents: [], leaderSummary: null, operationalCenter: null, selectedProjectId: null, selectedLeaderId: null },
@@ -54,6 +55,12 @@ const titles = {
   "typification-trees": "Arboles de gestion",
   recordings: "Grabaciones",
   telephony: "Telefonia",
+  careflow: "CareFlow 360",
+  "careflow-config": "Configuracion CareFlow",
+  "careflow-reports": "Reportes CareFlow",
+  "careflow-team": "Equipo CareFlow",
+  "careflow-new": "Crear caso",
+  "careflow-assigned": "Casos asignados",
   uploads: "Cargas y repartos",
   "excel-web": "Mi Excel Web",
   integrations: "Integraciones",
@@ -123,6 +130,12 @@ const sectionCategories = {
   channels: "Operacion",
   recordings: "Operacion",
   telephony: "Operacion",
+  careflow: "Operacion",
+  "careflow-config": "Administracion",
+  "careflow-reports": "Analitica",
+  "careflow-team": "Operacion",
+  "careflow-new": "Operacion",
+  "careflow-assigned": "Operacion",
   uploads: "Operacion",
   integrations: "Operacion",
   parties: "Operacion",
@@ -163,6 +176,12 @@ const sectionModules = {
   channels: "integrations",
   recordings: "collections",
   telephony: "telephony",
+  careflow: "careflow",
+  "careflow-config": "careflow",
+  "careflow-reports": "careflow",
+  "careflow-team": "careflow",
+  "careflow-new": "careflow",
+  "careflow-assigned": "careflow",
   uploads: "collections",
   integrations: "integrations",
   parties: "crm",
@@ -181,6 +200,7 @@ const moduleCopy = {
   sales: { name: "Pipeline comercial", category: "Expansion", description: "Leads, oportunidades, valor ponderado y forecast comercial." },
   bi: { name: "Analytics 360", category: "Analitica", description: "Dashboards, reportes, analitica operacional y ejecutiva." },
   telephony: { name: "Telefonia", category: "Integraciones", description: "Click-to-call, extensiones, historial de llamadas y base para softphone WebRTC." },
+  careflow: { name: "CareFlow 360", category: "Operacion", description: "Atencion al cliente, casos, solicitudes, SLA y seguimiento." },
   integrations: { name: "ChatBOX 360", category: "Integraciones", description: "Canales, chatbot, WhatsApp y automatizacion conversacional." },
   hr: { name: "FoodFlow 360", category: "Operacion", description: "Produccion de alimentos, inventarios, pedidos, costos y trazabilidad." },
   finance: { name: "PayControl 360", category: "Operacion", description: "Control, validacion, soporte y reporteria de pagos." },
@@ -596,6 +616,12 @@ function iconForSection(section) {
     channels: '<path d="M4 12h5"/><path d="M15 12h5"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/>',
     recordings: '<rect x="3" y="7" width="18" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>',
     telephony: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L8 9.71a16 16 0 0 0 6.29 6.29l1.28-1.28a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/>',
+    careflow: '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
+    "careflow-config": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
+    "careflow-reports": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
+    "careflow-team": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
+    "careflow-new": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
+    "careflow-assigned": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
     uploads: '<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/>',
     integrations: '<path d="M8 7V3"/><path d="M16 7V3"/><path d="M7 7h10v5a5 5 0 0 1-10 0z"/><path d="M12 17v4"/>',
     configuration: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1V21a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-.4-1 1.7 1.7 0 0 0-1-.6 1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1-.4H3a2 2 0 1 1 0-4h.08a1.7 1.7 0 0 0 1-.4 1.7 1.7 0 0 0 .6-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.11 3.4l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1V3a2 2 0 1 1 4 0v.08a1.7 1.7 0 0 0 .4 1 1.7 1.7 0 0 0 1 .6 1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.2.35.4.65.6 1 .3.2.62.35 1 .4H21a2 2 0 1 1 0 4h-.08a1.7 1.7 0 0 0-1 .4 1.7 1.7 0 0 0-.52.6z"/>',
@@ -767,7 +793,9 @@ function renderDynamicMenu() {
     section.classList.toggle("menu-disabled", !allowedSections.has(section.id));
   });
   const firstSection = navItems[0]?.section || "dashboard";
-  document.querySelector(`#${firstSection}`)?.classList.add("active-section");
+  const firstTarget = firstSection.startsWith("careflow") ? "careflow" : firstSection;
+  if (firstSection.startsWith("careflow")) state.ui.activeCareflowView = firstSection;
+  document.querySelector(`#${firstTarget}`)?.classList.add("active-section");
   document.querySelector("#sectionTitle").textContent = titles[firstSection] || navItems[0]?.label || "IEP";
   renderShellContext();
 }
@@ -1052,6 +1080,41 @@ async function loadPhase8BData() {
   state.ops = { ...state.ops, trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult: state.ops.excelResult || excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events };
 }
 
+function hasCareFlowSection() {
+  return menuHasSection("careflow", "careflow-config", "careflow-reports", "careflow-team", "careflow-new", "careflow-assigned");
+}
+
+async function loadCareFlowData() {
+  if (!hasCareFlowSection()) return;
+  const scope = scopedQuery();
+  const options = await apiMaybe(`/api/crm/options${scope}`, state.crm.options || { tenants: [], projects: [], users: [], channels: [] });
+  state.crm.options = options;
+  if (!state.crm.customers?.items?.length) {
+    state.crm.customers = await apiMaybe(`/api/crm/customers${scopedQuery({ page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE })}`, { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 });
+  }
+  const route = state.ui.activeCareflowView || "careflow";
+  const filterForm = document.querySelector("#careflowFilterForm");
+  const assignedFromView = route === "careflow-assigned" || (menuUser().audience === "operational_user" && route === "careflow");
+  const params = queryParams(scopedTenantParams({
+    page: state.careflow.page || 1,
+    page_size: DEFAULT_TABLE_PAGE_SIZE,
+    status: filterForm?.elements.status?.value || "",
+    priority: filterForm?.elements.priority?.value || "",
+    channel: filterForm?.elements.channel?.value || "",
+    project_id: filterForm?.elements.project_id?.value || "",
+    assigned_user_id: assignedFromView ? menuUser().id : filterForm?.elements.assigned_user_id?.value || "",
+    search: filterForm?.elements.search?.value || ""
+  }));
+  const [summary, cases, categories] = await Promise.all([
+    apiMaybe(`/api/careflow/summary${scope}`, null),
+    apiMaybe(`/api/careflow/cases?${params}`, { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 }),
+    apiMaybe(`/api/careflow/categories${scope}`, []),
+  ]);
+  const selectedId = state.careflow.selectedCaseId || cases.items?.[0]?.id || null;
+  const selectedCase = selectedId ? await apiMaybe(`/api/careflow/cases/${selectedId}`, null) : null;
+  state.careflow = { ...state.careflow, summary, cases, categories, selectedCaseId: selectedCase?.id || selectedId, selectedCase };
+}
+
 async function refreshAll() {
   await loadCoreData();
   renderDynamicMenu();
@@ -1072,6 +1135,9 @@ async function refreshAll() {
   }
   if (menuHasSection("typification-trees", "recordings", "telephony", "uploads", "excel-web", "integrations")) {
     await optionalLoad("Fase 8B", loadPhase8BData);
+  }
+  if (hasCareFlowSection()) {
+    await optionalLoad("CareFlow 360", loadCareFlowData);
   }
   renderAll();
 }
@@ -3445,6 +3511,161 @@ function renderTelephony() {
   `);
 }
 
+function careflowCanConfigure() {
+  return menuHasSection("careflow-config") || ["platform_admin", "company_admin"].includes(menuUser().audience);
+}
+
+function careflowCanAssign() {
+  return menuHasSection("careflow-team", "careflow-config") || ["platform_admin", "company_admin", "operational_leader"].includes(menuUser().audience);
+}
+
+function careflowPriorityTone(priority) {
+  return { baja: "green", media: "blue", alta: "yellow", critica: "red" }[priority] || "blue";
+}
+
+function careflowSlaTone(slaStatus) {
+  return { en_tiempo: "status-pill-ok", proximo_a_vencer: "status-pill-warn", vencido: "status-pill-danger" }[slaStatus] || "";
+}
+
+function careflowDateInput(value) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function renderCareFlow() {
+  if (!hasCareFlowSection()) return;
+  const summary = state.careflow.summary || {};
+  const cases = state.careflow.cases || { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 };
+  const categories = state.careflow.categories || [];
+  const selected = state.careflow.selectedCase;
+  const activeView = state.ui.activeCareflowView || "careflow";
+  const projectOptions = optionList(state.crm.options.projects || [], "id", "label");
+  const userOptions = optionList(state.crm.options.users || [], "id", "label");
+  const customerOptions = optionList(state.crm.customers?.items || [], "id", "name");
+  const categoryOptions = categories.map((item) => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  const showConfig = careflowCanConfigure() && ["careflow-config", "careflow"].includes(activeView);
+  const showReports = menuHasSection("careflow-reports") && ["careflow-reports", "careflow-team", "careflow"].includes(activeView);
+  const showForm = activeView === "careflow-new" || activeView === "careflow" || careflowCanConfigure();
+  renderCardSet("#careflowKpis", [
+    { label: "Nuevos", value: summary.new_cases || 0, detail: "Casos esperando primera gestion.", tone: summary.new_cases ? "yellow" : "green", action: "Asignar o iniciar seguimiento." },
+    { label: "En mi alcance", value: summary.assigned_to_me || 0, detail: "Casos asignados a tu usuario.", tone: summary.assigned_to_me ? "blue" : "green", action: "Gestionar mis casos." },
+    { label: "Vencidos", value: summary.overdue_cases || 0, detail: "Casos fuera de SLA.", tone: summary.overdue_cases ? "red" : "green", action: "Prioridad de atencion." },
+    { label: "Cerrados mes", value: summary.closed_this_month || 0, detail: "Casos finalizados durante el mes.", tone: "green", action: "Medir resolucion." },
+  ]);
+  const tabs = [
+    ["careflow", "Casos"],
+    ["careflow-new", "Crear"],
+    ["careflow-assigned", "Asignados"],
+    ["careflow-team", "Equipo"],
+    ["careflow-reports", "Reportes"],
+    ["careflow-config", "Config"],
+  ].filter(([section]) => menuHasSection(section) || section === "careflow");
+  document.querySelector("#careflowViewTabs") && (document.querySelector("#careflowViewTabs").innerHTML = tabs
+    .map(([section, label]) => `<button class="${activeView === section ? "active" : ""}" data-careflow-view="${section}" type="button">${escapeHtml(label)}</button>`)
+    .join(""));
+
+  document.querySelector("#careflowCaseFormPanel") && (document.querySelector("#careflowCaseFormPanel").innerHTML = showForm
+    ? `<form id="careCaseForm" class="ops-form form-grid">
+        ${isPlatform() ? `<label>Empresa<select name="tenant_id">${optionList(state.admin.tenants)}</select></label>` : ""}
+        <label>Cliente<select name="customer_id"><option value="">Sin cliente</option>${customerOptions}</select></label>
+        <label>Cartera<select name="project_id"><option value="">Sin cartera</option>${projectOptions}</select></label>
+        <label class="wide">Titulo<input name="title" required placeholder="Solicitud de soporte o PQRS" /></label>
+        <label class="wide">Descripcion<textarea name="description" placeholder="Contexto breve del caso"></textarea></label>
+        <label>Canal<select name="channel"><option value="llamada">Llamada</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="web">Web</option><option value="presencial">Presencial</option><option value="interno">Interno</option></select></label>
+        <label>Tipo<input name="case_type" placeholder="PQRS, soporte, solicitud" /></label>
+        <label>Categoria<input name="category" list="careflowCategoryList" placeholder="Soporte operativo" /><datalist id="careflowCategoryList">${categoryOptions}</datalist></label>
+        <label>Prioridad<select name="priority"><option value="baja">Baja</option><option value="media" selected>Media</option><option value="alta">Alta</option><option value="critica">Critica</option></select></label>
+        <label>Responsable<select name="assigned_user_id"><option value="">Sin responsable</option>${userOptions}</select></label>
+        <label>Vencimiento<input name="due_at" type="date" /></label>
+        <button type="submit">Crear caso</button>
+      </form>`
+    : `<article class="empty-state compact"><strong>Creacion no disponible</strong><p>Tu rol puede consultar o gestionar casos existentes dentro de su alcance.</p></article>`);
+
+  const caseRows = (cases.items || []).map((item) => `<tr>
+    <td><strong>${escapeHtml(item.case_number)}</strong><small>${escapeHtml(item.channel)} - ${escapeHtml(item.category || item.case_type || "Sin categoria")}</small></td>
+    <td><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.customer_name || item.project_name || "Sin cliente asociado")}</small></td>
+    <td><span class="badge ${careflowPriorityTone(item.priority)}">${escapeHtml(item.priority)}</span></td>
+    <td>${escapeHtml(item.status)}</td>
+    <td><span class="status-pill ${careflowSlaTone(item.sla_status)}">${escapeHtml(item.sla_status.replaceAll("_", " "))}</span><small>${dateOnly(item.due_at)}</small></td>
+    <td>${escapeHtml(item.assigned_user_name || "Sin responsable")}</td>
+    <td><button class="table-button" data-careflow-open="${item.id}" type="button">Abrir</button></td>
+  </tr>`).join("");
+  const pager = `<div class="table-pager">
+    <button data-careflow-page="${Math.max(1, (cases.page || 1) - 1)}" type="button" ${(cases.page || 1) <= 1 ? "disabled" : ""}>Anterior</button>
+    <span>Pagina ${cases.page || 1} de ${cases.total_pages || 1} - ${cases.total || 0} casos</span>
+    <button data-careflow-page="${Math.min(cases.total_pages || 1, (cases.page || 1) + 1)}" type="button" ${(cases.page || 1) >= (cases.total_pages || 1) ? "disabled" : ""}>Siguiente</button>
+  </div>`;
+  document.querySelector("#careflowCaseTable") && (document.querySelector("#careflowCaseTable").innerHTML = `
+    <form id="careflowFilterForm" class="inline-filters">
+      <label>Buscar<input name="search" placeholder="caso, titulo o descripcion" /></label>
+      <label>Estado<select name="status"><option value="">Todos</option><option value="nuevo">Nuevo</option><option value="asignado">Asignado</option><option value="en_proceso">En proceso</option><option value="pendiente_cliente">Pendiente cliente</option><option value="pendiente_interno">Pendiente interno</option><option value="resuelto">Resuelto</option><option value="cerrado">Cerrado</option></select></label>
+      <label>Prioridad<select name="priority"><option value="">Todas</option><option value="baja">Baja</option><option value="media">Media</option><option value="alta">Alta</option><option value="critica">Critica</option></select></label>
+      <label>Canal<select name="channel"><option value="">Todos</option><option value="llamada">Llamada</option><option value="whatsapp">WhatsApp</option><option value="email">Email</option><option value="web">Web</option><option value="presencial">Presencial</option><option value="interno">Interno</option></select></label>
+      <label>Cartera<select name="project_id"><option value="">Todas</option>${projectOptions}</select></label>
+      ${careflowCanAssign() ? `<label>Responsable<select name="assigned_user_id"><option value="">Todos</option>${userOptions}</select></label>` : ""}
+      <button type="submit">Filtrar</button>
+    </form>
+    ${table(["Caso", "Titulo", "Prioridad", "Estado", "SLA", "Responsable", ""], caseRows, "Sin casos CareFlow para tu alcance.", { noClientPager: true })}
+    ${pager}
+  `);
+
+  const eventRows = (selected?.events || []).map((item) => `<article class="mini-alert neutral"><strong>${escapeHtml(item.event_type)}</strong><p>${escapeHtml(item.description)}</p><small>${escapeHtml(item.created_by_name || "-")} - ${dateOnly(item.created_at)}</small></article>`).join("");
+  document.querySelector("#careflowCaseDetail") && (document.querySelector("#careflowCaseDetail").innerHTML = selected
+    ? `<article class="workspace-profile-card careflow-detail-card">
+        <span>${escapeHtml(selected.case_number)}</span>
+        <strong>${escapeHtml(selected.title)}</strong>
+        <p>${escapeHtml(selected.description || "Sin descripcion adicional.")}</p>
+        <small>${escapeHtml(selected.status)} - ${escapeHtml(selected.priority)} - ${escapeHtml(selected.assigned_user_name || "Sin responsable")}</small>
+      </article>
+      <div class="compact-alert-list">${eventRows || `<article class="mini-alert green"><strong>Sin eventos adicionales</strong><p>El historial aparecera cuando se agreguen notas o cambios.</p></article>`}</div>
+      <form id="careCaseEventForm" class="ops-form form-grid">
+        <input name="case_id" type="hidden" value="${selected.id}" />
+        <label>Tipo<select name="event_type"><option value="nota">Nota</option><option value="comentario">Comentario</option><option value="cambio_estado">Cambio estado</option><option value="adjunto">Adjunto</option></select></label>
+        <label class="wide">Nota<textarea name="description" required placeholder="Agregar seguimiento"></textarea></label>
+        <button type="submit">Agregar nota</button>
+      </form>
+      ${careflowCanAssign() ? `<form id="careCaseAssignForm" class="ops-form form-grid">
+        <input name="case_id" type="hidden" value="${selected.id}" />
+        <label>Responsable<select name="assigned_user_id" required><option value="">Selecciona responsable</option>${userOptions}</select></label>
+        <label>Nota<input name="note" placeholder="Motivo de asignacion" /></label>
+        <button type="submit">Asignar</button>
+      </form>` : ""}
+      <form id="careCaseCloseForm" class="ops-form form-grid">
+        <input name="case_id" type="hidden" value="${selected.id}" />
+        <label>Resultado<select name="status"><option value="resuelto">Resuelto</option><option value="cerrado">Cerrado</option><option value="cancelado">Cancelado</option></select></label>
+        <label class="wide">Resolucion<textarea name="resolution" placeholder="Resumen de cierre"></textarea></label>
+        <button type="submit">Cerrar caso</button>
+      </form>`
+    : `<article class="empty-state compact"><strong>Selecciona un caso</strong><p>Abre un registro para ver su historial, agregar notas, asignar o cerrar.</p></article>`);
+
+  document.querySelector("#careflowConfigPanel") && (document.querySelector("#careflowConfigPanel").innerHTML = showConfig
+    ? `<div class="panel-head"><div><h2>Configuracion CareFlow</h2><p>Categorias base y SLA por defecto para clasificar casos.</p></div></div>
+      <form id="careCategoryForm" class="ops-form form-grid">
+        ${isPlatform() ? `<label>Empresa<select name="tenant_id">${optionList(state.admin.tenants)}</select></label>` : ""}
+        <label>Categoria<input name="name" required placeholder="PQRS" /></label>
+        <label>Prioridad<select name="default_priority"><option value="baja">Baja</option><option value="media">Media</option><option value="alta">Alta</option><option value="critica">Critica</option></select></label>
+        <label>SLA horas<input name="default_sla_hours" type="number" min="1" max="720" value="48" /></label>
+        <label class="wide">Descripcion<textarea name="description"></textarea></label>
+        <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Activa</label>
+        <button type="submit">Guardar categoria</button>
+      </form>
+      ${table(["Categoria", "Prioridad", "SLA", "Estado"], categories.map((item) => `<tr><td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.description || "")}</small></td><td>${escapeHtml(item.default_priority)}</td><td>${item.default_sla_hours} h</td><td>${item.is_active ? "Activa" : "Inactiva"}</td></tr>`).join(""), "Sin categorias CareFlow configuradas.")}`
+    : "");
+
+  document.querySelector("#careflowReportsPanel") && (document.querySelector("#careflowReportsPanel").innerHTML = showReports
+    ? `<div class="panel-head"><div><h2>Reportes CareFlow</h2><p>Lectura basica por estado, prioridad y control SLA.</p></div></div>
+      <div class="settings-summary">
+        <article><span>Sin responsable</span><strong>${summary.unassigned_cases || 0}</strong></article>
+        <article><span>Criticos abiertos</span><strong>${summary.critical_open_cases || 0}</strong></article>
+        <article><span>Proximos SLA</span><strong>${summary.due_soon_cases || 0}</strong></article>
+      </div>
+      <div class="dashboard-grid">
+        <div class="bar-list">${Object.entries(summary.by_status || {}).map(([label, value]) => `<div class="bar-row"><span>${escapeHtml(label)}</span><div><i style="width:${Math.max(8, Number(value) * 12)}%"></i></div><strong>${value}</strong></div>`).join("") || `<p class="empty">Sin estados para graficar.</p>`}</div>
+        <div class="bar-list">${Object.entries(summary.by_priority || {}).map(([label, value]) => `<div class="bar-row"><span>${escapeHtml(label)}</span><div><i style="width:${Math.max(8, Number(value) * 12)}%"></i></div><strong>${value}</strong></div>`).join("") || `<p class="empty">Sin prioridades para graficar.</p>`}</div>
+      </div>`
+    : "");
+}
+
 function renderUploads() {
   const batches = state.ops.uploads || [];
   const demographics = state.ops.demographics || [];
@@ -4196,6 +4417,7 @@ function renderAll() {
   renderTypificationTrees();
   renderRecordings();
   renderTelephony();
+  renderCareFlow();
   renderUploads();
   renderExcelWeb();
   renderIntegrations();
@@ -4485,11 +4707,120 @@ async function submitJson(form, endpoint, buildPayload, options = {}) {
   }, "Guardando...");
 }
 
+async function reloadCareFlow() {
+  await loadCareFlowData();
+  renderCareFlow();
+  renderSessionPriorities();
+}
+
+function careCasePayload(form) {
+  return {
+    tenant_id: form.elements.tenant_id?.value ? Number(form.elements.tenant_id.value) : null,
+    project_id: optionalNumber(form.elements.project_id.value),
+    customer_id: optionalNumber(form.elements.customer_id.value),
+    title: form.elements.title.value,
+    description: form.elements.description.value || null,
+    channel: form.elements.channel.value,
+    case_type: form.elements.case_type.value || null,
+    category: form.elements.category.value || null,
+    priority: form.elements.priority.value,
+    assigned_user_id: optionalNumber(form.elements.assigned_user_id.value),
+    due_at: toDateTime(form.elements.due_at.value),
+    metadata: { source: "frontend_careflow_mvp" }
+  };
+}
+
+async function handleCareCaseSubmit(form) {
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    const result = await api("/api/careflow/cases", { method: "POST", body: JSON.stringify(careCasePayload(form)) });
+    state.careflow.selectedCaseId = result.id;
+    form.reset();
+    showToast("success", "Caso CareFlow creado correctamente.");
+    await reloadCareFlow();
+  }, "Creando caso...");
+}
+
+async function handleCareCaseEventSubmit(form) {
+  const caseId = form.elements.case_id.value;
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    await api(`/api/careflow/cases/${caseId}/events`, {
+      method: "POST",
+      body: JSON.stringify({
+        event_type: form.elements.event_type.value,
+        description: form.elements.description.value,
+        metadata: { source: "frontend_careflow_mvp" }
+      })
+    });
+    form.reset();
+    state.careflow.selectedCaseId = Number(caseId);
+    showToast("success", "Nota agregada al caso.");
+    await reloadCareFlow();
+  }, "Agregando nota...");
+}
+
+async function handleCareCaseAssignSubmit(form) {
+  const caseId = form.elements.case_id.value;
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    await api(`/api/careflow/cases/${caseId}/assign`, {
+      method: "POST",
+      body: JSON.stringify({
+        assigned_user_id: Number(form.elements.assigned_user_id.value),
+        note: form.elements.note.value || null
+      })
+    });
+    state.careflow.selectedCaseId = Number(caseId);
+    showToast("success", "Responsable asignado.");
+    await reloadCareFlow();
+  }, "Asignando...");
+}
+
+async function handleCareCaseCloseSubmit(form) {
+  const caseId = form.elements.case_id.value;
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    await api(`/api/careflow/cases/${caseId}/close`, {
+      method: "POST",
+      body: JSON.stringify({
+        status: form.elements.status.value,
+        resolution: form.elements.resolution.value || null
+      })
+    });
+    state.careflow.selectedCaseId = Number(caseId);
+    showToast("success", "Caso actualizado correctamente.");
+    await reloadCareFlow();
+  }, "Cerrando...");
+}
+
+async function handleCareCategorySubmit(form) {
+  const button = form.querySelector("button[type='submit']");
+  await runAction(button, async () => {
+    await api("/api/careflow/categories", {
+      method: "POST",
+      body: JSON.stringify({
+        tenant_id: form.elements.tenant_id?.value ? Number(form.elements.tenant_id.value) : null,
+        name: form.elements.name.value,
+        description: form.elements.description.value || null,
+        default_priority: form.elements.default_priority.value,
+        default_sla_hours: Number(form.elements.default_sla_hours.value || 48),
+        is_active: form.elements.is_active.checked
+      })
+    });
+    form.reset();
+    showToast("success", "Categoria CareFlow guardada.");
+    await reloadCareFlow();
+  }, "Guardando categoria...");
+}
+
 function setupNavigation() {
   document.querySelector("#mainNav").addEventListener("click", (event) => {
     const button = event.target.closest(".nav-item");
     if (!button || button.classList.contains("hidden")) return;
-    const section = document.querySelector(`#${button.dataset.section}`);
+    const targetSection = button.dataset.section.startsWith("careflow") ? "careflow" : button.dataset.section;
+    if (button.dataset.section.startsWith("careflow")) state.ui.activeCareflowView = button.dataset.section;
+    const section = document.querySelector(`#${targetSection}`);
     if (!section) return;
     document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("active"));
     document.querySelectorAll(".section").forEach((item) => item.classList.remove("active-section"));
@@ -4497,6 +4828,7 @@ function setupNavigation() {
     section.classList.remove("menu-disabled");
     section.classList.add("active-section");
     document.querySelector("#sectionTitle").textContent = titles[button.dataset.section] || button.textContent || "IEP";
+    if (targetSection === "careflow") renderCareFlow();
   });
 }
 
@@ -4685,6 +5017,31 @@ function setupEvents() {
       event.preventDefault();
       await handleTelephonyExtensionSubmit(form);
     }
+    if (form.id === "careCaseForm") {
+      event.preventDefault();
+      await handleCareCaseSubmit(form);
+    }
+    if (form.id === "careCaseEventForm") {
+      event.preventDefault();
+      await handleCareCaseEventSubmit(form);
+    }
+    if (form.id === "careCaseAssignForm") {
+      event.preventDefault();
+      await handleCareCaseAssignSubmit(form);
+    }
+    if (form.id === "careCaseCloseForm") {
+      event.preventDefault();
+      await handleCareCaseCloseSubmit(form);
+    }
+    if (form.id === "careCategoryForm") {
+      event.preventDefault();
+      await handleCareCategorySubmit(form);
+    }
+    if (form.id === "careflowFilterForm") {
+      event.preventDefault();
+      state.careflow.page = 1;
+      await reloadCareFlow();
+    }
     if (form.id === "uploadPreviewForm") {
       event.preventDefault();
       await handleUploadPreview(form);
@@ -4807,6 +5164,30 @@ function setupEvents() {
     const clearTelephony = event.target.closest("[data-clear-telephony-extension]");
     if (clearTelephony) {
       clearTelephonyExtensionForm();
+      return;
+    }
+    const careflowView = event.target.closest("[data-careflow-view]");
+    if (careflowView) {
+      state.ui.activeCareflowView = careflowView.dataset.careflowView;
+      state.careflow.page = 1;
+      await reloadCareFlow();
+      return;
+    }
+    const careflowRefresh = event.target.closest("[data-careflow-refresh]");
+    if (careflowRefresh) {
+      await runAction(careflowRefresh, reloadCareFlow, "Actualizando...");
+      return;
+    }
+    const careflowOpen = event.target.closest("[data-careflow-open]");
+    if (careflowOpen) {
+      state.careflow.selectedCaseId = Number(careflowOpen.dataset.careflowOpen);
+      await reloadCareFlow();
+      return;
+    }
+    const careflowPage = event.target.closest("[data-careflow-page]");
+    if (careflowPage) {
+      state.careflow.page = Number(careflowPage.dataset.careflowPage || 1);
+      await reloadCareFlow();
       return;
     }
     const teamProject = event.target.closest("[data-team-project]");
