@@ -14,6 +14,7 @@ from app.schemas.self_service import AdvisorManagementInsightsOut, CustomerManag
 from app.core.roles import AGENT, COORDINATOR, PLATFORM_ADMIN, TENANT_ADMIN
 from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, require_permission, user_has_permission
 from app.services.audit_service import record_audit
+from app.services.contact_compliance import evaluate_contact_rules, normalize_channel
 from app.services.collections_self_service import advisor_management_insights, customer_management_insights
 
 from .access import activity_to_out, customer_for_access, ensure_read_access
@@ -104,6 +105,28 @@ def create_activity(customer_id: int, payload: ActivityCreate, request: Request,
     obligation = obligation_for_access(db, payload.obligation_id, user, write=False) if payload.obligation_id else None
     if obligation and obligation.customer_id != customer.id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="La obligacion no pertenece al cliente seleccionado.")
+    normalized_channel = normalize_channel(payload.channel)
+    if normalized_channel in {"phone", "whatsapp", "email", "sms"}:
+        compliance = evaluate_contact_rules(
+            db,
+            user=user,
+            customer=customer,
+            obligation=obligation,
+            channel=normalized_channel,
+            source="management_activity",
+            audit=True,
+            request=request,
+        )
+        if not compliance["allowed"]:
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "contact_compliance_blocked",
+                    "message": "Contacto restringido por regla de cumplimiento",
+                    "decision": compliance,
+                },
+            )
     typification = db.get(TypificationNode, payload.typification_id) if payload.typification_id else None
     if typification and typification.tenant_id != customer.tenant_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Tipificacion fuera de la empresa.")

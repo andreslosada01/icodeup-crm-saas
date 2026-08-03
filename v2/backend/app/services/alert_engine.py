@@ -6,9 +6,10 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import AlertRule, Customer, Lead, LegalAction, LegalCase, LegalDeadline, LegalHearing, Opportunity, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, Tenant, TenantModule, TenantSubscription, User
+from app.models import AlertRule, BusinessRule, Customer, Lead, LegalAction, LegalCase, LegalDeadline, LegalHearing, Opportunity, PaymentAgreement, PaymentAgreementInstallment, PaymentPromise, Project, Tenant, TenantModule, TenantSubscription, User
 from app.models.careflow import CareCase
 from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, user_has_permission
+from app.services.contact_compliance import CONTACT_RULE_MODULE, CONTACT_RULE_TYPE, active_contact_rules, evaluate_contact_rules, json_dict, parse_date
 
 
 SEVERITY_ORDER = {"critical": 4, "high": 3, "medium": 2, "low": 1}
@@ -190,6 +191,114 @@ def _collection_alerts(db: Session, user: User, tenant_ids: list[int]) -> list[d
                         severity="high",
                         due_at=installment.due_date,
                         action="Gestionar cumplimiento del acuerdo.",
+                    )
+                )
+    return alerts
+
+
+def _contact_compliance_alerts(db: Session, user: User, tenant_ids: list[int]) -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    now = _now()
+    for tenant_id in tenant_ids:
+        rules = active_contact_rules(db, tenant_id, include_inactive=True)
+        active_rules = [rule for rule in rules if rule.is_active]
+        if not rules:
+            continue
+        if is_platform_admin(db, user) or is_company_admin(db, user):
+            for rule in rules[:100]:
+                condition = json_dict(rule.condition_json)
+                action = json_dict(rule.action_json)
+                valid_until = parse_date(condition.get("valid_until"))
+                if rule.is_active and valid_until and valid_until < now.date():
+                    alerts.append(
+                        _alert(
+                            tenant_id=tenant_id,
+                            module="collections",
+                            entity_type="contact_rule",
+                            entity_id=rule.id,
+                            title=f"Regla de contacto vencida: {rule.name}",
+                            message="La regla sigue activa pero su vigencia configurada ya finalizo.",
+                            severity="high",
+                            action="Revisar vigencia o desactivar regla.",
+                        )
+                    )
+                if not rule.is_active and str(action.get("severity") or rule.severity).lower() in {"block", "bloqueo", "critical", "critica"}:
+                    alerts.append(
+                        _alert(
+                            tenant_id=tenant_id,
+                            module="collections",
+                            entity_type="contact_rule",
+                            entity_id=rule.id,
+                            title=f"Regla critica inactiva: {rule.name}",
+                            message="Existe una regla de bloqueo configurada como inactiva.",
+                            severity="medium",
+                            action="Validar si debe activarse o retirarse.",
+                        )
+                    )
+            if active_rules:
+                scoped_projects = {json_dict(rule.condition_json).get("project_id") for rule in active_rules if json_dict(rule.condition_json).get("project_id")}
+                projects = list(db.scalars(select(Project).where(Project.tenant_id == tenant_id, Project.status == "active").limit(50)))
+                for project in projects:
+                    if project.id not in scoped_projects:
+                        alerts.append(
+                            _alert(
+                                tenant_id=tenant_id,
+                                module="collections",
+                                entity_type="project",
+                                entity_id=project.id,
+                                title=f"Cartera sin regla especifica: {project.name}",
+                                message="La cartera hereda reglas generales o aun no tiene regla de contacto propia.",
+                                severity="low",
+                                action="Configurar regla por cartera si aplica.",
+                            )
+                        )
+        if not active_rules:
+            continue
+        customer_query = select(Customer).where(Customer.tenant_id == tenant_id).order_by(Customer.priority.desc(), Customer.id)
+        if _assigned_filter_needed(db, user, "collections"):
+            customer_query = customer_query.where(Customer.assigned_user_id == user.id)
+        for customer in db.scalars(customer_query.limit(50)):
+            decision = evaluate_contact_rules(db, user=user, customer=customer, obligation=None, channel="phone", current_at=now, audit=False)
+            if not decision["allowed"]:
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="collections",
+                        entity_type="customer",
+                        entity_id=customer.id,
+                        title=f"Cliente restringido: {customer.name}",
+                        message=decision["reason"],
+                        severity="high" if is_company_admin(db, user) else "medium",
+                        assigned_user_id=customer.assigned_user_id,
+                        action=decision["recommended_action"],
+                    )
+                )
+            elif decision["severity"] == "warning":
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="collections",
+                        entity_type="customer",
+                        entity_id=customer.id,
+                        title=f"Contacto con advertencia: {customer.name}",
+                        message=decision["reason"],
+                        severity="medium",
+                        assigned_user_id=customer.assigned_user_id,
+                        action=decision["recommended_action"],
+                    )
+                )
+            elif _assigned_filter_needed(db, user, "collections"):
+                alerts.append(
+                    _alert(
+                        tenant_id=tenant_id,
+                        module="collections",
+                        entity_type="customer",
+                        entity_id=customer.id,
+                        title=f"Contacto permitido hoy: {customer.name}",
+                        message="El cliente asignado no presenta bloqueo de contacto para llamada.",
+                        severity="low",
+                        assigned_user_id=customer.assigned_user_id,
+                        action="Priorizar gestion segun cola.",
                     )
                 )
     return alerts
@@ -478,6 +587,8 @@ def collect_alerts(
     alerts: list[dict[str, Any]] = []
     if "collections" in modules and _can_view_module(db, user, "collections"):
         alerts.extend(_collection_alerts(db, user, tenant_ids))
+        if _can_view_module(db, user, "collections") and user_has_permission(db, user, "contact_compliance.evaluate"):
+            alerts.extend(_contact_compliance_alerts(db, user, tenant_ids))
     if "legal" in modules and _can_view_module(db, user, "legal"):
         alerts.extend(_legal_alerts(db, user, tenant_ids))
     if "sales" in modules and _can_view_module(db, user, "sales"):

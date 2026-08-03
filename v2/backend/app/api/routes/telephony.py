@@ -30,6 +30,7 @@ from app.schemas.telephony import (
 )
 from app.services.access_control import get_profile_role_code, is_company_admin, is_platform_admin, require_module, require_permission, require_tenant, user_has_permission
 from app.services.audit_service import record_audit
+from app.services.contact_compliance import evaluate_contact_rules
 
 
 router = APIRouter()
@@ -588,6 +589,27 @@ def click_to_call(payload: ClickToCallRequest, request: Request, db: Session = D
     phone_number = (payload.phone_number or customer.phone or "").strip()
     if not phone_number:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="El cliente no tiene telefono disponible para llamar.")
+    compliance = evaluate_contact_rules(
+        db,
+        user=user,
+        customer=customer,
+        obligation=obligation,
+        channel="phone",
+        source=payload.source or "telephony_click_to_call",
+        audit=True,
+        request=request,
+    )
+    if not compliance["allowed"]:
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "ok": False,
+                "code": "contact_compliance_blocked",
+                "message": "Contacto restringido por regla de cumplimiento",
+                "decision": compliance,
+            },
+        )
     provider = _provider_for_call(db, customer.tenant_id, extension)
     dialing = _dial_string_for_provider(provider, phone_number)
     mode = _call_mode(provider)

@@ -13,6 +13,7 @@ const state = {
   governance: { permissions: [], roles: [], users: [], modules: [], settings: null, audit: [], parties: [], plans: [], subscriptions: [], health: null, securityInsights: [], effectiveAccess: null },
   crm: { options: { tenants: [], projects: [], users: [], channels: [] }, dashboard: null, bi: null, customers: null, queue: null, promises: [], payments: [], agreements: [], paymentObligations: [], channels: [], typifications: [] },
   configuration: { catalogs: [], rules: [], alertRules: [], workflows: [] },
+  compliance: { rules: { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 }, page: 1 },
   alerts: { items: [], summary: null, sessionSummary: null },
   careflow: { summary: null, cases: { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 }, categories: [], selectedCaseId: null, selectedCase: null, page: 1 },
   legal: { dashboard: null, kanban: null, cases: [] },
@@ -26,6 +27,7 @@ const state = {
   selectedAgreements: [],
   selectedDemographics: [],
   selectedManagementInsights: null,
+  selectedContactStatus: null,
   queuePage: 1,
   customerPage: 1
 };
@@ -55,6 +57,7 @@ const titles = {
   "typification-trees": "Arboles de gestion",
   recordings: "Grabaciones",
   telephony: "Telefonia",
+  "contact-compliance": "Cumplimiento y contacto",
   careflow: "CareFlow 360",
   "careflow-config": "Configuracion CareFlow",
   "careflow-reports": "Reportes CareFlow",
@@ -130,6 +133,7 @@ const sectionCategories = {
   channels: "Operacion",
   recordings: "Operacion",
   telephony: "Operacion",
+  "contact-compliance": "Administracion",
   careflow: "Operacion",
   "careflow-config": "Administracion",
   "careflow-reports": "Analitica",
@@ -176,6 +180,7 @@ const sectionModules = {
   channels: "integrations",
   recordings: "collections",
   telephony: "telephony",
+  "contact-compliance": "collections",
   careflow: "careflow",
   "careflow-config": "careflow",
   "careflow-reports": "careflow",
@@ -200,6 +205,7 @@ const moduleCopy = {
   sales: { name: "Pipeline comercial", category: "Expansion", description: "Leads, oportunidades, valor ponderado y forecast comercial." },
   bi: { name: "Analytics 360", category: "Analitica", description: "Dashboards, reportes, analitica operacional y ejecutiva." },
   telephony: { name: "Telefonia", category: "Integraciones", description: "Click-to-call, extensiones, historial de llamadas y base para softphone WebRTC." },
+  contact_compliance: { name: "Cumplimiento y contacto", category: "Gobierno operativo", description: "Reglas configurables de horario, canal, frecuencia y restricciones de contacto." },
   careflow: { name: "CareFlow 360", category: "Operacion", description: "Atencion al cliente, casos, solicitudes, SLA y seguimiento." },
   integrations: { name: "ChatBOX 360", category: "Integraciones", description: "Canales, chatbot, WhatsApp y automatizacion conversacional." },
   hr: { name: "FoodFlow 360", category: "Operacion", description: "Produccion de alimentos, inventarios, pedidos, costos y trazabilidad." },
@@ -616,6 +622,7 @@ function iconForSection(section) {
     channels: '<path d="M4 12h5"/><path d="M15 12h5"/><path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/>',
     recordings: '<rect x="3" y="7" width="18" height="10" rx="3"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/>',
     telephony: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.77.62 2.6a2 2 0 0 1-.45 2.11L8 9.71a16 16 0 0 0 6.29 6.29l1.28-1.28a2 2 0 0 1 2.11-.45c.83.29 1.7.5 2.6.62A2 2 0 0 1 22 16.92z"/>',
+    "contact-compliance": '<path d="M12 3 5 6v5c0 4.5 2.9 7.7 7 9 4.1-1.3 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-5"/><path d="M7 21h10"/>',
     careflow: '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
     "careflow-config": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
     "careflow-reports": '<path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/><path d="M16 3h5v5"/><path d="m21 3-7 7"/>',
@@ -1080,6 +1087,24 @@ async function loadPhase8BData() {
   state.ops = { ...state.ops, trees, combinations, recordings, telephonyProviders, telephonyExtensions, telephonyCallLogs, myExtension, uploads, demographics, excelSources, excelViews, excelResult: state.ops.excelResult || excelResult, excelSheetRows, providers, integrationChannels, templates, webhooks, events };
 }
 
+function hasComplianceSection() {
+  return menuHasSection("contact-compliance");
+}
+
+async function loadComplianceData() {
+  if (!hasComplianceSection()) return;
+  const scope = scopedQuery();
+  if (!state.crm.options?.projects?.length) {
+    state.crm.options = await apiMaybe(`/api/crm/options${scope}`, state.crm.options || { tenants: [], projects: [], users: [], channels: [] });
+  }
+  const params = queryParams(scopedTenantParams({
+    page: state.compliance.page || 1,
+    page_size: DEFAULT_TABLE_PAGE_SIZE,
+    project_id: document.querySelector("#complianceRuleProjectFilter")?.value || ""
+  }));
+  state.compliance.rules = await apiMaybe(`/api/compliance/contact-rules?${params}`, { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 });
+}
+
 function hasCareFlowSection() {
   return menuHasSection("careflow", "careflow-config", "careflow-reports", "careflow-team", "careflow-new", "careflow-assigned");
 }
@@ -1135,6 +1160,9 @@ async function refreshAll() {
   }
   if (menuHasSection("typification-trees", "recordings", "telephony", "uploads", "excel-web", "integrations")) {
     await optionalLoad("Fase 8B", loadPhase8BData);
+  }
+  if (hasComplianceSection()) {
+    await optionalLoad("Cumplimiento y contacto", loadComplianceData);
   }
   if (hasCareFlowSection()) {
     await optionalLoad("CareFlow 360", loadCareFlowData);
@@ -1880,24 +1908,27 @@ async function selectCustomer(customerId) {
   const customer = [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
   state.selectedCustomer = customer || null;
   if (customer) {
-    const [activities, obligations, demographics, agreements, managementInsights] = await Promise.all([
+    const [activities, obligations, demographics, agreements, managementInsights, contactStatus] = await Promise.all([
       api(`/api/crm/customers/${customer.id}/activities`),
       apiMaybe(`/api/crm/customers/${customer.id}/obligations`, []),
       apiMaybe(`/api/uploads/demographics?${queryParams(scopedTenantParams({ customer_id: customer.id, page_size: DEFAULT_TABLE_PAGE_SIZE }))}`, []),
       apiMaybe(`/api/crm/agreements?${queryParams(scopedTenantParams({ customer_id: customer.id }))}`, []),
-      apiMaybe(`/api/crm/customers/${customer.id}/management-insights`, null)
+      apiMaybe(`/api/crm/customers/${customer.id}/management-insights`, null),
+      apiMaybe(`/api/compliance/customer/${customer.id}/contact-status`, null)
     ]);
     state.selectedActivities = activities;
     state.selectedObligations = obligations;
     state.selectedDemographics = demographics;
     state.selectedAgreements = agreements;
     state.selectedManagementInsights = managementInsights;
+    state.selectedContactStatus = contactStatus;
   } else {
     state.selectedActivities = [];
     state.selectedObligations = [];
     state.selectedDemographics = [];
     state.selectedAgreements = [];
     state.selectedManagementInsights = null;
+    state.selectedContactStatus = null;
   }
   renderQueueDetail();
 }
@@ -2003,6 +2034,61 @@ function channelHref(kind, customer) {
   return "#";
 }
 
+function contactChannelLabel(channel) {
+  return {
+    phone: "Llamada",
+    whatsapp: "WhatsApp",
+    email: "Email",
+    sms: "SMS",
+    presencial: "Presencial",
+    web: "Web",
+    manual: "Manual"
+  }[channel] || channel;
+}
+
+function contactActionButton(customer, channel, label) {
+  return `<button type="button" data-contact-action="${escapeHtml(channel)}" data-customer-id="${customer.id}">${escapeHtml(label || contactChannelLabel(channel))}</button>`;
+}
+
+function contactStatusTone(status) {
+  if (!status) return "neutral";
+  if (status.severity === "block" || status.status === "bloqueado") return "red";
+  if (status.severity === "warning" || status.status === "advertencia") return "yellow";
+  return "green";
+}
+
+function renderContactStatusPanel(status = state.selectedContactStatus) {
+  if (!status) {
+    return `<p class="empty">Estado de contacto no disponible para este cliente.</p>`;
+  }
+  const channels = (status.channels_enabled || []).map((item) => `<span class="badge green">${escapeHtml(contactChannelLabel(item))}</span>`).join("") || `<span class="badge yellow">Sin canales habilitados</span>`;
+  const attempts = Object.entries(status.attempts_by_channel_today || {})
+    .filter(([channel]) => ["phone", "whatsapp", "email", "sms"].includes(channel))
+    .map(([channel, count]) => `<small>${escapeHtml(contactChannelLabel(channel))}: ${Number(count || 0)}</small>`)
+    .join("");
+  const restrictions = (status.active_restrictions || [])
+    .slice(0, 4)
+    .map((item) => `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.reason)}</span></li>`)
+    .join("");
+  return `
+    <div class="contact-status-card ${contactStatusTone(status)}">
+      <div>
+        <span class="eyebrow">Estado de contacto</span>
+        <strong>${escapeHtml(status.status || "permitido")}</strong>
+        <p>${escapeHtml(status.reason || "Contacto permitido segun reglas activas.")}</p>
+      </div>
+      <div class="contact-status-channels">${channels}</div>
+      <div class="contact-status-counts">
+        <small>Intentos hoy: ${Number(status.attempts_today || 0)}</small>
+        <small>Intentos semana: ${Number(status.attempts_week || 0)}</small>
+        ${attempts}
+      </div>
+      ${status.next_window ? `<p class="muted">${escapeHtml(status.next_window)}</p>` : ""}
+      ${restrictions ? `<ul class="contact-restrictions">${restrictions}</ul>` : `<p class="muted">Sin restricciones activas para este cliente.</p>`}
+    </div>
+  `;
+}
+
 function telephonyModuleAvailable() {
   return menuHasSection("telephony");
 }
@@ -2050,9 +2136,12 @@ function renderQueueDetail() {
     </div>
     <div class="channel-actions">
       ${callActionButton(customer)}
-      <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
-      <a href="${channelHref("email", customer)}">Email</a>
+      ${contactActionButton(customer, "whatsapp", "WhatsApp")}
+      ${contactActionButton(customer, "email", "Email")}
     </div>
+    <article class="drawer-card contact-status-inline">
+      ${renderContactStatusPanel()}
+    </article>
     <div class="activity-head"><strong>Obligaciones</strong><span>Gestiona por deuda o cliente completo</span></div>
     <div class="activity-matrix">${renderObligationMatrix()}</div>
     <form id="activityForm" class="form-grid management-grid" data-customer-id="${customer.id}">
@@ -2170,13 +2259,16 @@ function renderManagementDrawer() {
       </div>
       <div class="drawer-actions">
         ${callActionButton(customer)}
-        <a href="${channelHref("whatsapp", customer)}" target="_blank" rel="noreferrer">WhatsApp</a>
-        <a href="${channelHref("email", customer)}">Email</a>
+        ${contactActionButton(customer, "whatsapp", "WhatsApp")}
+        ${contactActionButton(customer, "email", "Email")}
         <button type="button" data-prefill-result="Contactado">Registrar llamada</button>
         <button type="button" data-prefill-result="Promesa">Crear promesa</button>
         <button type="button" data-section-jump="agreements">Crear acuerdo</button>
         <button type="button" data-prefill-result="Escalado">Escalar juridico</button>
       </div>
+      <article class="drawer-card">
+        ${renderContactStatusPanel()}
+      </article>
       <article class="drawer-card">
         <h3>Obligaciones del cliente</h3>
         <div class="activity-matrix">${renderObligationMatrix()}</div>
@@ -2283,6 +2375,10 @@ async function submitActivity(event) {
     return;
   }
   if (message) message.textContent = "";
+  if (["phone", "whatsapp", "email", "sms"].includes(body.channel)) {
+    const allowed = await evaluateContactAction(customerId, body.channel, "management_activity_precheck");
+    if (!allowed) return;
+  }
   setButtonLoading(button, true, "Guardando...");
   try {
     await api(`/api/crm/customers/${customerId}/activities`, { method: "POST", body: JSON.stringify(body) });
@@ -2376,24 +2472,27 @@ async function refreshCustomerAfterActivity(customerId) {
   const obligationsRequest = apiMaybe(`/api/crm/customers/${customerId}/obligations`, []);
   const demographicsRequest = apiMaybe(`/api/uploads/demographics?${queryParams(scopedTenantParams({ customer_id: customerId, page_size: DEFAULT_TABLE_PAGE_SIZE }))}`, []);
   const agreementsRequest = apiMaybe(`/api/crm/agreements?${queryParams(scopedTenantParams({ customer_id: customerId }))}`, []);
-  const [queueResult, customersResult, activitiesResult, obligationsResult, demographicsResult, agreementsResult, promisesResult, paymentsResult, globalAgreementsResult] = await Promise.allSettled([
+  const contactStatusRequest = apiMaybe(`/api/compliance/customer/${customerId}/contact-status`, null);
+  const [queueResult, customersResult, activitiesResult, obligationsResult, demographicsResult, agreementsResult, contactStatusResult, promisesResult, paymentsResult, globalAgreementsResult] = await Promise.allSettled([
     loadQueue(),
     loadCustomers(),
     activityRequest,
     obligationsRequest,
     demographicsRequest,
     agreementsRequest,
+    contactStatusRequest,
     menuHasSection("promises") ? api(`/api/crm/promises${scopedQuery()}`) : Promise.resolve(state.crm.promises || []),
     menuHasSection("payments") ? api(`/api/crm/payments${scopedQuery()}`) : Promise.resolve(state.crm.payments || []),
     menuHasSection("agreements") ? api(`/api/crm/agreements${scopedQuery()}`) : Promise.resolve(state.crm.agreements || []),
   ]);
-  [queueResult, customersResult, activitiesResult, obligationsResult, demographicsResult, agreementsResult, promisesResult, paymentsResult, globalAgreementsResult].forEach((result) => {
+  [queueResult, customersResult, activitiesResult, obligationsResult, demographicsResult, agreementsResult, contactStatusResult, promisesResult, paymentsResult, globalAgreementsResult].forEach((result) => {
     if (result.status === "rejected") console.warn("Refresh posterior a gestion omitido:", result.reason);
   });
   if (activitiesResult.status === "fulfilled") state.selectedActivities = activitiesResult.value;
   if (obligationsResult.status === "fulfilled") state.selectedObligations = obligationsResult.value;
   if (demographicsResult.status === "fulfilled") state.selectedDemographics = demographicsResult.value;
   if (agreementsResult.status === "fulfilled") state.selectedAgreements = agreementsResult.value;
+  if (contactStatusResult.status === "fulfilled") state.selectedContactStatus = contactStatusResult.value;
   if (promisesResult.status === "fulfilled") state.crm.promises = promisesResult.value;
   if (paymentsResult.status === "fulfilled") state.crm.payments = paymentsResult.value;
   if (globalAgreementsResult.status === "fulfilled") state.crm.agreements = globalAgreementsResult.value;
@@ -3381,6 +3480,217 @@ function renderRecordings() {
 
 function canManageTelephony() {
   return ["platform_admin", "company_admin"].includes(menuUser().audience) || ["platform_admin", "tenant_admin"].includes(currentUser?.role);
+}
+
+function canManageContactCompliance() {
+  return hasComplianceSection() && ["platform_admin", "company_admin", "operational_leader"].includes(menuUser().audience);
+}
+
+function complianceCheckboxes(name, options, selected = []) {
+  const selectedSet = new Set((selected || []).map(String));
+  return options
+    .map(([value, label]) => `<label class="checkbox-row compact"><input name="${escapeHtml(name)}" value="${escapeHtml(value)}" type="checkbox" ${selectedSet.has(String(value)) ? "checked" : ""} /> ${escapeHtml(label)}</label>`)
+    .join("");
+}
+
+function complianceProjectOptions(selected = "") {
+  return `<option value="">Todas las carteras</option>${optionList(state.crm.options.projects || [], "id", "name", selected)}`;
+}
+
+function complianceSeverityLabel(value) {
+  return { info: "Informativa", warning: "Advertencia", block: "Bloqueo" }[value] || value || "Advertencia";
+}
+
+function complianceRulePayload(form) {
+  return {
+    tenant_id: platformTenantValue(form),
+    project_id: optionalNumber(form.elements.project_id?.value),
+    code: form.elements.code.value || null,
+    name: form.elements.name.value,
+    description: form.elements.description.value || null,
+    channels: Array.from(form.querySelectorAll('input[name="channels"]:checked')).map((item) => item.value),
+    blocked_channels: Array.from(form.querySelectorAll('input[name="blocked_channels"]:checked')).map((item) => item.value),
+    allowed_days: Array.from(form.querySelectorAll('input[name="allowed_days"]:checked')).map((item) => item.value),
+    start_time: form.elements.start_time.value || null,
+    end_time: form.elements.end_time.value || null,
+    max_attempts_per_day: optionalNumber(form.elements.max_attempts_per_day.value),
+    max_attempts_per_week: optionalNumber(form.elements.max_attempts_per_week.value),
+    max_attempts_per_channel_day: optionalNumber(form.elements.max_attempts_per_channel_day.value),
+    blocked_customer_ids: String(form.elements.blocked_customer_ids.value || "").split(",").map((item) => Number(item.trim())).filter(Boolean),
+    blocked_obligation_ids: String(form.elements.blocked_obligation_ids.value || "").split(",").map((item) => Number(item.trim())).filter(Boolean),
+    restricted_contactability_values: String(form.elements.restricted_contactability_values.value || "").split(",").map((item) => item.trim()).filter(Boolean),
+    requires_consent: Boolean(form.elements.requires_consent.checked),
+    consent_granted: form.elements.consent_granted.value === "" ? null : form.elements.consent_granted.value === "true",
+    valid_from: form.elements.valid_from.value || null,
+    valid_until: form.elements.valid_until.value || null,
+    severity: form.elements.severity.value,
+    priority: Number(form.elements.priority.value || 100),
+    recommended_action: form.elements.recommended_action.value || null,
+    is_active: Boolean(form.elements.is_active.checked)
+  };
+}
+
+async function reloadCompliance() {
+  await loadComplianceData();
+  renderContactCompliance();
+  renderAlertsCenter();
+}
+
+function renderContactCompliance() {
+  if (!document.querySelector("#contact-compliance")) return;
+  const rules = state.compliance.rules || { items: [], page: 1, total_pages: 1, total: 0 };
+  const items = rules.items || [];
+  const active = items.filter((item) => item.is_active);
+  const blocked = items.filter((item) => item.severity === "block");
+  const projectScoped = items.filter((item) => item.project_id);
+  renderCardSet("#complianceKpis", [
+    { label: "Reglas visibles", value: rules.total || items.length, detail: "Alcance por empresa/cartera segun rol.", tone: "blue", action: "Maximo 10 por pagina." },
+    { label: "Activas", value: active.length, detail: "Reglas que participan en evaluacion.", tone: active.length ? "green" : "yellow", action: "Sin reglas activas no se bloquea contacto." },
+    { label: "Bloqueos", value: blocked.length, detail: "Reglas con severidad de bloqueo.", tone: blocked.length ? "red" : "green", action: "Bloquean acciones rapidas." },
+    { label: "Por cartera", value: projectScoped.length, detail: "Reglas asociadas a cartera especifica.", tone: projectScoped.length ? "green" : "yellow", action: "Si no hay, aplica alcance general." }
+  ]);
+  const tenantOptions = telephonyTenantOptions(telephonyTenantSource(), document.querySelector('#complianceRuleForm select[name="tenant_id"]')?.value || operationalTenantId());
+  const currentRuleId = document.querySelector('#complianceRuleForm input[name="rule_id"]')?.value || "";
+  document.querySelector("#complianceRuleFormPanel").innerHTML = canManageContactCompliance()
+    ? `<form id="complianceRuleForm" class="ops-form form-grid">
+        <input name="rule_id" type="hidden" value="${escapeHtml(currentRuleId)}" />
+        ${isPlatform() ? `<label>Empresa<select name="tenant_id"><option value="">Global IEP</option>${tenantOptions}</select></label>` : ""}
+        <label>Cartera<select name="project_id">${complianceProjectOptions()}</select></label>
+        <label>Codigo<input name="code" placeholder="CONTACT_RULE" /></label>
+        <label>Nombre<input name="name" required placeholder="Ventana de contacto" /></label>
+        <label>Severidad<select name="severity"><option value="info">Informativa</option><option value="warning" selected>Advertencia</option><option value="block">Bloqueo</option></select></label>
+        <label>Prioridad<input name="priority" type="number" min="1" value="100" /></label>
+        <label>Inicio vigencia<input name="valid_from" type="date" /></label>
+        <label>Fin vigencia<input name="valid_until" type="date" /></label>
+        <label>Hora inicio<input name="start_time" type="time" /></label>
+        <label>Hora fin<input name="end_time" type="time" /></label>
+        <label>Max. dia<input name="max_attempts_per_day" type="number" min="0" /></label>
+        <label>Max. semana<input name="max_attempts_per_week" type="number" min="0" /></label>
+        <label>Max. canal/dia<input name="max_attempts_per_channel_day" type="number" min="0" /></label>
+        <label class="wide">Descripcion<textarea name="description" placeholder="Proposito operativo de la regla."></textarea></label>
+        <fieldset class="wide"><legend>Canales permitidos</legend>${complianceCheckboxes("channels", [["phone", "Llamada"], ["whatsapp", "WhatsApp"], ["email", "Email"], ["sms", "SMS"], ["presencial", "Presencial"], ["web", "Web"]], ["phone", "whatsapp", "email"])}</fieldset>
+        <fieldset class="wide"><legend>Canales bloqueados</legend>${complianceCheckboxes("blocked_channels", [["phone", "Llamada"], ["whatsapp", "WhatsApp"], ["email", "Email"], ["sms", "SMS"], ["presencial", "Presencial"], ["web", "Web"]])}</fieldset>
+        <fieldset class="wide"><legend>Dias permitidos</legend>${complianceCheckboxes("allowed_days", [["mon", "Lunes"], ["tue", "Martes"], ["wed", "Miercoles"], ["thu", "Jueves"], ["fri", "Viernes"], ["sat", "Sabado"], ["sun", "Domingo"]], ["mon", "tue", "wed", "thu", "fri"])}</fieldset>
+        <label class="wide">Clientes bloqueados IDs<input name="blocked_customer_ids" placeholder="123, 456" /></label>
+        <label class="wide">Obligaciones bloqueadas IDs<input name="blocked_obligation_ids" placeholder="10, 11" /></label>
+        <label class="wide">Contactabilidad restringida<input name="restricted_contactability_values" placeholder="Restringida, No contactar" /></label>
+        <label>Consentimiento<select name="consent_granted"><option value="">No aplica</option><option value="true">Autorizado</option><option value="false">No autorizado</option></select></label>
+        <label class="checkbox-row"><input name="requires_consent" type="checkbox" /> Requiere consentimiento</label>
+        <label class="checkbox-row"><input name="is_active" type="checkbox" checked /> Regla activa</label>
+        <label class="wide">Accion recomendada<textarea name="recommended_action" placeholder="Que debe hacer el asesor cuando aplique."></textarea></label>
+        <button type="submit">Guardar regla</button>
+        <button type="button" class="secondary-button" data-clear-compliance-rule>Limpiar</button>
+      </form>`
+    : `<article class="empty-state"><strong>Modo lectura</strong><p>Tu rol puede consultar reglas y advertencias operativas, pero no modificar configuracion.</p></article>`;
+
+  document.querySelector("#complianceSummaryPanel").innerHTML = `
+    <div class="workspace-profile">
+      <p><strong>Evaluacion activa</strong><span>Canal, horario, dias, intentos, cliente, obligacion y consentimiento se leen desde configuracion JSON.</span></p>
+      <p><strong>Auditoria</strong><span>Las evaluaciones permitidas, advertidas o bloqueadas quedan en audit_logs.</span></p>
+      <p><strong>Sin reglas legales fijas</strong><span>Los limites son ajustables por empresa o cartera.</span></p>
+    </div>
+    <form id="complianceFilterForm" class="inline-filter">
+      <label>Cartera<select id="complianceRuleProjectFilter" name="project_id">${complianceProjectOptions(document.querySelector("#complianceRuleProjectFilter")?.value || "")}</select></label>
+      <button type="submit">Filtrar</button>
+    </form>
+  `;
+
+  const rows = items.map((item) => {
+    const project = (state.crm.options.projects || []).find((projectItem) => Number(projectItem.id) === Number(item.project_id));
+    const channels = (item.channels || []).map(contactChannelLabel).join(", ") || "Todos";
+    const limits = [
+      item.max_attempts_per_day !== null && item.max_attempts_per_day !== undefined ? `${item.max_attempts_per_day}/dia` : "",
+      item.max_attempts_per_week !== null && item.max_attempts_per_week !== undefined ? `${item.max_attempts_per_week}/semana` : "",
+      item.max_attempts_per_channel_day !== null && item.max_attempts_per_channel_day !== undefined ? `${item.max_attempts_per_channel_day}/canal` : "",
+    ].filter(Boolean).join(" - ") || "Sin maximos";
+    return `<tr>
+      <td><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.code || "")}</small></td>
+      <td>${escapeHtml(project?.name || "General")}</td>
+      <td>${escapeHtml(channels)}</td>
+      <td>${escapeHtml([item.start_time, item.end_time].filter(Boolean).join(" - ") || "Sin horario")}</td>
+      <td>${escapeHtml(limits)}</td>
+      <td><span class="badge ${item.severity === "block" ? "red" : item.severity === "warning" ? "yellow" : "blue"}">${escapeHtml(complianceSeverityLabel(item.severity))}</span></td>
+      <td><span class="badge ${item.is_active ? "green" : "neutral"}">${item.is_active ? "Activa" : "Inactiva"}</span></td>
+      <td>${canManageContactCompliance() ? `<button class="table-button" data-edit-compliance-rule="${item.id}" type="button">Editar</button><button class="table-button" data-toggle-compliance-rule="${item.id}" type="button">${item.is_active ? "Desactivar" : "Activar"}</button>` : "-"}</td>
+    </tr>`;
+  }).join("");
+  document.querySelector("#complianceRuleTable").innerHTML = `
+    ${table(["Regla", "Cartera", "Canales", "Horario", "Intentos", "Severidad", "Estado", ""], rows, "No hay reglas de contacto configuradas.", { noClientPager: true })}
+    <div class="table-pager">
+      <button data-compliance-page="${Number(rules.page || 1) - 1}" type="button" ${Number(rules.page || 1) <= 1 ? "disabled" : ""}>Anterior</button>
+      <span>Pagina ${Number(rules.page || 1)} de ${Number(rules.total_pages || 1)} - ${Number(rules.total || 0)} reglas</span>
+      <button data-compliance-page="${Number(rules.page || 1) + 1}" type="button" ${Number(rules.page || 1) >= Number(rules.total_pages || 1) ? "disabled" : ""}>Siguiente</button>
+    </div>
+  `;
+}
+
+function fillComplianceRuleForm(ruleId) {
+  const form = document.querySelector("#complianceRuleForm");
+  const rule = (state.compliance.rules.items || []).find((item) => Number(item.id) === Number(ruleId));
+  if (!form || !rule) return;
+  form.elements.rule_id.value = rule.id;
+  if (form.elements.tenant_id) form.elements.tenant_id.value = rule.tenant_id ? String(rule.tenant_id) : "";
+  form.elements.project_id.value = rule.project_id ? String(rule.project_id) : "";
+  form.elements.code.value = rule.code || "";
+  form.elements.name.value = rule.name || "";
+  form.elements.description.value = rule.description || "";
+  form.elements.severity.value = rule.severity || "warning";
+  form.elements.priority.value = rule.priority || 100;
+  form.elements.valid_from.value = String(rule.valid_from || "").slice(0, 10);
+  form.elements.valid_until.value = String(rule.valid_until || "").slice(0, 10);
+  form.elements.start_time.value = rule.start_time || "";
+  form.elements.end_time.value = rule.end_time || "";
+  form.elements.max_attempts_per_day.value = rule.max_attempts_per_day ?? "";
+  form.elements.max_attempts_per_week.value = rule.max_attempts_per_week ?? "";
+  form.elements.max_attempts_per_channel_day.value = rule.max_attempts_per_channel_day ?? "";
+  form.elements.blocked_customer_ids.value = (rule.blocked_customer_ids || []).join(", ");
+  form.elements.blocked_obligation_ids.value = (rule.blocked_obligation_ids || []).join(", ");
+  form.elements.restricted_contactability_values.value = (rule.restricted_contactability_values || []).join(", ");
+  form.elements.requires_consent.checked = Boolean(rule.requires_consent);
+  form.elements.consent_granted.value = rule.consent_granted === null || rule.consent_granted === undefined ? "" : String(Boolean(rule.consent_granted));
+  form.elements.is_active.checked = Boolean(rule.is_active);
+  form.elements.recommended_action.value = rule.recommended_action || "";
+  ["channels", "blocked_channels", "allowed_days"].forEach((name) => {
+    const values = new Set((rule[name] || []).map(String));
+    form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+      input.checked = values.has(input.value);
+    });
+  });
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function clearComplianceRuleForm() {
+  const form = document.querySelector("#complianceRuleForm");
+  if (!form) return;
+  form.reset();
+  form.elements.rule_id.value = "";
+  form.querySelectorAll('input[name="channels"]').forEach((input) => {
+    input.checked = ["phone", "whatsapp", "email"].includes(input.value);
+  });
+  form.querySelectorAll('input[name="allowed_days"]').forEach((input) => {
+    input.checked = ["mon", "tue", "wed", "thu", "fri"].includes(input.value);
+  });
+}
+
+async function handleComplianceRuleSubmit(form) {
+  const id = form.elements.rule_id.value;
+  await runAction(form.querySelector("button[type='submit']"), async () => {
+    await api(id ? `/api/compliance/contact-rules/${id}` : "/api/compliance/contact-rules", {
+      method: id ? "PATCH" : "POST",
+      body: JSON.stringify(complianceRulePayload(form))
+    });
+    showToast("success", "Regla de contacto guardada.");
+    clearComplianceRuleForm();
+    await reloadCompliance();
+  }, "Guardando regla...");
+}
+
+async function toggleComplianceRule(ruleId, button) {
+  await runAction(button, async () => {
+    await api(`/api/compliance/contact-rules/${ruleId}/toggle`, { method: "POST" });
+    showToast("success", "Estado de regla actualizado.");
+    await reloadCompliance();
+  }, "Actualizando...");
 }
 
 function renderTelephony() {
@@ -4416,6 +4726,7 @@ function renderAll() {
   renderSalesAdvanced();
   renderTypificationTrees();
   renderRecordings();
+  renderContactCompliance();
   renderTelephony();
   renderCareFlow();
   renderUploads();
@@ -4617,6 +4928,69 @@ function clickToCallPayload(customerId) {
   return payload;
 }
 
+function selectedObligationIdForContact(customerId) {
+  const activityForm = document.querySelector(`#activityForm[data-customer-id="${customerId}"]`);
+  const drawerForm = document.querySelector(`#drawerActivityForm[data-customer-id="${customerId}"]`);
+  return optionalNumber(drawerForm?.elements.obligation_id?.value || activityForm?.elements.obligation_id?.value || "");
+}
+
+function complianceErrorMessage(error) {
+  const decision = error?.payload?.detail?.decision;
+  if (decision?.reason) return decision.reason;
+  return error?.message || "No fue posible validar cumplimiento de contacto.";
+}
+
+async function evaluateContactAction(customerId, channel, source = "frontend_contact_action") {
+  try {
+    const decision = await api("/api/compliance/evaluate-contact", {
+      method: "POST",
+      body: JSON.stringify({
+        customer_id: Number(customerId),
+        obligation_id: selectedObligationIdForContact(customerId),
+        channel,
+        source
+      })
+    });
+    state.selectedContactStatus = await apiMaybe(`/api/compliance/customer/${customerId}/contact-status`, state.selectedContactStatus);
+    if (!decision.allowed) {
+      showToast("warning", decision.reason || "Contacto restringido por regla de cumplimiento");
+      if (!document.querySelector("#managementDrawer")?.classList.contains("hidden")) renderManagementDrawer();
+      else renderQueueDetail();
+      return false;
+    }
+    if (decision.severity === "warning") {
+      showToast("warning", decision.reason || "Contacto permitido con advertencia de cumplimiento.");
+    }
+    return true;
+  } catch (error) {
+    console.warn(error);
+    showToast("warning", complianceErrorMessage(error));
+    return false;
+  }
+}
+
+async function openValidatedContact(channel, customerId, button) {
+  const customer = state.selectedCustomer && Number(state.selectedCustomer.id) === Number(customerId)
+    ? state.selectedCustomer
+    : [...(state.crm.queue?.items || []), ...(state.crm.customers?.items || [])].find((item) => Number(item.id) === Number(customerId));
+  if (!customer) {
+    showToast("warning", "Selecciona un cliente para contactar.");
+    return;
+  }
+  await runAction(button, async () => {
+    const allowed = await evaluateContactAction(customerId, channel, `quick_${channel}`);
+    if (!allowed) return;
+    const href = channelHref(channel, customer);
+    if (channel === "email") {
+      const link = document.createElement("a");
+      link.href = href;
+      link.click();
+    } else {
+      window.open(href, "_blank", "noopener,noreferrer");
+    }
+  }, "Validando...");
+}
+
 function clearTelephonyExtensionForm(userId = "") {
   const form = document.querySelector("#telephonyExtensionForm");
   if (!form) return;
@@ -4669,6 +5043,8 @@ async function startClickToCall(customerId, button) {
   const relatedButtons = Array.from(document.querySelectorAll("[data-click-to-call]")).filter((item) => item.dataset.clickToCall === key);
   relatedButtons.forEach((item) => setButtonLoading(item, true, "Llamando..."));
   try {
+    const allowed = await evaluateContactAction(customerId, "phone", "click_to_call_precheck");
+    if (!allowed) return;
     const result = await api("/api/telephony/click-to-call", {
       method: "POST",
       body: JSON.stringify(clickToCallPayload(customerId))
@@ -5042,6 +5418,15 @@ function setupEvents() {
       state.careflow.page = 1;
       await reloadCareFlow();
     }
+    if (form.id === "complianceRuleForm") {
+      event.preventDefault();
+      await handleComplianceRuleSubmit(form);
+    }
+    if (form.id === "complianceFilterForm") {
+      event.preventDefault();
+      state.compliance.page = 1;
+      await reloadCompliance();
+    }
     if (form.id === "uploadPreviewForm") {
       event.preventDefault();
       await handleUploadPreview(form);
@@ -5116,6 +5501,11 @@ function setupEvents() {
       await startClickToCall(clickToCall.dataset.clickToCall, clickToCall);
       return;
     }
+    const contactAction = event.target.closest("[data-contact-action]");
+    if (contactAction) {
+      await openValidatedContact(contactAction.dataset.contactAction, contactAction.dataset.customerId, contactAction);
+      return;
+    }
     const editProvider = event.target.closest("[data-edit-telephony-provider]");
     if (editProvider) {
       fillTelephonyProviderForm(editProvider.dataset.editTelephonyProvider);
@@ -5188,6 +5578,31 @@ function setupEvents() {
     if (careflowPage) {
       state.careflow.page = Number(careflowPage.dataset.careflowPage || 1);
       await reloadCareFlow();
+      return;
+    }
+    const complianceRefresh = event.target.closest("[data-compliance-refresh]");
+    if (complianceRefresh) {
+      await runAction(complianceRefresh, reloadCompliance, "Actualizando...");
+      return;
+    }
+    const compliancePage = event.target.closest("[data-compliance-page]");
+    if (compliancePage) {
+      state.compliance.page = Number(compliancePage.dataset.compliancePage || 1);
+      await reloadCompliance();
+      return;
+    }
+    const editCompliance = event.target.closest("[data-edit-compliance-rule]");
+    if (editCompliance) {
+      fillComplianceRuleForm(editCompliance.dataset.editComplianceRule);
+      return;
+    }
+    const toggleCompliance = event.target.closest("[data-toggle-compliance-rule]");
+    if (toggleCompliance) {
+      await toggleComplianceRule(toggleCompliance.dataset.toggleComplianceRule, toggleCompliance);
+      return;
+    }
+    if (event.target.closest("[data-clear-compliance-rule]")) {
+      clearComplianceRuleForm();
       return;
     }
     const teamProject = event.target.closest("[data-team-project]");
