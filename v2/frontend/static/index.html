@@ -871,6 +871,59 @@
             <h2>Insights accionables</h2>
             <div id="biInsights" class="insight-grid"></div>
           </article>
+
+          <article class="module-intelligence operational-reports-hero">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Analytics 360 - Collects 360</p>
+                <h2>Reportes operativos</h2>
+                <p>Centro avanzado para clientes, gestiones, promesas, pagos, acuerdos, productividad, demograficos y tareas con aislamiento por empresa y cartera.</p>
+              </div>
+              <div class="inline-actions">
+                <button id="refreshOperationalReports" class="table-button" type="button">Buscar</button>
+                <button id="clearOperationalReportFilters" class="secondary-button" type="button">Limpiar</button>
+                <button id="exportOperationalReport" class="table-button" type="button">Exportar CSV</button>
+              </div>
+            </div>
+            <div id="operationalReportTabs" class="inline-actions report-tabs"></div>
+            <form id="operationalReportFilters" class="inline-filters operational-report-filters">
+              <label class="platform-only">Empresa<select name="tenant_id"></select></label>
+              <label>Cartera<select name="project_id"></select></label>
+              <label>Asesor<select name="advisor_id" id="operationalReportAdvisor"></select></label>
+              <label>Lider<select name="leader_id" id="operationalReportLeader"></select></label>
+              <label>Desde<input name="date_from" type="date" /></label>
+              <label>Hasta<input name="date_to" type="date" /></label>
+              <label>Estado<input name="status" placeholder="Vigente, active, Promesa" /></label>
+              <label>Canal<input name="channel" placeholder="phone, whatsapp, email" /></label>
+              <label>Riesgo<select name="risk"><option value="">Todos</option><option>Alto</option><option>Medio</option><option>Bajo</option></select></label>
+              <label>Buscar<input name="search" placeholder="Cliente, documento, referencia" /></label>
+              <label>Score min.<input name="min_score" type="number" min="0" max="100" placeholder="65" /></label>
+              <label>Mora min.<input name="min_dpd" type="number" min="0" placeholder="30" /></label>
+              <label>Saldo min.<input name="min_balance" type="number" min="0" placeholder="1000000" /></label>
+              <label class="checkbox-row"><input name="effective" type="checkbox" /> Solo efectivas</label>
+              <label class="checkbox-row"><input name="no_management" type="checkbox" /> Sin gestion</label>
+              <label class="checkbox-row"><input name="active_promise" type="checkbox" /> Promesa vigente</label>
+              <label class="checkbox-row"><input name="contact_restriction" type="checkbox" /> Restriccion contacto</label>
+              <label class="checkbox-row"><input name="overdue" type="checkbox" /> Vencidos</label>
+            </form>
+          </article>
+
+          <div id="operationalReportKpis" class="intelligence-grid"></div>
+
+          <article class="chart-panel operational-report-panel">
+            <div class="panel-head">
+              <div>
+                <h2 id="operationalReportTitle">Reporte seleccionado</h2>
+                <p id="operationalReportMeta">Hasta 10 registros por pagina con filtros seguros.</p>
+              </div>
+              <div class="table-pager">
+                <button id="operationalReportPrev" type="button">Anterior</button>
+                <span id="operationalReportPageLabel">Pagina 1 de 1</span>
+                <button id="operationalReportNext" type="button">Siguiente</button>
+              </div>
+            </div>
+            <div id="operationalReportTable" class="table-wrap"></div>
+          </article>
         </section>
 
         <section id="channels" class="section">

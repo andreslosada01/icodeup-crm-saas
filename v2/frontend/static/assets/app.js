@@ -15,6 +15,7 @@ const state = {
   configuration: { catalogs: [], rules: [], alertRules: [], workflows: [] },
   compliance: { rules: { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 }, page: 1 },
   alerts: { items: [], summary: null, sessionSummary: null },
+  reports: { meta: null, active: "clients", current: null, page: 1 },
   careflow: { summary: null, cases: { items: [], page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total: 0, total_pages: 1 }, categories: [], selectedCaseId: null, selectedCase: null, page: 1 },
   legal: { dashboard: null, kanban: null, cases: [] },
   sales: { dashboard: null, pipeline: null, kanban: null, leads: [], opportunities: [] },
@@ -42,7 +43,7 @@ const titles = {
   legal: "Gestion juridica",
   documents: "Gestion documental",
   sales: "Pipeline comercial",
-  reports: "Analytics 360",
+  reports: "Reportes operativos",
   channels: "ChatBOX 360",
   tenants: "Empresas",
   projects: "Proyectos",
@@ -1031,6 +1032,49 @@ async function loadBi() {
   state.crm.bi = await api(`/api/crm/bi?${params}`);
 }
 
+function operationalReportParams(page = state.reports.page || 1) {
+  const form = document.querySelector("#operationalReportFilters");
+  const params = {
+    page,
+    page_size: DEFAULT_TABLE_PAGE_SIZE,
+    tenant_id: operationalTenantId() || form?.elements.tenant_id?.value || document.querySelector("#biTenant")?.value || "",
+    project_id: form?.elements.project_id?.value || "",
+    advisor_id: form?.elements.advisor_id?.value || "",
+    leader_id: form?.elements.leader_id?.value || "",
+    date_from: form?.elements.date_from?.value || "",
+    date_to: form?.elements.date_to?.value || "",
+    status: form?.elements.status?.value || "",
+    channel: form?.elements.channel?.value || "",
+    risk: form?.elements.risk?.value || "",
+    search: form?.elements.search?.value || "",
+    min_score: form?.elements.min_score?.value || "",
+    min_dpd: form?.elements.min_dpd?.value || "",
+    min_balance: form?.elements.min_balance?.value || "",
+    effective: form?.elements.effective?.checked ? true : "",
+    no_management: form?.elements.no_management?.checked ? true : "",
+    active_promise: form?.elements.active_promise?.checked ? true : "",
+    contact_restriction: form?.elements.contact_restriction?.checked ? true : "",
+    overdue: form?.elements.overdue?.checked ? true : ""
+  };
+  return queryParams(scopedTenantParams(params));
+}
+
+async function loadOperationalReports() {
+  if (!menuHasSection("reports")) return;
+  const tenantId = operationalTenantId() || document.querySelector("#operationalReportFilters")?.elements.tenant_id?.value || document.querySelector("#biTenant")?.value || "";
+  const metaParams = queryParams(scopedTenantParams({ tenant_id: tenantId }));
+  const meta = await apiMaybe(`/api/reports/operational/meta${metaParams ? `?${metaParams}` : ""}`, { reports: [], page_size: DEFAULT_TABLE_PAGE_SIZE, agent_restricted: true });
+  const available = meta.reports || [];
+  if (available.length && !available.some((item) => item.code === state.reports.active)) {
+    state.reports.active = available[0].code;
+    state.reports.page = 1;
+  }
+  const active = state.reports.active || available[0]?.code || "clients";
+  const params = operationalReportParams(state.reports.page || 1);
+  const current = await apiMaybe(`/api/reports/operational/${active}?${params}`, { report: active, title: "Reportes operativos", columns: [], kpis: [], items: [], total: 0, page: 1, page_size: DEFAULT_TABLE_PAGE_SIZE, total_pages: 1, available: false, note: "Reporte no disponible." });
+  state.reports = { ...state.reports, meta, active, current };
+}
+
 async function loadPhase8Data() {
   const allowed = (...sections) => menuHasSection(...sections);
   const scope = scopedQuery();
@@ -1154,6 +1198,7 @@ async function refreshAll() {
   }
   if (menuHasSection("reports")) {
     await optionalLoad("BI", loadBi);
+    await optionalLoad("Reportes operativos", loadOperationalReports);
   }
   if (menuHasSection("configuration", "alerts", "legal", "sales", "dashboard", "reports")) {
     await optionalLoad("Fase 8", loadPhase8Data);
@@ -1381,6 +1426,20 @@ function fillSelects() {
     const current = biProject.value;
     biProject.innerHTML = `<option value="">Todos los proyectos</option>${projectOptions}`;
     if (current) biProject.value = current;
+  }
+
+  const reportAdvisor = document.querySelector("#operationalReportAdvisor");
+  if (reportAdvisor) {
+    const current = reportAdvisor.value;
+    reportAdvisor.innerHTML = `<option value="">Todos los asesores</option>${userOptions}`;
+    if (current) reportAdvisor.value = current;
+  }
+  const reportLeader = document.querySelector("#operationalReportLeader");
+  if (reportLeader) {
+    const current = reportLeader.value;
+    const leaders = (state.crm.options.users || []).filter((item) => /lider|coordinador|admin|supervisor/i.test(item.label || item.name || ""));
+    reportLeader.innerHTML = `<option value="">Todos los lideres</option>${optionList(leaders.length ? leaders : state.crm.options.users, "id", "label")}`;
+    if (current) reportLeader.value = current;
   }
 
   const statusSelect = document.querySelector("#queueStatus");
@@ -1840,6 +1899,67 @@ function renderBI() {
       `
     )
     .join("");
+}
+
+function operationalReportValue(value, type = "text") {
+  if (value === null || value === undefined || value === "") return "-";
+  if (type === "money") return money(value);
+  if (type === "date") return dateOnly(value);
+  if (typeof value === "boolean") return value ? "Si" : "No";
+  if (typeof value === "number") return escapeHtml(value.toLocaleString("es-CO"));
+  return escapeHtml(value);
+}
+
+function renderOperationalReports() {
+  const current = state.reports.current;
+  const meta = state.reports.meta || { reports: [] };
+  const availableReports = meta.reports?.length ? meta.reports : [
+    { code: "clients", label: "Clientes" },
+    { code: "activities", label: "Gestion" },
+    { code: "promises", label: "Promesas" },
+    { code: "payments", label: "Pagos" },
+    { code: "agreements", label: "Acuerdos" },
+    { code: "productivity-hourly", label: "Productividad por hora" },
+    { code: "productivity-advisor", label: "Productividad por asesor" },
+    { code: "demographics", label: "Demograficos" },
+    { code: "tasks", label: "Tareas / agendados" },
+  ];
+  const tabs = document.querySelector("#operationalReportTabs");
+  if (tabs) {
+    tabs.innerHTML = availableReports
+      .map((item) => `<button class="${state.reports.active === item.code ? "active" : ""}" data-operational-report-tab="${escapeHtml(item.code)}" type="button">${escapeHtml(item.label)}</button>`)
+      .join("");
+  }
+  document.querySelector("#operationalReportTitle") && (document.querySelector("#operationalReportTitle").textContent = current?.title || "Reportes operativos");
+  const note = current?.note || "Hasta 10 registros por pagina con filtros seguros.";
+  document.querySelector("#operationalReportMeta") && (document.querySelector("#operationalReportMeta").textContent = current ? `${current.total || 0} registros - ${note}` : note);
+  renderCardSet("#operationalReportKpis", (current?.kpis || []).map((kpi) => ({
+    label: kpi.label,
+    value: kpi.key?.includes("amount") || kpi.key === "balance" ? money(kpi.value) : kpi.value,
+    detail: kpi.detail || "Calculado con el alcance autorizado.",
+    tone: kpi.tone || "neutral",
+    action: "Aislamiento por empresa, cartera y rol activo."
+  })));
+  const columns = current?.columns || [];
+  const rows = (current?.items || []).map((item) => `
+    <tr>
+      ${columns.map((column) => `<td>${operationalReportValue(item[column.key], column.type)}</td>`).join("")}
+    </tr>
+  `).join("");
+  const tableTarget = document.querySelector("#operationalReportTable");
+  if (tableTarget) {
+    tableTarget.innerHTML = current?.available === false
+      ? `<article class="empty-state"><strong>Reporte no disponible</strong><p>${escapeHtml(current.note || "Modulo no activo para la empresa seleccionada.")}</p></article>`
+      : table(columns.map((column) => column.label), rows, "Sin datos para los filtros seleccionados.", { key: "operational-report", noClientPager: true });
+  }
+  const pageLabel = document.querySelector("#operationalReportPageLabel");
+  if (pageLabel) pageLabel.textContent = `Pagina ${current?.page || 1} de ${current?.total_pages || 1}`;
+  const prev = document.querySelector("#operationalReportPrev");
+  const next = document.querySelector("#operationalReportNext");
+  if (prev) prev.disabled = !current || (current.page || 1) <= 1;
+  if (next) next.disabled = !current || (current.page || 1) >= (current.total_pages || 1);
+  const exportButton = document.querySelector("#exportOperationalReport");
+  if (exportButton) exportButton.disabled = !current || current.available === false || !(current.total || 0);
 }
 
 function tableKey(headers, emptyMessage) {
@@ -4711,6 +4831,7 @@ function renderAll() {
   renderRoleDashboard();
   renderDashboard();
   renderBI();
+  renderOperationalReports();
   renderQueue();
   renderCustomers();
   renderPromises();
@@ -5480,6 +5601,14 @@ function setupEvents() {
       renderAll();
       return;
     }
+    const reportTab = event.target.closest("[data-operational-report-tab]");
+    if (reportTab) {
+      state.reports.active = reportTab.dataset.operationalReportTab;
+      state.reports.page = 1;
+      await loadOperationalReports();
+      renderOperationalReports();
+      return;
+    }
     if (event.target.closest("[data-close-session-priorities]")) {
       localStorage.setItem(sessionPrioritiesClosedKey(), "1");
       renderSessionPriorities();
@@ -6039,16 +6168,59 @@ function setupEvents() {
   ["#biTenant", "#biProject", "#biHorizon"].forEach((selector) => {
     document.querySelector(selector).addEventListener("change", async () => {
       await loadBi();
+      await loadOperationalReports();
       renderBI();
+      renderOperationalReports();
       renderDashboard();
       renderModuleInsights();
     });
   });
   document.querySelector("#refreshBi").addEventListener("click", async () => {
     await loadBi();
+    await loadOperationalReports();
     renderBI();
+    renderOperationalReports();
     renderDashboard();
     renderModuleInsights();
+  });
+  document.querySelector("#operationalReportFilters")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    state.reports.page = 1;
+    await loadOperationalReports();
+    renderOperationalReports();
+  });
+  document.querySelector("#refreshOperationalReports")?.addEventListener("click", async () => {
+    state.reports.page = 1;
+    await loadOperationalReports();
+    renderOperationalReports();
+  });
+  document.querySelector("#clearOperationalReportFilters")?.addEventListener("click", async () => {
+    const form = document.querySelector("#operationalReportFilters");
+    form?.reset();
+    state.reports.page = 1;
+    await loadOperationalReports();
+    fillSelects();
+    renderOperationalReports();
+  });
+  document.querySelector("#operationalReportPrev")?.addEventListener("click", async () => {
+    state.reports.page = Math.max(1, (state.reports.current?.page || state.reports.page || 1) - 1);
+    await loadOperationalReports();
+    renderOperationalReports();
+  });
+  document.querySelector("#operationalReportNext")?.addEventListener("click", async () => {
+    const current = state.reports.current || {};
+    state.reports.page = Math.min(current.total_pages || 1, (current.page || state.reports.page || 1) + 1);
+    await loadOperationalReports();
+    renderOperationalReports();
+  });
+  document.querySelector("#exportOperationalReport")?.addEventListener("click", async () => {
+    try {
+      const params = operationalReportParams(1);
+      await downloadCsv(`/api/reports/operational/${state.reports.active}/export?${params}`, `iep_reporte_${state.reports.active}.csv`);
+      showToast("success", "Exportacion de reporte iniciada.");
+    } catch (error) {
+      showToast("error", error.message);
+    }
   });
 }
 
